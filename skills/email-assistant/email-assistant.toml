@@ -1,0 +1,5 @@
+name = "email-assistant"
+description = "Send emails and read inbox through configured email provider (mock mode)"
+version = "1.0.0"
+permission_class = "safe"
+entry_point = "email-assistant.js"

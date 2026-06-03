@@ -1,0 +1,5 @@
+name = "summarizer"
+description = "Summarize long text content using AI"
+version = "1.0.0"
+permission_class = "safe"
+entry_point = "summarizer.js"

@@ -1,0 +1,5 @@
+name = "code-review"
+description = "Review code changes (git diff) and provide AI-powered feedback"
+version = "1.0.0"
+permission_class = "shell"
+entry_point = "code-review.js"

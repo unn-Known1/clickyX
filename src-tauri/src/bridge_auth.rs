@@ -61,8 +61,6 @@ where
                     .and_then(|v| v.to_str().ok().map(|s| s.to_owned()))
             });
 
-        let (http_req, payload) = req.into_parts();
-
         let should_block = if let Some(expected_token) = auth_config {
             let token_ok = match auth_header {
                 Some(h) => {
@@ -77,6 +75,7 @@ where
         };
 
         if should_block {
+            let (http_req, _payload) = req.into_parts();
             let response = HttpResponse::Unauthorized().json(serde_json::json!({
                 "error": "unauthorized",
                 "message": "Invalid or missing authentication token"
@@ -84,7 +83,6 @@ where
             return Box::pin(async move { Ok(ServiceResponse::new(http_req, response)) });
         }
 
-        let req = ServiceRequest::new(http_req, payload);
         let fut = self.service.call(req);
         Box::pin(async move { fut.await })
     }

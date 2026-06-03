@@ -341,7 +341,7 @@ pub fn start_hotplug_poll<R: Runtime>(app: AppHandle<R>, url: &str) {
             let current = match xcap::Monitor::all() {
                 Ok(m) => m
                     .iter()
-                    .map(|mon| (mon.x(), mon.y(), mon.width(), mon.height()))
+                    .map(|mon| (mon.x().unwrap_or(0), mon.y().unwrap_or(0), mon.width().unwrap_or(0), mon.height().unwrap_or(0)))
                     .collect::<Vec<_>>(),
                 Err(_) => continue,
             };
@@ -372,10 +372,10 @@ pub fn start_hotplug_poll<R: Runtime>(app: AppHandle<R>, url: &str) {
 pub fn get_screen_for_point(x: f64, y: f64) -> usize {
     if let Ok(all) = xcap::Monitor::all() {
         for (i, m) in all.iter().enumerate() {
-            if x >= m.x() as f64
-                && x < (m.x() + m.width() as i32) as f64
-                && y >= m.y() as f64
-                && y < (m.y() + m.height() as i32) as f64
+            if x >= m.x().unwrap_or(0) as f64
+                && x < (m.x().unwrap_or(0) + m.width().unwrap_or(0) as i32) as f64
+                && y >= m.y().unwrap_or(0) as f64
+                && y < (m.y().unwrap_or(0) + m.height().unwrap_or(0) as i32) as f64
             {
                 return i;
             }

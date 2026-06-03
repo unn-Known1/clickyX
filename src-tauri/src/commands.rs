@@ -10,7 +10,9 @@ use crate::ai::catalog::ModelCatalog;
 use crate::ai::streaming::StreamEvent;
 use crate::audio::VoicePipeline;
 use crate::config::{self, AgentConfig, AppConfig};
+use crate::accessibility::{AccessibilityElement, AccessibilityTree};
 use crate::permissions::{self, Permission, PermissionStatus};
+use crate::screen::auto_capture::{AutoCaptureConfig, AutoCaptureEngine, CapturedFrame};
 use crate::screen::capture;
 use crate::updater::{self, UpdateInfo};
 
@@ -348,6 +350,65 @@ pub fn capture_cursor_screen() -> Result<capture::ScreenImage, String> {
 #[tauri::command]
 pub fn capture_focused_window() -> Result<Option<capture::ScreenImage>, String> {
     capture::capture_focused_window()
+}
+
+// --- Auto-Capture Commands ---
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AutoCaptureStatus {
+    pub running: bool,
+    pub last_capture: Option<CapturedFrame>,
+    pub config: AutoCaptureConfig,
+}
+
+#[tauri::command]
+pub fn start_auto_capture(
+    engine: State<'_, Mutex<AutoCaptureEngine>>,
+    interval_ms: Option<u64>,
+    capture_mode: Option<String>,
+) -> Result<(), String> {
+    let engine = engine.lock().map_err(|e| format!("lock error: {e}"))?;
+    if let Some(ms) = interval_ms {
+        let mut cfg = engine.get_config();
+        cfg.interval_ms = ms;
+        engine.set_config(cfg);
+    }
+    if let Some(mode) = capture_mode {
+        let mut cfg = engine.get_config();
+        cfg.capture_mode = mode;
+        engine.set_config(cfg);
+    }
+    engine.start()
+}
+
+#[tauri::command]
+pub fn stop_auto_capture(
+    engine: State<'_, Mutex<AutoCaptureEngine>>,
+) -> Result<(), String> {
+    let engine = engine.lock().map_err(|e| format!("lock error: {e}"))?;
+    engine.stop()
+}
+
+#[tauri::command]
+pub fn get_auto_capture_status(
+    engine: State<'_, Mutex<AutoCaptureEngine>>,
+) -> Result<AutoCaptureStatus, String> {
+    let engine = engine.lock().map_err(|e| format!("lock error: {e}"))?;
+    Ok(AutoCaptureStatus {
+        running: engine.is_running(),
+        last_capture: engine.get_latest(),
+        config: engine.get_config(),
+    })
+}
+
+#[tauri::command]
+pub fn set_auto_capture_config(
+    engine: State<'_, Mutex<AutoCaptureEngine>>,
+    config: AutoCaptureConfig,
+) -> Result<(), String> {
+    let engine = engine.lock().map_err(|e| format!("lock error: {e}"))?;
+    engine.set_config(config);
+    Ok(())
 }
 
 #[tauri::command]
@@ -1191,4 +1252,33 @@ pub fn update_agent_config(
     app.manage(config);
     let updated = app.state::<AppConfig>();
     Ok(updated.agent.clone())
+}
+
+// --- Accessibility Commands ---
+
+#[tauri::command]
+pub fn get_element_at_point(x: i32, y: i32) -> Result<AccessibilityElement, String> {
+    let api = crate::accessibility::create_accessibility_api();
+    api.get_element_at_point(x, y)
+}
+
+#[tauri::command]
+pub fn get_focused_element() -> Result<Option<AccessibilityElement>, String> {
+    let api = crate::accessibility::create_accessibility_api();
+    api.get_focused_element()
+}
+
+#[tauri::command]
+pub fn get_accessibility_tree_snapshot() -> Result<AccessibilityTree, String> {
+    let api = crate::accessibility::create_accessibility_api();
+    api.snapshot()
+}
+
+#[tauri::command]
+pub fn perform_accessibility_action(
+    element: AccessibilityElement,
+    action: String,
+) -> Result<(), String> {
+    let api = crate::accessibility::create_accessibility_api();
+    api.perform_action(&element, &action)
 }

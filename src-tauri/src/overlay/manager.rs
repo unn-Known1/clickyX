@@ -1,4 +1,3 @@
-use serde::Serialize;
 use std::collections::HashMap;
 
 use super::lifecycle::{now_ms, Annotation, AnnotationKind, AnnotationState};
@@ -148,4 +147,90 @@ pub fn format_lifecycle_event(action: &str, id: &str, state: &AnnotationState) -
         "state": state,
     })
     .to_string()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::overlay::{CursorData, RectPayload, ScribblePayload, CaptionPayload};
+
+    #[test]
+    fn test_manager_new_is_empty() {
+        let mgr = AnnotationManager::new();
+        assert!(!mgr.has_active());
+        assert!(mgr.get_expired().is_empty());
+    }
+
+    #[test]
+    fn test_add_and_complete_cursor() {
+        let mut mgr = AnnotationManager::new();
+        let data = CursorData { x: 100.0, y: 200.0, label: None, accent: None, duration_ms: 5000 };
+        mgr.add_cursor("c1".into(), data);
+        assert!(mgr.has_active());
+        mgr.complete("c1");
+        assert!(mgr.get_expired().is_empty());
+    }
+
+    #[test]
+    fn test_add_and_miss() {
+        let mut mgr = AnnotationManager::new();
+        let data = CursorData { x: 10.0, y: 20.0, label: None, accent: None, duration_ms: 5000 };
+        mgr.add_cursor("c2".into(), data);
+        mgr.miss("c2");
+    }
+
+    #[test]
+    fn test_sweep_expired() {
+        let mut mgr = AnnotationManager::new();
+        let data = CursorData { x: 0.0, y: 0.0, label: None, accent: None, duration_ms: 0 };
+        mgr.add_cursor("c3".into(), data);
+        let expired = mgr.get_expired();
+        assert!(!expired.is_empty());
+        assert_eq!(expired[0], "c3");
+    }
+
+    #[test]
+    fn test_clear_all() {
+        let mut mgr = AnnotationManager::new();
+        let cd = CursorData { x: 1.0, y: 2.0, label: None, accent: None, duration_ms: 5000 };
+        let rd = RectPayload { id: "r".into(), x: 0.0, y: 0.0, w: 10.0, h: 10.0, state: AnnotationState::Armed, label: None };
+        mgr.add_cursor("c".into(), cd);
+        mgr.add_rect("r".into(), rd);
+        assert!(mgr.has_active());
+        mgr.clear_all();
+        assert!(!mgr.has_active());
+    }
+
+    #[test]
+    fn test_add_all_kinds() {
+        let mut mgr = AnnotationManager::new();
+        let cd = CursorData { x: 0.0, y: 0.0, label: None, accent: None, duration_ms: 5000 };
+        let rd = RectPayload { id: "r".into(), x: 0.0, y: 0.0, w: 10.0, h: 10.0, state: AnnotationState::Armed, label: None };
+        let sd = ScribblePayload { points: vec![[0.0, 0.0]], state: AnnotationState::Armed, label: None };
+        let capd = CaptionPayload { text: "hi".into(), x: 0.0, y: 0.0, state: AnnotationState::Armed };
+        mgr.add_cursor("c".into(), cd);
+        mgr.add_rect("r".into(), rd);
+        mgr.add_scribble("s".into(), sd);
+        mgr.add_caption("cap".into(), capd);
+        assert!(mgr.has_active());
+    }
+
+    #[test]
+    fn test_force_complete_kind() {
+        let mut mgr = AnnotationManager::new();
+        let cd1 = CursorData { x: 0.0, y: 0.0, label: None, accent: None, duration_ms: 5000 };
+        let cd2 = CursorData { x: 1.0, y: 1.0, label: None, accent: None, duration_ms: 5000 };
+        mgr.add_cursor("c1".into(), cd1);
+        mgr.add_cursor("c2".into(), cd2);
+        let rd = RectPayload { id: "r".into(), x: 0.0, y: 0.0, w: 10.0, h: 10.0, state: AnnotationState::Armed, label: None };
+        mgr.add_rect("r".into(), rd);
+        assert!(mgr.has_active());
+    }
+
+    #[test]
+    fn test_format_lifecycle_event() {
+        let s = format_lifecycle_event("test", "id-1", &AnnotationState::Completed);
+        assert!(s.contains("completed") || s.contains("Completed"));
+        assert!(s.contains("id-1"));
+    }
 }

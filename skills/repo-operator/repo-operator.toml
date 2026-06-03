@@ -1,0 +1,5 @@
+name = "repo-operator"
+description = "Perform git operations on local repositories (status, diff, log, commit, branch)"
+version = "1.0.0"
+permission_class = "shell"
+entry_point = "repo-operator.js"

@@ -1,6 +1,6 @@
 use serde::Serialize;
 use std::collections::HashMap;
-use tauri::{AppHandle, Emitter, Manager, Runtime, WebviewWindow, WebviewWindowBuilder};
+use tauri::{AppHandle, Emitter, Runtime, WebviewWindow, WebviewWindowBuilder};
 
 use super::screen_router::{CoordinateNormalizer, MonitorInfo, ScreenManager};
 

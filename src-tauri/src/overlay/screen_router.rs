@@ -1,5 +1,4 @@
 use serde::Serialize;
-use std::collections::HashMap;
 
 #[derive(Debug, Clone, Serialize)]
 pub struct MonitorInfo {
@@ -38,12 +37,12 @@ impl ScreenManager {
                 for m in &all {
                     monitors.push(MonitorInfo {
                         name: m.name().unwrap_or_else(|_| "unknown".into()),
-                        x: m.x(),
-                        y: m.y(),
-                        width: m.width(),
-                        height: m.height(),
+                        x: m.x().unwrap_or(0),
+                        y: m.y().unwrap_or(0),
+                        width: m.width().unwrap_or(0),
+                        height: m.height().unwrap_or(0),
                         scale_factor: 1.0,
-                        is_primary: m.x() == 0 && m.y() == 0,
+                        is_primary: m.x().unwrap_or(0) == 0 && m.y().unwrap_or(0) == 0,
                     });
                 }
             }
@@ -157,5 +156,99 @@ impl CoordinateNormalizer {
 impl Default for CoordinateNormalizer {
     fn default() -> Self {
         Self::new(ScreenManager::new())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn test_monitors() -> Vec<MonitorInfo> {
+        vec![
+            MonitorInfo { name: "left".into(), x: -1920, y: 0, width: 1920, height: 1080, scale_factor: 1.0, is_primary: false },
+            MonitorInfo { name: "main".into(), x: 0, y: 0, width: 1920, height: 1080, scale_factor: 1.0, is_primary: true },
+            MonitorInfo { name: "right".into(), x: 1920, y: 0, width: 1920, height: 1080, scale_factor: 1.0, is_primary: false },
+        ]
+    }
+
+    fn test_screen_mgr() -> ScreenManager {
+        let monitors = test_monitors();
+        ScreenManager { monitors, primary_index: 1 }
+    }
+
+    #[test]
+    fn test_coordinate_normalizer_to_virtual() {
+        let sm = test_screen_mgr();
+        let norm = CoordinateNormalizer::new(sm);
+        let result = norm.to_virtual("main", 100.0, 200.0);
+        assert!(result.is_some());
+        let (vx, vy) = result.unwrap();
+        assert_eq!(vx, 100.0);
+        assert_eq!(vy, 200.0);
+    }
+
+    #[test]
+    fn test_coordinate_normalizer_to_virtual_left() {
+        let sm = test_screen_mgr();
+        let norm = CoordinateNormalizer::new(sm);
+        let result = norm.to_virtual("left", 100.0, 200.0);
+        assert!(result.is_some());
+        let (vx, vy) = result.unwrap();
+        assert_eq!(vx, -1820.0);
+        assert_eq!(vy, 200.0);
+    }
+
+    #[test]
+    fn test_coordinate_normalizer_to_local() {
+        let sm = test_screen_mgr();
+        let norm = CoordinateNormalizer::new(sm);
+        let result = norm.to_local(100.0, 200.0);
+        assert!(result.is_some());
+        let (lx, ly, mon) = result.unwrap();
+        assert_eq!(lx, 100.0);
+        assert_eq!(ly, 200.0);
+        assert_eq!(mon.name, "main");
+    }
+
+    #[test]
+    fn test_clamp_to_bounds() {
+        let sm = test_screen_mgr();
+        let norm = CoordinateNormalizer::new(sm);
+        let (cx, cy) = norm.clamp_to_bounds(-10000.0, -10000.0, 10.0);
+        assert!((cx - (-1910.0)).abs() < 0.001);
+        assert!((cy - 10.0).abs() < 0.001);
+    }
+
+    #[test]
+    fn test_tag_screen() {
+        let sm = test_screen_mgr();
+        let norm = CoordinateNormalizer::new(sm);
+        assert_eq!(norm.tag_screen(100.0, 500.0), "screen2");
+        assert_eq!(norm.tag_screen(-1000.0, 500.0), "screen1");
+    }
+
+    #[test]
+    fn test_screen_manager_find_by_point() {
+        let sm = test_screen_mgr();
+        let m = sm.find_by_point(100.0, 500.0);
+        assert!(m.is_some());
+        assert_eq!(m.unwrap().name, "main");
+    }
+
+    #[test]
+    fn test_screen_manager_find_by_name() {
+        let sm = test_screen_mgr();
+        assert!(sm.find_by_name("main").is_some());
+        assert!(sm.find_by_name("nonexistent").is_none());
+    }
+
+    #[test]
+    fn test_screen_manager_virtual_bounds() {
+        let sm = test_screen_mgr();
+        let (min_x, min_y, w, h) = sm.virtual_bounds();
+        assert_eq!(min_x, -1920);
+        assert_eq!(min_y, 0);
+        assert_eq!(w, 5760);
+        assert_eq!(h, 1080);
     }
 }

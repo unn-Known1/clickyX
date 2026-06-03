@@ -1,0 +1,5 @@
+name = "shell-executor"
+description = "Execute whitelisted shell commands (ls, pwd, cat, find, grep, head, tail, wc, echo)"
+version = "1.0.0"
+permission_class = "shell"
+entry_point = "shell-executor.js"

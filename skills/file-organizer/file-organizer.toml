@@ -1,0 +1,5 @@
+name = "file-organizer"
+description = "Organize files in a directory by type/extension into categorized folders"
+version = "1.0.0"
+permission_class = "shell"
+entry_point = "file-organizer.js"

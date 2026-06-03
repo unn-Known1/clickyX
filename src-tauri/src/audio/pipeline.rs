@@ -49,6 +49,7 @@ pub enum VadState {
     Speech,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AlwaysOnConfig {
     pub enabled: bool,
     pub vad_threshold: f32,
@@ -438,7 +439,7 @@ impl VoicePipeline {
         let stt_cfg = self.stt_config().unwrap_or_default();
         let sample_rate = self.sample_rate;
 
-        let _running = running.clone();
+        let on_transcript = std::sync::Arc::new(std::sync::Mutex::new(on_transcript));
         std::thread::spawn(move || {
             let mut vad = VadState::Silence;
             let mut speech_start: Option<Instant> = None;
@@ -500,7 +501,7 @@ impl VoicePipeline {
                                     if !is_speaking {
                                         let buffer_clone = audio_buffer.clone();
                                         let stt_cfg_clone = stt_cfg.clone();
-                                        let on_tx = on_transcript;
+                                        let on_tx = on_transcript.clone();
 
                                         if let Ok(rt) = tokio::runtime::Handle::try_current() {
                                             let _ = rt.spawn(async move {
@@ -508,7 +509,9 @@ impl VoicePipeline {
                                                 match result {
                                                     Ok(text) if !text.trim().is_empty() => {
                                                         log::info!("VAD auto-transcribed: {}", text);
-                                                        on_tx(text);
+                                                        if let Ok(cb) = on_tx.lock() {
+                                                            cb(text);
+                                                        }
                                                     }
                                                     Ok(_) => {}
                                                     Err(e) => log::error!("VAD auto-transcribe error: {e}"),
@@ -558,7 +561,7 @@ impl VoicePipeline {
     pub fn get_always_on_config(&self) -> Result<AlwaysOnConfig, String> {
         self.always_on_config
             .lock()
-            .map(|c| *c)
+            .map(|c| c.clone())
             .map_err(|e| format!("AlwaysOn config lock error: {e}"))
     }
 
@@ -624,5 +627,107 @@ impl VoicePipeline {
 impl Default for VoicePipeline {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_pipeline_state_default() {
+        assert_eq!(PipelineState::default(), PipelineState::Idle);
+    }
+
+    #[test]
+    fn test_pipeline_state_transitions() {
+        let mut state = PipelineState::Idle;
+        assert_eq!(state, PipelineState::Idle);
+        state = PipelineState::Listening;
+        assert_eq!(state, PipelineState::Listening);
+        state = PipelineState::Processing;
+        assert_eq!(state, PipelineState::Processing);
+        state = PipelineState::Speaking;
+        assert_eq!(state, PipelineState::Speaking);
+        state = PipelineState::WakeWordListening;
+        assert_eq!(state, PipelineState::WakeWordListening);
+    }
+
+    #[test]
+    fn test_pipeline_state_debug() {
+        let s = format!("{:?}", PipelineState::Idle);
+        assert_eq!(s, "Idle");
+    }
+
+    #[test]
+    fn test_pipeline_state_clone() {
+        let a = PipelineState::Listening;
+        let b = a;
+        assert_eq!(a, b);
+    }
+
+    #[test]
+    fn test_always_on_config_defaults() {
+        let cfg = AlwaysOnConfig::default();
+        assert!(!cfg.enabled);
+        assert!((cfg.vad_threshold - 0.008).abs() < f32::EPSILON);
+        assert_eq!(cfg.silence_timeout_ms, 1500);
+        assert_eq!(cfg.min_speech_ms, 300);
+        assert_eq!(cfg.sample_rate, 16000);
+        assert!(cfg.auto_submit);
+    }
+
+    #[test]
+    fn test_always_on_config_clone() {
+        let cfg = AlwaysOnConfig::default();
+        let cloned = cfg.clone();
+        assert_eq!(cfg.enabled, cloned.enabled);
+        assert_eq!(cfg.sample_rate, cloned.sample_rate);
+    }
+
+    #[test]
+    fn test_vad_state_defaults() {
+        assert_eq!(VadState::Silence as u8, 0);
+        assert_eq!(VadState::Speech as u8, 1);
+    }
+
+    #[test]
+    fn test_audio_level_default() {
+        let level = AudioLevel::zero();
+        assert!((level.rms).abs() < f32::EPSILON);
+        assert!((level.peak).abs() < f32::EPSILON);
+        assert!(!level.clipping);
+    }
+
+    #[test]
+    fn test_audio_level_clone() {
+        let a = AudioLevel { rms: 0.5, peak: 0.8, clipping: false };
+        let b = a.clone();
+        assert_eq!(a.rms, b.rms);
+    }
+
+    #[test]
+    fn test_alway_on_config_serde_roundtrip() {
+        let cfg = AlwaysOnConfig::default();
+        let json = serde_json::to_string(&cfg).unwrap();
+        let deserialized: AlwaysOnConfig = serde_json::from_str(&json).unwrap();
+        assert_eq!(cfg.enabled, deserialized.enabled);
+        assert_eq!(cfg.sample_rate, deserialized.sample_rate);
+    }
+
+    #[test]
+    fn test_check_wake_word_fails_when_not_listening() {
+        let pipeline = VoicePipeline::new();
+        let result = pipeline.check_wake_word();
+        assert!(result.is_ok());
+        assert!(!result.unwrap());
+    }
+
+    #[test]
+    fn test_get_state_default() {
+        let pipeline = VoicePipeline::new();
+        let state = pipeline.get_state();
+        assert!(state.is_ok());
+        assert_eq!(state.unwrap(), PipelineState::Idle);
     }
 }

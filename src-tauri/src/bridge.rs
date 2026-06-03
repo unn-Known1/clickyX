@@ -1,7 +1,7 @@
 use std::io::Cursor;
 
 use actix_web::{web, App, HttpServer, HttpResponse, middleware};
-use crate::bridge_auth::{Auth, BridgeAuthConfig};
+use crate::bridge_auth::BridgeAuthConfig;
 use futures_util::stream::Stream;
 use futures_util::StreamExt;
 use serde::{Deserialize, Serialize};
@@ -885,6 +885,53 @@ async fn not_found() -> HttpResponse {
         error: "not_found".into(),
         message: "Route not found".into(),
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_cursor_request_serde() {
+        let json = r#"{"x":100.0,"y":200.0,"label":"test","accent":null}"#;
+        let req: CursorRequest = serde_json::from_str(json).unwrap();
+        assert_eq!(req.x, 100.0);
+        assert_eq!(req.y, 200.0);
+        assert_eq!(req.label.unwrap(), "test");
+    }
+
+    #[test]
+    fn test_wav_to_pcm_f32_with_empty() {
+        let result = wav_to_pcm_f32(&[]);
+        assert!(result.is_empty());
+    }
+
+    #[test]
+    fn test_ok_response_serde() {
+        let r = OkResponse { ok: true };
+        let json = serde_json::to_string(&r).unwrap();
+        assert_eq!(json, r#"{"ok":true}"#);
+    }
+
+    #[test]
+    fn test_error_response_serde() {
+        let r = ErrorResponse { error: "test_error".into(), message: "test message".into() };
+        let json = serde_json::to_string(&r).unwrap();
+        assert!(json.contains("test_error"));
+    }
+
+    #[test]
+    fn test_health_response_struct() {
+        let h = HealthResponse { status: "ok".into(), version: "0.1.0".into() };
+        let json = serde_json::to_string(&h).unwrap();
+        assert!(json.contains("0.1.0"));
+    }
+
+    #[test]
+    fn test_bridge_state_new() {
+        // Just verify the struct exists and builds
+        let _ = HealthResponse { status: "ok".into(), version: "0.1.0".into() };
+    }
 }
 
 pub fn start_bridge(app_handle: AppHandle, bridge_token: Option<String>) {

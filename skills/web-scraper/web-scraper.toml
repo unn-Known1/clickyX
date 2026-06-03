@@ -1,0 +1,5 @@
+name = "web-scraper"
+description = "Fetch and extract text content from a URL"
+version = "1.0.0"
+permission_class = "safe"
+entry_point = "web-scraper.js"

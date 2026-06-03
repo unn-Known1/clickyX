@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 mod agent;
 mod audio;
 mod config;
@@ -13,12 +15,15 @@ mod gen3d;
 mod updater;
 mod permissions;
 mod cua;
+mod accessibility;
 
 use std::path::PathBuf;
 use std::sync::Mutex;
 use std::time::Duration;
 use tauri::{AppHandle, Emitter, Manager};
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
+
+use crate::screen::auto_capture::{AutoCaptureConfig, AutoCaptureEngine};
 
 pub fn get_log_dir() -> Result<PathBuf, String> {
     let base = dirs::config_dir().ok_or("could not find config directory")?;
@@ -224,6 +229,10 @@ pub fn run() {
                 });
             }
 
+            // Initialize auto-capture engine
+            let auto_capture_engine = AutoCaptureEngine::new(AutoCaptureConfig::default());
+            handle.manage(Mutex::new(auto_capture_engine));
+
             // Initialize agent state
             let agent_store = Mutex::new(agent::session::AgentStore::new());
             handle.manage(agent_store);
@@ -349,6 +358,14 @@ pub fn run() {
             commands::get_always_on_config,
             commands::set_agent_triggers,
             commands::get_agent_triggers,
+            commands::start_auto_capture,
+            commands::stop_auto_capture,
+            commands::get_auto_capture_status,
+            commands::set_auto_capture_config,
+            commands::get_element_at_point,
+            commands::get_focused_element,
+            commands::get_accessibility_tree_snapshot,
+            commands::perform_accessibility_action,
         ])
         .build(tauri::generate_context!())
         .expect("error while building ClickyX")
