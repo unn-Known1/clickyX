@@ -108,6 +108,7 @@ jobs:
           draft: false
           files: |
             artifacts/**/*.msi
+            artifacts/**/*.exe
             artifacts/**/*.dmg
             artifacts/**/*.AppImage
             artifacts/**/*.deb

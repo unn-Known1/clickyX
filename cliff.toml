@@ -1,0 +1,35 @@
+[changelog]
+header = "# Changelog\n"
+body = """
+{% for group, commits in commits | group_by(attribute="group") %}
+### {{ group | upper_first }}
+{% for commit in commits %}
+- {% if commit.breaking %}[breaking] {% endif %}{{ commit.message | upper_first }} ([{{ commit.id | truncate(length=7, end="") }}](https://github.com/unn-Known1/clickyX/commit/{{ commit.id }}))
+{% endfor %}
+{% endfor %}
+"""
+trim = true
+footer = ""
+
+[git]
+conventional_commits = true
+filter_commits = false
+commit_parsers = [
+    { message = "^feat", group = "Features" },
+    { message = "^fix", group = "Bug Fixes" },
+    { message = "^chore", group = "Chores" },
+    { message = "^docs", group = "Documentation" },
+    { message = "^refactor", group = "Refactoring" },
+    { message = "^test", group = "Testing" },
+    { message = "^perf", group = "Performance" },
+    { message = "^ci", group = "CI/CD" },
+    { message = "^style", group = "Style" },
+    { message = "^revert", group = "Reverts" },
+    { message = ".*", group = "Other" },
+]
+sort_groups = ["Features", "Bug Fixes", "Refactoring", "CI/CD", "Chores", "Other"]
+
+skip_commits = [
+    { message = "^chore\\(release\\)" },
+    { message = "^updated dependencies" },
+]

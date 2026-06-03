@@ -81,6 +81,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Download all artifacts
         uses: actions/download-artifact@v4
@@ -97,14 +99,27 @@ jobs:
             echo "prerelease=false" >> "$GITHUB_OUTPUT"
           fi
 
+      - name: Install git-cliff
+        uses: taiki-e/install-action@v2
+        with:
+          tool: git-cliff
+
+      - name: Generate changelog
+        id: changelog
+        run: |
+          git cliff --unreleased --tag "${{ github.ref_name }}" --output CHANGELOG.md 2>/dev/null || true
+          if [ ! -f CHANGELOG.md ] || [ ! -s CHANGELOG.md ]; then
+            echo "## What's Changed" > CHANGELOG.md
+          fi
+
       - name: Generate release notes
         id: notes
         run: |
-          echo "## ClickyX ${{ github.ref_name }}" > release-notes.md
+          cat CHANGELOG.md > release-notes.md
           echo "" >> release-notes.md
           echo "### Downloads" >> release-notes.md
           echo "" >> release-notes.md
-          find artifacts -type f -name "*.msi" -o -name "*.dmg" -o -name "*.AppImage" -o -name "*.deb" -o -name "*.rpm" | while read f; do
+          find artifacts -type f \( -name "*.msi" -o -name "*.exe" -o -name "*.dmg" -o -name "*.AppImage" -o -name "*.deb" -o -name "*.rpm" \) | while read f; do
             basename=$(basename "$f")
             echo "- $basename" >> release-notes.md
           done
@@ -119,6 +134,7 @@ jobs:
           prerelease: ${{ steps.check.outputs.prerelease }}
           files: |
             artifacts/**/*.msi
+            artifacts/**/*.exe
             artifacts/**/*.dmg
             artifacts/**/*.AppImage
             artifacts/**/*.deb
