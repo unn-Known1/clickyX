@@ -118,6 +118,23 @@ impl Default for ScreenConfig {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ComputerUseConfig {
+    pub pointing_model: String,
+    pub cua_backend: String,
+    pub native_cua: bool,
+}
+
+impl Default for ComputerUseConfig {
+    fn default() -> Self {
+        Self {
+            pointing_model: "claude-sonnet-4-20250514".into(),
+            cua_backend: "anthropic".into(),
+            native_cua: false,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct OverlayPrefs {
     pub cursor_accent: String,
     pub cursor_size: u32,
@@ -181,6 +198,7 @@ pub struct AppConfig {
     pub wake_word: WakeWordConfig,
     pub mcp_servers: Vec<McpServerConfig>,
     pub automations_file: String,
+    pub computer_use: ComputerUseConfig,
 }
 
 impl Default for AppConfig {
@@ -199,6 +217,7 @@ impl Default for AppConfig {
             mcp_servers: vec![],
             automations_file: "automations.json".into(),
             agent: AgentConfig::default(),
+            computer_use: ComputerUseConfig::default(),
         }
     }
 }

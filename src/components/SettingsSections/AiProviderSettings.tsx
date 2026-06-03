@@ -12,6 +12,7 @@ interface AiConfig {
 }
 
 interface AppConfig {
+  api_keys: { provider: string; key: string }[];
   overlay: { agent_dock_position: string };
 }
 
@@ -19,22 +20,41 @@ function AiProviderSettings() {
   const [aiConfig, setAiConfig] = useState<AiConfig | null>(null);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const [elevenlabsKey, setElevenlabsKey] = useState("");
   const [cartesiaKey, setCartesiaKey] = useState("");
   const [deepgramKey, setDeepgramKey] = useState("");
   const [assemblyaiKey, setAssemblyaiKey] = useState("");
 
+  const showToast = (text: string, type: "success" | "error" | "info" = "info") => {
+    window.__showToast?.(text, type);
+  };
+
   useEffect(() => {
-    invoke<AiConfig>("get_ai_config").then((ai) => {
-      setAiConfig(ai);
-    }).catch(console.error);
-    invoke<AppConfig>("get_config").then(() => {}).catch(console.error);
+    setError(null);
+    invoke<AiConfig>("get_ai_config")
+      .then(setAiConfig)
+      .catch((e) => {
+        console.error("Failed to load AI config:", e);
+        setError("Failed to load AI provider settings");
+      });
+    invoke<AppConfig>("get_config")
+      .then((cfg) => {
+        const keys = cfg.api_keys || [];
+        const getKey = (provider: string) => keys.find((k) => k.provider === provider)?.key || "";
+        setElevenlabsKey(getKey("elevenlabs"));
+        setCartesiaKey(getKey("cartesia"));
+        setDeepgramKey(getKey("deepgram"));
+        setAssemblyaiKey(getKey("assemblyai"));
+      })
+      .catch(console.error);
   }, []);
 
   const saveAiConfig = useCallback(async () => {
     if (!aiConfig) return;
     setSaving(true);
+    setError(null);
     try {
       const updated = await invoke<AiConfig>("update_ai_config", {
         partial: {
@@ -42,23 +62,45 @@ function AiProviderSettings() {
           anthropic_model: aiConfig.anthropic_model,
           openai_api_key: aiConfig.openai_api_key || null,
           openai_model: aiConfig.openai_model,
+          openai_base_url: aiConfig.openai_base_url,
           default_provider: aiConfig.default_provider,
           system_prompt: aiConfig.system_prompt,
         },
       });
       setAiConfig(updated);
+      const newApiKeys = [
+        elevenlabsKey && { provider: "elevenlabs", key: elevenlabsKey },
+        cartesiaKey && { provider: "cartesia", key: cartesiaKey },
+        deepgramKey && { provider: "deepgram", key: deepgramKey },
+        assemblyaiKey && { provider: "assemblyai", key: assemblyaiKey },
+      ].filter(Boolean) as { provider: string; key: string }[];
+      await invoke("update_config", {
+        partial: { api_keys: newApiKeys },
+      });
       setSaved(true);
+      showToast("Settings saved", "success");
       setTimeout(() => setSaved(false), 2000);
     } catch (e) {
       console.error("Failed to save AI config:", e);
+      setError("Failed to save settings");
+      showToast("Failed to save settings", "error");
     } finally {
       setSaving(false);
     }
-  }, [aiConfig]);
+  }, [aiConfig, elevenlabsKey, cartesiaKey, deepgramKey, assemblyaiKey]);
 
   const updateAiField = useCallback((key: string, value: unknown) => {
     setAiConfig((prev) => (prev ? { ...prev, [key]: value } : prev));
   }, []);
+
+  if (error) {
+    return (
+      <section className="settings-section">
+        <h3>AI Providers</h3>
+        <div className="settings-error">{error}</div>
+      </section>
+    );
+  }
 
   if (!aiConfig) {
     return (
@@ -185,6 +227,7 @@ function AiProviderSettings() {
         >
           {saving ? "Saving..." : saved ? "Saved!" : "Save AI Settings"}
         </button>
+        {error && <div className="settings-error">{error}</div>}
       </div>
     </section>
   );

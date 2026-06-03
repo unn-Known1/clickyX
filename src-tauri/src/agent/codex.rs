@@ -104,8 +104,8 @@ impl CodexProcess {
         Ok(response.get("result").cloned().unwrap_or(Value::Null))
     }
 
-    pub fn is_running(&self) -> bool {
-        if let Some(ref child) = self.child {
+    pub fn is_running(&mut self) -> bool {
+        if let Some(ref mut child) = self.child {
             matches!(child.try_wait(), Ok(None))
         } else {
             false

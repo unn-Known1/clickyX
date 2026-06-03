@@ -12,9 +12,16 @@ interface AudioConfig {
 
 function VoiceSettings() {
   const [audioConfig, setAudioConfig] = useState<AudioConfig | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    invoke<AudioConfig>("get_audio_config").then(setAudioConfig).catch(console.error);
+    setError(null);
+    invoke<AudioConfig>("get_audio_config")
+      .then(setAudioConfig)
+      .catch((e) => {
+        console.error("Failed to load audio config:", e);
+        setError("Failed to load voice settings");
+      });
   }, []);
 
   const updateAudio = useCallback(async (key: string, value: unknown) => {
@@ -28,6 +35,15 @@ function VoiceSettings() {
       console.error("Failed to update audio config:", e);
     }
   }, [audioConfig]);
+
+  if (error) {
+    return (
+      <section className="settings-section">
+        <h3>Voice</h3>
+        <div className="settings-error">{error}</div>
+      </section>
+    );
+  }
 
   if (!audioConfig) {
     return (

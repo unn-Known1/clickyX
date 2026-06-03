@@ -106,6 +106,11 @@ pub fn update_config(app: AppHandle, partial: serde_json::Value) -> Result<AppCo
                 config.api_keys = k;
             }
         }
+        if let Some(computer_use) = obj.get("computer_use") {
+            if let Ok(c) = serde_json::from_value(computer_use.clone()) {
+                config.computer_use = c;
+            }
+        }
     }
     config::save_config(&app, &config)?;
     crate::register_hotkeys(&app)?;

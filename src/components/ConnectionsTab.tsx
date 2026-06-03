@@ -62,16 +62,26 @@ function ConnectionsTab() {
     last_run: undefined,
   });
 
+  const showToast = (text: string, type: "success" | "error" | "info" = "info") => {
+    window.__showToast?.(text, type);
+  };
+
   useEffect(() => {
     invoke<WorkspaceStatus>("check_google_workspace")
       .then(setWorkspace)
       .catch(() => setWorkspace({ available: false, authenticated: false }));
     invoke<McpServer[]>("get_mcp_servers")
       .then(setMcpServers)
-      .catch(console.error);
+      .catch((e) => {
+        console.error("Failed to load MCP servers:", e);
+        showToast("Failed to load MCP servers", "error");
+      });
     invoke<Automation[]>("list_automations")
       .then(setAutomations)
-      .catch(console.error);
+      .catch((e) => {
+        console.error("Failed to load automations:", e);
+        showToast("Failed to load automations", "error");
+      });
   }, []);
 
   const addMcpServer = async () => {
@@ -82,8 +92,10 @@ function ConnectionsTab() {
       });
       setMcpServers(servers);
       setNewMcp({ name: "", command: "", args: [], env: {}, enabled: true });
+      showToast("MCP server added", "success");
     } catch (e) {
       console.error("Failed to add MCP server:", e);
+      showToast("Failed to add MCP server", "error");
     }
   };
 
@@ -91,8 +103,10 @@ function ConnectionsTab() {
     try {
       const servers = await invoke<McpServer[]>("remove_mcp_server", { name });
       setMcpServers(servers);
+      showToast("MCP server removed", "success");
     } catch (e) {
       console.error("Failed to remove MCP server:", e);
+      showToast("Failed to remove MCP server", "error");
     }
   };
 
@@ -112,8 +126,10 @@ function ConnectionsTab() {
         enabled: true,
         last_run: undefined,
       });
+      showToast("Automation created", "success");
     } catch (e) {
       console.error("Failed to create automation:", e);
+      showToast("Failed to create automation", "error");
     }
   };
 
@@ -128,6 +144,7 @@ function ConnectionsTab() {
       );
     } catch (e) {
       console.error("Failed to toggle automation:", e);
+      showToast("Failed to toggle automation", "error");
     }
   };
 
@@ -135,8 +152,10 @@ function ConnectionsTab() {
     try {
       await invoke<boolean>("delete_automation", { id });
       setAutomations(prev => prev.filter((a) => a.id !== id));
+      showToast("Automation deleted", "success");
     } catch (e) {
       console.error("Failed to delete automation:", e);
+      showToast("Failed to delete automation", "error");
     }
   };
 

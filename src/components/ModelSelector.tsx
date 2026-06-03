@@ -16,6 +16,7 @@ interface ModelSelectorProps {
 function ModelSelector({ selectedModel, onModelChange }: ModelSelectorProps) {
   const [models, setModels] = useState<ModelInfo[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     invoke<ModelInfo[]>("get_models")
@@ -25,6 +26,7 @@ function ModelSelector({ selectedModel, onModelChange }: ModelSelectorProps) {
       })
       .catch((e) => {
         console.error("Failed to load models:", e);
+        setError("Failed to load models");
         setLoading(false);
       });
   }, []);
@@ -34,6 +36,10 @@ function ModelSelector({ selectedModel, onModelChange }: ModelSelectorProps) {
     acc[m.provider].push(m);
     return acc;
   }, {});
+
+  if (error) {
+    return <div className="model-selector-error">{error}</div>;
+  }
 
   return (
     <select

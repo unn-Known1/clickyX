@@ -1,6 +1,8 @@
 import { useState, useCallback, useEffect, lazy, Suspense, Component, ReactNode } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import HomeTab from "./components/HomeTab";
+import AgentsTab from "./components/AgentsTab";
+import ConnectionsTab from "./components/ConnectionsTab";
 import { useConfig } from "./hooks/useConfig";
 import "./styles/theme.css";
 
@@ -111,14 +113,14 @@ function App() {
     setToasts((prev) => prev.filter((t) => t.id !== id));
   }, []);
 
-  (window as unknown as Record<string, unknown>).__setActiveTab = useCallback(
+  window.__setActiveTab = useCallback(
     (tab: string) => {
       setActiveTab(tab as Tab);
     },
     [],
   );
 
-  (window as unknown as Record<string, unknown>).__showToast = showToast;
+  window.__showToast = showToast;
 
   const handleTabChange = useCallback((tab: Tab) => {
     setTabTransition(true);
@@ -150,19 +152,9 @@ function App() {
         case "home":
           return <HomeTab />;
         case "agents":
-          return (
-            <div className="placeholder-tab">
-              <h2>Agents</h2>
-              <p>Agent management with bundled skills and custom agents.</p>
-            </div>
-          );
+          return <AgentsTab />;
         case "connections":
-          return (
-            <div className="placeholder-tab">
-              <h2>Connections</h2>
-              <p>Integration connections for external services.</p>
-            </div>
-          );
+          return <ConnectionsTab />;
         case "settings":
           return (
             <Suspense fallback={<div className="skeleton-loader" />}>

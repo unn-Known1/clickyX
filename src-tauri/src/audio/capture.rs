@@ -126,13 +126,14 @@ impl AudioCapture {
 
         let buffer = self.buffer.clone();
         let recording = self.recording.clone();
+        let recording_cb = recording.clone();
 
         let err_callback = move |err: cpal::StreamError| {
             log::error!("Audio capture stream error: {err}");
         };
 
         let data_callback = move |data: &[f32], _: &cpal::InputCallbackInfo| {
-            if recording.load(Ordering::SeqCst) {
+            if recording_cb.load(Ordering::SeqCst) {
                 if let Ok(mut buf) = buffer.lock() {
                     buf.push(data);
                 }

@@ -16,9 +16,16 @@ interface AppConfig {
 
 function GeneralSettings() {
   const [config, setConfig] = useState<AppConfig | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    invoke<AppConfig>("get_config").then(setConfig).catch(console.error);
+    setError(null);
+    invoke<AppConfig>("get_config")
+      .then(setConfig)
+      .catch((e) => {
+        console.error("Failed to load config:", e);
+        setError("Failed to load settings");
+      });
   }, []);
 
   const updateTheme = useCallback(async (theme: string) => {
@@ -52,6 +59,15 @@ function GeneralSettings() {
       console.error("Failed to toggle tutor mode:", e);
     }
   }, []);
+
+  if (error) {
+    return (
+      <section className="settings-section">
+        <h3>General</h3>
+        <div className="settings-error">{error}</div>
+      </section>
+    );
+  }
 
   if (!config) {
     return (
