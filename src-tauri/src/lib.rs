@@ -77,7 +77,8 @@ pub fn run() {
 
             // Load config
             let config = config::load_config(&handle)?;
-            handle.manage(config);
+            let managed_config = config.clone();
+            handle.manage(managed_config);
 
             // Register default global hotkeys
             register_hotkeys(&handle)?;
@@ -140,6 +141,24 @@ pub fn run() {
             commands::get_ai_config,
             commands::update_ai_config,
             commands::chat_with_vision,
+            commands::capture_screens,
+            commands::capture_cursor_screen,
+            commands::capture_focused_window,
+            commands::overlay_show_cursor,
+            commands::overlay_show_cursors,
+            commands::overlay_show_rect,
+            commands::overlay_show_scribble,
+            commands::overlay_show_caption,
+            commands::overlay_clear,
+            commands::set_overlay_visible,
+            commands::start_recording,
+            commands::stop_recording,
+            commands::get_audio_level,
+            commands::transcribe_audio,
+            commands::speak_text,
+            commands::set_ptt_hotkey,
+            commands::get_audio_config,
+            commands::update_audio_config,
         ])
         .build(tauri::generate_context!())
         .expect("error while building ClickyX")

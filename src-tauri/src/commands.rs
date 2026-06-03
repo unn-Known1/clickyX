@@ -409,7 +409,7 @@ pub fn get_audio_level(
 #[tauri::command]
 pub fn transcribe_audio(
     audio_data: Vec<f32>,
-    provider: Option<String>,
+    _provider: Option<String>,
     pipeline: State<'_, Mutex<VoicePipeline>>,
 ) -> Result<String, String> {
     let pipe = pipeline.lock().map_err(|e| format!("lock error: {e}"))?;
@@ -425,7 +425,7 @@ pub fn transcribe_audio(
 #[tauri::command]
 pub fn speak_text(
     text: String,
-    provider: Option<String>,
+    _provider: Option<String>,
     pipeline: State<'_, Mutex<VoicePipeline>>,
 ) -> Result<Vec<u8>, String> {
     let pipe = pipeline.lock().map_err(|e| format!("lock error: {e}"))?;

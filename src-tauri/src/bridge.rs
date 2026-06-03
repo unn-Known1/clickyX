@@ -1,7 +1,6 @@
 use std::io::Cursor;
 
 use actix_web::{web, App, HttpServer, HttpResponse, middleware};
-use base64::Engine;
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager};
 

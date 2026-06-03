@@ -142,24 +142,19 @@ async fn transcribe_deepgram(wav_data: &[u8], config: &SttConfig) -> Result<Stri
 async fn transcribe_whisper(wav_data: &[u8], config: &SttConfig) -> Result<String, String> {
     let client = reqwest::Client::new();
 
-    let b64 = base64::engine::general_purpose::STANDARD.encode(wav_data);
-
-    let part = reqwest::multipart::Part::text(b64)
-        .file_name("audio.wav")
-        .mime_str("audio/wav")
-        .map_err(|e| format!("Multipart error: {e}"))?;
-
-    let form = reqwest::multipart::Form::new()
-        .part("file", part)
-        .text("model", "whisper-1")
-        .text("language", config.language.clone());
-
     let mut last_error = String::new();
     for attempt in 0..config.max_retries {
+        let form = reqwest::multipart::Form::new()
+            .part("file", reqwest::multipart::Part::bytes(wav_data.to_vec())
+                .file_name("audio.wav")
+                .mime_str("audio/wav").map_err(|e| format!("Mime error: {e}"))?)
+            .text("model", "whisper-1")
+            .text("language", config.language.clone());
+
         let result = client
             .post("https://api.openai.com/v1/audio/transcriptions")
             .header("Authorization", format!("Bearer {}", config.api_key))
-            .multipart(form.clone())
+            .multipart(form)
             .timeout(std::time::Duration::from_secs(config.timeout_secs))
             .send()
             .await;

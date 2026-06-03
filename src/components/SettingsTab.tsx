@@ -20,7 +20,6 @@ interface AiConfig {
 
 function SettingsTab() {
   const [config, setConfig] = useState<AppConfig | null>(null);
-  const [aiConfig, setAiConfig] = useState<AiConfig | null>(null);
   const [newApiKey, setNewApiKey] = useState({ provider: "", key: "" });
   const [newHotkey, setNewHotkey] = useState({
     key: "",
@@ -43,7 +42,6 @@ function SettingsTab() {
 
     invoke<AiConfig>("get_ai_config")
       .then((ai) => {
-        setAiConfig(ai);
         setAnthropicKey(ai.anthropic_api_key || "");
         setAnthropicModel(ai.anthropic_model);
         setOpenaiKey(ai.openai_api_key || "");
@@ -107,7 +105,7 @@ function SettingsTab() {
 
   const saveAiConfig = async () => {
     try {
-      const updated = await invoke<AiConfig>("update_ai_config", {
+      await invoke<AiConfig>("update_ai_config", {
         partial: {
           anthropic_api_key: anthropicKey || null,
           anthropic_model: anthropicModel,
@@ -117,7 +115,6 @@ function SettingsTab() {
           system_prompt: systemPrompt,
         },
       });
-      setAiConfig(updated);
     } catch (e) {
       console.error("Failed to save AI config:", e);
     }

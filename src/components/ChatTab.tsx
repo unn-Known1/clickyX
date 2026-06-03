@@ -40,7 +40,7 @@ function ChatTab() {
             images: getImageDataUrls(),
             model: selectedModel,
           })
-            .then((response) => {
+            .then(() => {
               clearImages();
             })
             .catch((err) => console.error(err));
