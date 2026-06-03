@@ -115,9 +115,8 @@ pub fn start_lifecycle_sweep<R: Runtime>(app: AppHandle<R>, manager: std::sync::
 }
 
 pub fn set_click_through<R: Runtime>(window: &WebviewWindow<R>, enabled: bool) -> Result<(), String> {
-    let webview: &tauri::Webview<R> = window.as_ref();
-    webview.set_cursor_hittest(!enabled)
-        .map_err(|e| format!("set_cursor_hittest: {e}"))
+    window.set_ignore_cursor_events(enabled)
+        .map_err(|e| format!("set_ignore_cursor_events: {e}"))
 }
 
 pub fn show_overlay<R: Runtime>(app: &AppHandle<R>) -> Result<(), String> {
