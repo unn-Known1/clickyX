@@ -183,7 +183,7 @@ mod tests {
     #[test]
     fn test_sweep_expired() {
         let mut mgr = AnnotationManager::new();
-        let data = CursorData { x: 0.0, y: 0.0, label: None, accent: None, duration_ms: 0 };
+        let data = CursorData { x: 0.0, y: 0.0, label: None, accent: None, duration_ms: 1 };
         mgr.add_cursor("c3".into(), data);
         let expired = mgr.get_expired();
         assert!(!expired.is_empty());

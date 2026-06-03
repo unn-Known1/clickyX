@@ -44,7 +44,7 @@ impl<T: Serialize + Clone> Annotation<T> {
 
     pub fn is_expired(&self, now_ms: u64) -> bool {
         self.state == AnnotationState::Armed
-            && now_ms.saturating_sub(self.created_at) > self.timeout_ms
+            && now_ms.saturating_sub(self.created_at) >= self.timeout_ms
     }
 }
 
