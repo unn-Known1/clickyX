@@ -60,12 +60,18 @@ See `docs/FEATURE_SPEC.md#17-implementation-phases` for the full 7-phase build p
 ## Build Status
 - `cargo check` — passes (76 dead_code warnings)
 - `npm run build` — passes (TypeScript + Vite)
-- CI/CD: `.github/workflows/ci.yml` + `.github/workflows/release.yml`
+- CI/CD: `.github/workflows/ci.yml` + `.github/workflows/release.yml` + `.github/workflows/nightly.yml`
+
+## Git Config
+```sh
+git config user.name "unn-Known1"
+git config user.email "ptelgm.yt@gmail.com"
+```
 
 ## Current Plan
 
 <!-- SPECKIT START -->
 - **Feature**: All Phases Complete
-- **Latest commit**: `dfbd8ed` — All 7 phases implemented
+- **Latest commit**: `47986a8` — Add nightly build workflow and pre-release tag support
 - **Repo**: `https://github.com/unn-Known1/clickyX`
 <!-- SPECKIT END -->
