@@ -29,13 +29,14 @@ jobs:
       - uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
           toolchain: stable
+          rustflags: ''
           cache: true
 
       - name: Install system deps (Linux)
         if: matrix.os == 'ubuntu-latest'
         run: |
           sudo apt-get update -y
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libxdo-dev
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libxdo-dev libasound2-dev
 
       - name: Install npm dependencies
         run: npm ci
