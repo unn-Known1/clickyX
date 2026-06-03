@@ -47,16 +47,19 @@ impl<R: Runtime> OverlayWindowManager<R> {
             if self.windows.contains_key(&label) {
                 continue;
             }
-            let window = WebviewWindowBuilder::new(app, &label, tauri::WebviewUrl::App(url.into()))
+            let mut builder = WebviewWindowBuilder::new(app, &label, tauri::WebviewUrl::App(url.into()))
                 .position(monitor.x as f64, monitor.y as f64)
                 .inner_size(monitor.width as f64, monitor.height as f64)
                 .decorations(false)
-                .transparent(true)
                 .always_on_top(true)
                 .skip_taskbar(true)
                 .resizable(false)
-                .fullscreen(false)
-                .build()
+                .fullscreen(false);
+            #[cfg(not(target_os = "macos"))]
+            {
+                builder = builder.transparent(true);
+            }
+            let window = builder.build()
                 .map_err(|e| format!("create overlay window {label}: {e}"))?;
             let _ = window.set_ignore_cursor_events(true);
             self.windows.insert(label, window);
@@ -111,15 +114,18 @@ impl<R: Runtime> OverlayWindowManager<R> {
                 let _ = window.set_position(tauri::PhysicalPosition::new(monitor.x, monitor.y));
                 let _ = window.set_size(tauri::Size::Physical(tauri::PhysicalSize::new(monitor.width, monitor.height)));
             } else {
-                let window = WebviewWindowBuilder::new(app, &label, tauri::WebviewUrl::App(url.into()))
+                let mut builder = WebviewWindowBuilder::new(app, &label, tauri::WebviewUrl::App(url.into()))
                     .position(monitor.x as f64, monitor.y as f64)
                     .inner_size(monitor.width as f64, monitor.height as f64)
                     .decorations(false)
-                    .transparent(true)
                     .always_on_top(true)
                     .skip_taskbar(true)
-                    .resizable(false)
-                    .build()
+                    .resizable(false);
+                #[cfg(not(target_os = "macos"))]
+                {
+                    builder = builder.transparent(true);
+                }
+                let window = builder.build()
                     .map_err(|e| format!("refresh create {label}: {e}"))?;
                 let _ = window.set_ignore_cursor_events(true);
                 self.windows.insert(label, window);
