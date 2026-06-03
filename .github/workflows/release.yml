@@ -86,10 +86,20 @@ jobs:
         with:
           path: artifacts
 
+      - name: Check if pre-release tag
+        id: check
+        run: |
+          TAG="${{ github.ref_name }}"
+          if echo "$TAG" | grep -Eq '\-(alpha|beta|rc|pre|dev|test)'; then
+            echo "prerelease=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "prerelease=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Generate release notes
         id: notes
         run: |
-          echo "## Release ${{ github.ref_name }}" > release-notes.md
+          echo "## ClickyX ${{ github.ref_name }}" > release-notes.md
           echo "" >> release-notes.md
           echo "### Downloads" >> release-notes.md
           echo "" >> release-notes.md
@@ -105,7 +115,7 @@ jobs:
           name: ClickyX ${{ github.ref_name }}
           body_path: release-notes.md
           draft: true
-          prerelease: false
+          prerelease: ${{ steps.check.outputs.prerelease }}
           files: |
             artifacts/**/*.msi
             artifacts/**/*.dmg

@@ -1,0 +1,113 @@
+name: Nightly Build
+
+on:
+  schedule:
+    - cron: '0 6 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: nightly-build
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          toolchain: stable
+          cache: true
+
+      - name: Install system deps (Linux)
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libxdo-dev
+
+      - name: Install npm dependencies
+        run: npm ci
+
+      - name: Build frontend
+        run: npm run build
+
+      - name: Build Tauri app
+        run: npm run tauri build
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: clickyx-${{ matrix.os }}
+          path: src-tauri/target/release/bundle/
+
+  release:
+    name: Create Pre-release
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Generate release info
+        id: info
+        run: |
+          DATE_TAG=$(date +'%Y%m%d-%H%M')
+          echo "tag=nightly-${DATE_TAG}" >> "$GITHUB_OUTPUT"
+          echo "date=$(date +'%Y-%m-%d %H:%M UTC')" >> "$GITHUB_OUTPUT"
+
+      - name: Generate release notes
+        id: notes
+        run: |
+          cat > release-notes.md << 'EOF'
+          ## Nightly Build
+
+          Automated nightly pre-release build.
+
+          **Commit**: ${{ github.sha }}
+
+          ### Downloads
+          EOF
+          find artifacts -type f | while read -r f; do
+            echo "- $(basename "$f")" >> release-notes.md
+          done
+
+      - name: Delete older nightly releases (keep last 5)
+        uses: dev-drprasad/delete-older-releases@v0.3.3
+        continue-on-error: true
+        with:
+          keep_latest: 5
+          delete_tags: true
+          delete_tag_pattern: nightly-
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create nightly pre-release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.info.outputs.tag }}
+          name: Nightly ${{ steps.info.outputs.date }}
+          body_path: release-notes.md
+          prerelease: true
+          draft: false
+          files: |
+            artifacts/**/*.msi
+            artifacts/**/*.dmg
+            artifacts/**/*.AppImage
+            artifacts/**/*.deb
+            artifacts/**/*.rpm
