@@ -286,13 +286,14 @@ fn matches_cron(expression: &str, dt: ChronoDatetime) -> bool {
     }
     let (y, mo, d, h, mn, _s, _ns) = dt;
     let dw = day_of_week(y, mo, d);
+    let dw_norm = if dw == 0 { 7 } else { dw };
 
     cron_field_matches(fields[0], mn, 0, 59)
         && cron_field_matches(fields[1], h, 0, 23)
         && cron_field_matches(fields[2], d, 1, 31)
         && cron_field_matches(fields[3], mo, 1, 12)
         && (cron_field_matches(fields[4], dw, 0, 6)
-            || cron_field_matches(fields[4], dw + 7, 0, 6))
+            || cron_field_matches(fields[4], dw_norm, 0, 7))
 }
 
 fn cron_field_matches(field: &str, value: u32, min: u32, max: u32) -> bool {

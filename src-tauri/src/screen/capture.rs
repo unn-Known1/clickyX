@@ -16,7 +16,7 @@ pub struct ScreenImage {
 fn encode_rgba_as_jpeg_base64(img: &image::RgbaImage, quality: u8) -> Result<String, String> {
     let mut buf = Vec::new();
     JpegEncoder::new_with_quality(&mut buf, quality)
-        .encode(img.as_raw(), img.width(), img.height(), ColorType::Rgba8)
+        .encode(img.as_raw(), img.width(), img.height(), ColorType::Rgba8.into())
         .map_err(|e| format!("jpeg encoding failed: {e}"))?;
     Ok(base64::engine::general_purpose::STANDARD.encode(&buf))
 }
