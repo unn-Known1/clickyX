@@ -44,7 +44,8 @@ impl AnnotationManager {
 
     pub fn add_cursor(&mut self, id: String, data: super::CursorData) {
         self.force_complete_kind(&AnnotationKind::Cursor);
-        let ann = Annotation::new(id.clone(), AnnotationKind::Cursor, self.timeouts.cursor_ms, data);
+        let timeout = if data.duration_ms > 0 { data.duration_ms } else { self.timeouts.cursor_ms };
+        let ann = Annotation::new(id.clone(), AnnotationKind::Cursor, timeout, data);
         self.cursors.insert(id.clone(), ann);
         self.kind_order.push(id);
     }

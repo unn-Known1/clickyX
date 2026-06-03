@@ -114,31 +114,9 @@ pub fn start_lifecycle_sweep<R: Runtime>(app: AppHandle<R>, manager: std::sync::
     });
 }
 
-#[cfg(target_os = "windows")]
-pub fn set_click_through<R: Runtime>(window: &WebviewWindow<R>, enabled: bool) {
-    use raw_window_handle::HasWindowHandle;
-    if let Ok(handle) = window.as_ref().window_handle() {
-        if let Ok(hwnd) = handle.as_raw() {
-            let hwnd = hwnd as isize;
-            let ex_style = unsafe { windows::Win32::UI::Windows::GetWindowLongW(hwnd, windows::Win32::UI::Windows::GWL_EXSTYLE) };
-            let new_style = if enabled {
-                ex_style | 0x80000
-            } else {
-                ex_style & !0x80000
-            };
-            unsafe { windows::Win32::UI::Windows::SetWindowLongW(hwnd, windows::Win32::UI::Windows::GWL_EXSTYLE, new_style); }
-        }
-    }
-}
-
-#[cfg(target_os = "linux")]
-pub fn set_click_through<R: Runtime>(_window: &WebviewWindow<R>, _enabled: bool) {
-    log::info!("Click-through overlay: Linux support pending (requires compositor-specific protocol)");
-}
-
-#[cfg(target_os = "macos")]
-pub fn set_click_through<R: Runtime>(_window: &WebviewWindow<R>, _enabled: bool) {
-    log::info!("Click-through overlay: macOS support pending ns_window integration");
+pub fn set_click_through<R: Runtime>(window: &WebviewWindow<R>, enabled: bool) -> Result<(), String> {
+    window.set_cursor_hittest(!enabled)
+        .map_err(|e| format!("set_cursor_hittest: {e}"))
 }
 
 pub fn show_overlay<R: Runtime>(app: &AppHandle<R>) -> Result<(), String> {
