@@ -1,22 +1,32 @@
-import { useState } from "react";
+import { useState, useCallback } from "react";
+import ChatTab from "./ChatTab";
 
 const suggestions = [
   "What can you help me with?",
-  "Take a screenshot",
-  "Summarize my screen",
+  "Take a screenshot and explain it",
+  "Summarize what's on my screen",
   "Open settings",
 ];
 
 function HomeTab() {
-  const [prompt, setPrompt] = useState("");
+  const [showChat, setShowChat] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (prompt.trim()) {
-      // TODO: Submit to AI provider (Phase 3)
-      setPrompt("");
+  const handleSuggestion = useCallback((suggestion: string) => {
+    setShowChat(true);
+    const input = document.querySelector(".chat-input") as HTMLInputElement;
+    if (input) {
+      input.value = suggestion;
+      input.focus();
     }
-  };
+  }, []);
+
+  if (showChat) {
+    return (
+      <div className="home-tab">
+        <ChatTab />
+      </div>
+    );
+  }
 
   return (
     <div className="home-tab">
@@ -24,24 +34,15 @@ function HomeTab() {
         <h1>Hi, I'm ClickyX</h1>
         <p>Your AI companion — ask me anything about your screen.</p>
       </div>
-      <form className="prompt-form" onSubmit={handleSubmit}>
-        <input
-          type="text"
-          className="prompt-input"
-          placeholder="Ask me anything..."
-          value={prompt}
-          onChange={(e) => setPrompt(e.target.value)}
-        />
-        <button type="submit" className="prompt-submit">
-          Ask
-        </button>
-      </form>
+      <button className="start-chat-btn" onClick={() => setShowChat(true)}>
+        Start a conversation
+      </button>
       <div className="suggestions-grid">
         {suggestions.map((s) => (
           <button
             key={s}
             className="suggestion-chip"
-            onClick={() => setPrompt(s)}
+            onClick={() => handleSuggestion(s)}
           >
             {s}
           </button>

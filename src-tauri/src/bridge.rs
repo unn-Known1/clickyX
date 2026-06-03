@@ -1,6 +1,11 @@
+use std::io::Cursor;
+
 use actix_web::{web, App, HttpServer, HttpResponse, middleware};
-use serde::Serialize;
+use base64::Engine;
+use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager};
+
+use crate::screen::capture;
 
 #[derive(Clone)]
 pub struct BridgeState {
@@ -23,6 +28,57 @@ struct PanelToggleResponse {
 struct ErrorResponse {
     error: String,
     message: String,
+}
+
+#[derive(Serialize)]
+struct OkResponse {
+    ok: bool,
+}
+
+#[derive(Serialize)]
+struct ScreenshotResponse {
+    images: Vec<capture::ScreenImage>,
+}
+
+#[derive(Deserialize)]
+struct CursorRequest {
+    x: f64,
+    y: f64,
+    label: Option<String>,
+    accent: Option<String>,
+}
+
+#[derive(Deserialize)]
+struct CursorsRequest {
+    cursors: Vec<CursorRequest>,
+}
+
+#[derive(Deserialize)]
+struct RectRequest {
+    x: f64,
+    y: f64,
+    w: f64,
+    h: f64,
+    label: Option<String>,
+}
+
+#[derive(Deserialize)]
+struct ScribbleRequest {
+    points: Vec<[f64; 2]>,
+    label: Option<String>,
+}
+
+#[derive(Deserialize)]
+struct CaptionRequest {
+    text: String,
+    x: f64,
+    y: f64,
+}
+
+#[derive(Deserialize)]
+struct ClickRequest {
+    x: f64,
+    y: f64,
 }
 
 async fn health() -> HttpResponse {
@@ -54,6 +110,505 @@ async fn toggle_panel(data: web::Data<BridgeState>) -> HttpResponse {
     }
 }
 
+async fn screenshot(data: web::Data<BridgeState>) -> HttpResponse {
+    let _app = &data.app_handle;
+    match capture::capture_all_screens() {
+        Ok(images) => HttpResponse::Ok().json(ScreenshotResponse { images }),
+        Err(e) => HttpResponse::InternalServerError().json(ErrorResponse {
+            error: "capture_error".into(),
+            message: e,
+        }),
+    }
+}
+
+async fn show_cursor(data: web::Data<BridgeState>, body: web::Json<CursorRequest>) -> HttpResponse {
+    let app = &data.app_handle;
+    match crate::overlay::show_cursor(app, body.x, body.y, body.label.clone()) {
+        Ok(_) => HttpResponse::Ok().json(OkResponse { ok: true }),
+        Err(e) => HttpResponse::InternalServerError().json(ErrorResponse {
+            error: "overlay_error".into(),
+            message: e,
+        }),
+    }
+}
+
+async fn show_cursors(data: web::Data<BridgeState>, body: web::Json<CursorsRequest>) -> HttpResponse {
+    let app = &data.app_handle;
+    for c in &body.cursors {
+        if let Err(e) = crate::overlay::show_cursor(app, c.x, c.y, c.label.clone()) {
+            return HttpResponse::InternalServerError().json(ErrorResponse {
+                error: "overlay_error".into(),
+                message: e,
+            });
+        }
+    }
+    HttpResponse::Ok().json(OkResponse { ok: true })
+}
+
+async fn show_rectangle(data: web::Data<BridgeState>, body: web::Json<RectRequest>) -> HttpResponse {
+    let app = &data.app_handle;
+    match crate::overlay::show_rect(app, body.x, body.y, body.w, body.h, body.label.clone()) {
+        Ok(_) => HttpResponse::Ok().json(OkResponse { ok: true }),
+        Err(e) => HttpResponse::InternalServerError().json(ErrorResponse {
+            error: "overlay_error".into(),
+            message: e,
+        }),
+    }
+}
+
+async fn show_scribble(data: web::Data<BridgeState>, body: web::Json<ScribbleRequest>) -> HttpResponse {
+    let app = &data.app_handle;
+    match crate::overlay::show_scribble(app, body.points.clone(), body.label.clone()) {
+        Ok(_) => HttpResponse::Ok().json(OkResponse { ok: true }),
+        Err(e) => HttpResponse::InternalServerError().json(ErrorResponse {
+            error: "overlay_error".into(),
+            message: e,
+        }),
+    }
+}
+
+async fn show_caption(data: web::Data<BridgeState>, body: web::Json<CaptionRequest>) -> HttpResponse {
+    let app = &data.app_handle;
+    match crate::overlay::show_caption(app, &body.text, body.x, body.y) {
+        Ok(_) => HttpResponse::Ok().json(OkResponse { ok: true }),
+        Err(e) => HttpResponse::InternalServerError().json(ErrorResponse {
+            error: "overlay_error".into(),
+            message: e,
+        }),
+    }
+}
+
+async fn click(data: web::Data<BridgeState>, body: web::Json<ClickRequest>) -> HttpResponse {
+    let _app = &data.app_handle;
+    log::info!("Click requested at ({}, {})", body.x, body.y);
+    HttpResponse::Ok().json(OkResponse { ok: true })
+}
+
+async fn clear_overlays(data: web::Data<BridgeState>) -> HttpResponse {
+    let app = &data.app_handle;
+    match crate::overlay::clear_overlays(app) {
+        Ok(_) => HttpResponse::Ok().json(OkResponse { ok: true }),
+        Err(e) => HttpResponse::InternalServerError().json(ErrorResponse {
+            error: "overlay_error".into(),
+            message: e,
+        }),
+    }
+}
+
+#[derive(Deserialize)]
+struct SpeakRequest {
+    text: String,
+    provider: Option<String>,
+}
+
+#[derive(Deserialize)]
+struct TranscribeRequest {
+    audio_base64: Option<String>,
+    provider: Option<String>,
+}
+
+#[derive(Serialize)]
+struct TranscribeResponse {
+    transcript: String,
+    provider: String,
+}
+
+#[derive(Serialize)]
+struct AudioLevelResponse {
+    rms: f32,
+    peak: f32,
+    clipping: bool,
+}
+
+fn wav_to_pcm_f32(wav_data: &[u8]) -> Vec<f32> {
+    let cursor = Cursor::new(wav_data);
+    if let Ok(reader) = hound::WavReader::new(cursor) {
+        reader
+            .into_samples::<i16>()
+            .filter_map(|s| s.ok())
+            .map(|s| s as f32 / i16::MAX as f32)
+            .collect()
+    } else {
+        vec![]
+    }
+}
+
+async fn speak(data: web::Data<BridgeState>, body: web::Json<SpeakRequest>) -> HttpResponse {
+    let app = &data.app_handle;
+    if let Some(pipeline) = app.try_state::<std::sync::Mutex<crate::audio::VoicePipeline>>() {
+        let pipe = match pipeline.lock() {
+            Ok(p) => p,
+            Err(e) => {
+                return HttpResponse::InternalServerError().json(ErrorResponse {
+                    error: "internal_error".into(),
+                    message: format!("Pipeline lock error: {e}"),
+                });
+            }
+        };
+        match pipe.speak_response(&body.text) {
+            Ok(audio) => HttpResponse::Ok()
+                .content_type("audio/wav")
+                .body(audio),
+            Err(e) => HttpResponse::BadRequest().json(ErrorResponse {
+                error: "provider_error".into(),
+                message: e,
+            }),
+        }
+    } else {
+        HttpResponse::InternalServerError().json(ErrorResponse {
+            error: "internal_error".into(),
+            message: "Voice pipeline not initialized".into(),
+        })
+    }
+}
+
+async fn transcribe(
+    data: web::Data<BridgeState>,
+    body: web::Json<TranscribeRequest>,
+) -> HttpResponse {
+    let app = &data.app_handle;
+    let config = match crate::config::load_config(app) {
+        Ok(c) => c,
+        Err(e) => {
+            return HttpResponse::InternalServerError().json(ErrorResponse {
+                error: "internal_error".into(),
+                message: e,
+            });
+        }
+    };
+
+    let provider_name = body
+        .provider
+        .clone()
+        .unwrap_or(config.audio.stt_provider.clone());
+    let stt_provider = crate::audio::SttProvider::from_name(&provider_name)
+        .unwrap_or(crate::audio::SttProvider::Deepgram);
+
+    let api_key = config
+        .api_keys
+        .iter()
+        .find(|k| k.provider == stt_provider.name())
+        .map(|k| k.key.clone())
+        .unwrap_or_default();
+
+    let stt_cfg = crate::audio::SttConfig {
+        provider: stt_provider,
+        api_key,
+        language: "en".into(),
+        timeout_secs: 30,
+        max_retries: 3,
+    };
+
+    let audio_base64 = match &body.audio_base64 {
+        Some(b64) => b64.clone(),
+        None => {
+            return HttpResponse::BadRequest().json(ErrorResponse {
+                error: "bad_request".into(),
+                message: "audio_base64 field required".into(),
+            });
+        }
+    };
+
+    let wav_bytes = match base64::Engine::decode(
+        &base64::engine::general_purpose::STANDARD,
+        audio_base64.as_bytes(),
+    ) {
+        Ok(b) => b,
+        Err(e) => {
+            return HttpResponse::BadRequest().json(ErrorResponse {
+                error: "bad_request".into(),
+                message: format!("Invalid base64: {e}"),
+            });
+        }
+    };
+
+    let pcm_data = wav_to_pcm_f32(&wav_bytes);
+
+    let sample_rate = 16000;
+    let transcript = match crate::audio::transcribe(&pcm_data, &stt_cfg, sample_rate).await {
+        Ok(t) => t,
+        Err(e) => {
+            return HttpResponse::InternalServerError().json(ErrorResponse {
+                error: "transcription_failed".into(),
+                message: e,
+            });
+        }
+    };
+
+    HttpResponse::Ok().json(TranscribeResponse {
+        transcript,
+        provider: provider_name,
+    })
+}
+
+async fn audio_level(data: web::Data<BridgeState>) -> HttpResponse {
+    let app = &data.app_handle;
+    if let Some(pipeline) = app.try_state::<std::sync::Mutex<crate::audio::VoicePipeline>>() {
+        let pipe = match pipeline.lock() {
+            Ok(p) => p,
+            Err(_) => {
+                return HttpResponse::Ok().json(AudioLevelResponse {
+                    rms: 0.0,
+                    peak: 0.0,
+                    clipping: false,
+                });
+            }
+        };
+        let level = pipe.get_audio_level();
+        HttpResponse::Ok().json(AudioLevelResponse {
+            rms: level.rms,
+            peak: level.peak,
+            clipping: level.clipping,
+        })
+    } else {
+        HttpResponse::Ok().json(AudioLevelResponse {
+            rms: 0.0,
+            peak: 0.0,
+            clipping: false,
+        })
+    }
+}
+
+#[derive(Deserialize)]
+struct MessagesRequest {
+    model: Option<String>,
+    messages: Vec<MessageItem>,
+    system: Option<String>,
+    max_tokens: Option<i32>,
+}
+
+#[derive(Deserialize)]
+struct MessageItem {
+    role: String,
+    content: serde_json::Value,
+}
+
+#[derive(Deserialize)]
+struct ResponsesRequest {
+    model: Option<String>,
+    messages: Vec<ResponseMessageItem>,
+    max_tokens: Option<i32>,
+}
+
+#[derive(Deserialize)]
+struct ResponseMessageItem {
+    role: String,
+    content: serde_json::Value,
+}
+
+#[derive(Serialize)]
+struct ModelsResponse {
+    models: Vec<serde_json::Value>,
+}
+
+async fn proxy_messages(
+    data: web::Data<BridgeState>,
+    body: web::Json<MessagesRequest>,
+) -> HttpResponse {
+    let app = &data.app_handle;
+    let config = match app.try_state::<crate::config::AppConfig>() {
+        Some(c) => c.inner().clone(),
+        None => {
+            return HttpResponse::InternalServerError().json(ErrorResponse {
+                error: "internal_error".into(),
+                message: "config not available".into(),
+            });
+        }
+    };
+
+    let api_key = match &config.ai.anthropic_api_key {
+        Some(k) => k.clone(),
+        None => {
+            return HttpResponse::Unauthorized().json(serde_json::json!({
+                "error": "auth_error",
+                "message": "Anthropic API key not configured"
+            }));
+        }
+    };
+
+    let model = body
+        .model
+        .clone()
+        .unwrap_or_else(|| config.ai.anthropic_model.clone());
+
+    let max_tokens = body.max_tokens.unwrap_or(4096);
+
+    let mut api_messages: Vec<serde_json::Value> = Vec::new();
+    for msg in &body.messages {
+        api_messages.push(serde_json::json!({
+            "role": msg.role,
+            "content": msg.content,
+        }));
+    }
+
+    let mut request_body = serde_json::json!({
+        "model": model,
+        "max_tokens": max_tokens,
+        "stream": false,
+        "messages": api_messages,
+    });
+
+    if let Some(system) = &body.system {
+        request_body
+            .as_object_mut()
+            .unwrap()
+            .insert("system".into(), serde_json::json!(system));
+    }
+
+    let client = reqwest::Client::new();
+    let response = match client
+        .post("https://api.anthropic.com/v1/messages")
+        .header("x-api-key", &api_key)
+        .header("anthropic-version", "2023-06-01")
+        .header("content-type", "application/json")
+        .json(&request_body)
+        .send()
+        .await
+    {
+        Ok(r) => r,
+        Err(e) => {
+            return HttpResponse::InternalServerError().json(ErrorResponse {
+                error: "internal_error".into(),
+                message: format!("proxy error: {e}"),
+            });
+        }
+    };
+
+    let status = response.status();
+    let text = match response.text().await {
+        Ok(t) => t,
+        Err(e) => {
+            return HttpResponse::InternalServerError().json(ErrorResponse {
+                error: "internal_error".into(),
+                message: format!("response read error: {e}"),
+            });
+        }
+    };
+
+    match serde_json::from_str::<serde_json::Value>(&text) {
+        Ok(json) => HttpResponse::build(
+            actix_web::http::StatusCode::from_u16(status.as_u16()).unwrap(),
+        )
+        .json(json),
+        Err(_) => HttpResponse::build(
+            actix_web::http::StatusCode::from_u16(status.as_u16()).unwrap(),
+        )
+        .body(text),
+    }
+}
+
+async fn proxy_responses(
+    data: web::Data<BridgeState>,
+    body: web::Json<ResponsesRequest>,
+) -> HttpResponse {
+    let app = &data.app_handle;
+    let config = match app.try_state::<crate::config::AppConfig>() {
+        Some(c) => c.inner().clone(),
+        None => {
+            return HttpResponse::InternalServerError().json(ErrorResponse {
+                error: "internal_error".into(),
+                message: "config not available".into(),
+            });
+        }
+    };
+
+    let api_key = match &config.ai.openai_api_key {
+        Some(k) => k.clone(),
+        None => {
+            return HttpResponse::Unauthorized().json(serde_json::json!({
+                "error": "auth_error",
+                "message": "OpenAI API key not configured"
+            }));
+        }
+    };
+
+    let model = body
+        .model
+        .clone()
+        .unwrap_or_else(|| config.ai.openai_model.clone());
+
+    let max_tokens = body.max_tokens.unwrap_or(4096);
+
+    let mut api_messages = Vec::new();
+    if !config.ai.system_prompt.is_empty() {
+        api_messages.push(serde_json::json!({
+            "role": "system",
+            "content": config.ai.system_prompt,
+        }));
+    }
+    for msg in &body.messages {
+        api_messages.push(serde_json::json!({
+            "role": msg.role,
+            "content": msg.content,
+        }));
+    }
+
+    let request_body = serde_json::json!({
+        "model": model,
+        "messages": api_messages,
+        "max_tokens": max_tokens,
+        "stream": false,
+    });
+
+    let client = reqwest::Client::new();
+    let response = match client
+        .post("https://api.openai.com/v1/chat/completions")
+        .header("Authorization", format!("Bearer {}", api_key))
+        .header("content-type", "application/json")
+        .json(&request_body)
+        .send()
+        .await
+    {
+        Ok(r) => r,
+        Err(e) => {
+            return HttpResponse::InternalServerError().json(ErrorResponse {
+                error: "internal_error".into(),
+                message: format!("proxy error: {e}"),
+            });
+        }
+    };
+
+    let status = response.status();
+    let text = match response.text().await {
+        Ok(t) => t,
+        Err(e) => {
+            return HttpResponse::InternalServerError().json(ErrorResponse {
+                error: "internal_error".into(),
+                message: format!("response read error: {e}"),
+            });
+        }
+    };
+
+    match serde_json::from_str::<serde_json::Value>(&text) {
+        Ok(json) => HttpResponse::build(
+            actix_web::http::StatusCode::from_u16(status.as_u16()).unwrap(),
+        )
+        .json(json),
+        Err(_) => HttpResponse::build(
+            actix_web::http::StatusCode::from_u16(status.as_u16()).unwrap(),
+        )
+        .body(text),
+    }
+}
+
+async fn list_models() -> HttpResponse {
+    let catalog = crate::ai::catalog::ModelCatalog::new();
+    let models: Vec<serde_json::Value> = catalog
+        .models
+        .iter()
+        .map(|m| {
+            serde_json::json!({
+                "id": m.id,
+                "provider": m.provider,
+                "name": m.name,
+                "capabilities": m.capabilities,
+            })
+        })
+        .collect();
+
+    HttpResponse::Ok().json(ModelsResponse { models })
+}
+
 async fn not_found() -> HttpResponse {
     HttpResponse::NotFound().json(ErrorResponse {
         error: "not_found".into(),
@@ -75,6 +630,9 @@ pub fn start_bridge(app_handle: AppHandle) {
                     .app_data(data.clone())
                     .route("/health", web::get().to(health))
                     .route("/panel/toggle", web::post().to(toggle_panel))
+                    .route("/v1/messages", web::post().to(proxy_messages))
+                    .route("/v1/responses", web::post().to(proxy_responses))
+                    .route("/models", web::get().to(list_models))
                     .default_service(web::route().to(not_found))
             })
             .bind("127.0.0.1:32123");

@@ -9,14 +9,48 @@ interface AppConfig {
   version: string;
 }
 
+interface AiConfig {
+  anthropic_api_key: string | null;
+  anthropic_model: string;
+  openai_api_key: string | null;
+  openai_model: string;
+  default_provider: string;
+  system_prompt: string;
+}
+
 function SettingsTab() {
   const [config, setConfig] = useState<AppConfig | null>(null);
+  const [aiConfig, setAiConfig] = useState<AiConfig | null>(null);
   const [newApiKey, setNewApiKey] = useState({ provider: "", key: "" });
-  const [newHotkey, setNewHotkey] = useState({ key: "", enabled: true, action: "toggle_panel" });
+  const [newHotkey, setNewHotkey] = useState({
+    key: "",
+    enabled: true,
+    action: "toggle_panel",
+  });
+
+  // AI settings state
+  const [anthropicKey, setAnthropicKey] = useState("");
+  const [anthropicModel, setAnthropicModel] = useState("");
+  const [openaiKey, setOpenaiKey] = useState("");
+  const [openaiModel, setOpenaiModel] = useState("");
+  const [defaultProvider, setDefaultProvider] = useState("anthropic");
+  const [systemPrompt, setSystemPrompt] = useState("");
 
   useEffect(() => {
     invoke<AppConfig>("get_config")
       .then(setConfig)
+      .catch(console.error);
+
+    invoke<AiConfig>("get_ai_config")
+      .then((ai) => {
+        setAiConfig(ai);
+        setAnthropicKey(ai.anthropic_api_key || "");
+        setAnthropicModel(ai.anthropic_model);
+        setOpenaiKey(ai.openai_api_key || "");
+        setOpenaiModel(ai.openai_model);
+        setDefaultProvider(ai.default_provider);
+        setSystemPrompt(ai.system_prompt);
+      })
       .catch(console.error);
   }, []);
 
@@ -71,11 +105,92 @@ function SettingsTab() {
     }
   };
 
+  const saveAiConfig = async () => {
+    try {
+      const updated = await invoke<AiConfig>("update_ai_config", {
+        partial: {
+          anthropic_api_key: anthropicKey || null,
+          anthropic_model: anthropicModel,
+          openai_api_key: openaiKey || null,
+          openai_model: openaiModel,
+          default_provider: defaultProvider,
+          system_prompt: systemPrompt,
+        },
+      });
+      setAiConfig(updated);
+    } catch (e) {
+      console.error("Failed to save AI config:", e);
+    }
+  };
+
   if (!config) return <div className="settings-tab">Loading...</div>;
 
   return (
     <div className="settings-tab">
       <h2>Settings</h2>
+
+      <section className="settings-section">
+        <h3>AI Providers</h3>
+        <div className="ai-settings">
+          <div className="ai-provider-group">
+            <h4>Anthropic (Claude)</h4>
+            <input
+              type="password"
+              className="settings-input"
+              placeholder="API Key (sk-ant-...)"
+              value={anthropicKey}
+              onChange={(e) => setAnthropicKey(e.target.value)}
+            />
+            <input
+              type="text"
+              className="settings-input"
+              placeholder="Model (e.g., claude-sonnet-4-20250514)"
+              value={anthropicModel}
+              onChange={(e) => setAnthropicModel(e.target.value)}
+            />
+          </div>
+          <div className="ai-provider-group">
+            <h4>OpenAI (GPT)</h4>
+            <input
+              type="password"
+              className="settings-input"
+              placeholder="API Key (sk-proj-...)"
+              value={openaiKey}
+              onChange={(e) => setOpenaiKey(e.target.value)}
+            />
+            <input
+              type="text"
+              className="settings-input"
+              placeholder="Model (e.g., gpt-4o)"
+              value={openaiModel}
+              onChange={(e) => setOpenaiModel(e.target.value)}
+            />
+          </div>
+          <div className="ai-provider-group">
+            <h4>Default Provider</h4>
+            <select
+              className="settings-select"
+              value={defaultProvider}
+              onChange={(e) => setDefaultProvider(e.target.value)}
+            >
+              <option value="anthropic">Anthropic</option>
+              <option value="openai">OpenAI</option>
+            </select>
+          </div>
+          <div className="ai-provider-group">
+            <h4>System Prompt</h4>
+            <textarea
+              className="settings-textarea"
+              rows={3}
+              value={systemPrompt}
+              onChange={(e) => setSystemPrompt(e.target.value)}
+            />
+          </div>
+          <button className="settings-save-btn" onClick={saveAiConfig}>
+            Save AI Settings
+          </button>
+        </div>
+      </section>
 
       <section className="settings-section">
         <h3>Theme</h3>

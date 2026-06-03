@@ -3,6 +3,35 @@ use std::fs;
 use std::path::PathBuf;
 use tauri::AppHandle;
 
+use crate::ai::AiConfig;
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AudioConfig {
+    pub ptt_hotkey: String,
+    pub stt_provider: String,
+    pub tts_provider: String,
+    pub activation_mode: String,
+    pub auto_submit: bool,
+    pub sample_rate: u32,
+    pub buffer_size: u32,
+    pub volume: f32,
+}
+
+impl Default for AudioConfig {
+    fn default() -> Self {
+        Self {
+            ptt_hotkey: "Ctrl+Shift+V".into(),
+            stt_provider: "deepgram".into(),
+            tts_provider: "elevenlabs".into(),
+            activation_mode: "ptt".into(),
+            auto_submit: true,
+            sample_rate: 16000,
+            buffer_size: 1024,
+            volume: 1.0,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct HotkeyBinding {
     pub key: String,
@@ -44,12 +73,54 @@ impl Default for WindowPrefs {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ScreenConfig {
+    pub max_dimension: u32,
+    pub jpeg_quality: u8,
+    pub cache_ttl_secs: u64,
+}
+
+impl Default for ScreenConfig {
+    fn default() -> Self {
+        Self {
+            max_dimension: 1280,
+            jpeg_quality: 80,
+            cache_ttl_secs: 3,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct OverlayPrefs {
+    pub cursor_accent: String,
+    pub cursor_size: u32,
+    pub show_cursor: bool,
+    pub tutor_mode: bool,
+    pub agent_dock_position: String,
+}
+
+impl Default for OverlayPrefs {
+    fn default() -> Self {
+        Self {
+            cursor_accent: "#4fc3f7".into(),
+            cursor_size: 32,
+            show_cursor: true,
+            tutor_mode: false,
+            agent_dock_position: "bottom".into(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AppConfig {
     pub hotkeys: Vec<HotkeyBinding>,
     pub theme: String,
     pub api_keys: Vec<ApiKey>,
     pub window: WindowPrefs,
     pub version: String,
+    pub ai: AiConfig,
+    pub screen: ScreenConfig,
+    pub overlay: OverlayPrefs,
+    pub audio: AudioConfig,
 }
 
 impl Default for AppConfig {
@@ -60,6 +131,10 @@ impl Default for AppConfig {
             api_keys: vec![],
             window: WindowPrefs::default(),
             version: "1.0".into(),
+            ai: AiConfig::default(),
+            screen: ScreenConfig::default(),
+            overlay: OverlayPrefs::default(),
+            audio: AudioConfig::default(),
         }
     }
 }
