@@ -54,20 +54,17 @@ function AgentDockStrip() {
 
 function HomeTab() {
   const [showChat, setShowChat] = useState(false);
+  const [initialSuggestion, setInitialSuggestion] = useState<string | null>(null);
 
   const handleSuggestion = useCallback((suggestion: string) => {
+    setInitialSuggestion(suggestion);
     setShowChat(true);
-    const input = document.querySelector(".chat-input") as HTMLInputElement;
-    if (input) {
-      input.value = suggestion;
-      input.focus();
-    }
   }, []);
 
   if (showChat) {
     return (
       <div className="home-tab">
-        <ChatTab />
+        <ChatTab initialText={initialSuggestion ?? undefined} />
       </div>
     );
   }

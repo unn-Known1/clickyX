@@ -19,7 +19,7 @@ pub fn setup_tray<R: Runtime>(app: &AppHandle<R>) -> Result<(), Box<dyn std::err
         .build()?;
 
     let _tray = TrayIconBuilder::new()
-        .icon(app.default_window_icon().unwrap().clone())
+        .icon(app.default_window_icon().ok_or("no default window icon")?.clone())
         .tooltip("ClickyX")
         .menu(&menu)
         .on_menu_event(move |app, event| match event.id.as_ref() {

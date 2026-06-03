@@ -51,9 +51,7 @@ impl CodexProcess {
 
     pub fn stop(&mut self) -> Result<(), String> {
         if let Some(mut child) = self.child.take() {
-            child
-                .kill()
-                .map_err(|e| format!("failed to stop codex: {e}"))?;
+            let _ = child.kill();
             let _ = child.wait();
         }
         Ok(())

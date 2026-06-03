@@ -102,7 +102,7 @@ function ConnectionsTab() {
       const created = await invoke<Automation>("create_automation", {
         automation: { ...newAutomation, id: "" },
       });
-      setAutomations([...automations, created]);
+      setAutomations(prev => [...prev, created]);
       setNewAutomation({
         id: "",
         name: "",
@@ -124,7 +124,7 @@ function ConnectionsTab() {
         enabled,
       });
       setAutomations(
-        automations.map((a) => (a.id === id ? updated : a)),
+        prev => prev.map((a) => (a.id === id ? updated : a)),
       );
     } catch (e) {
       console.error("Failed to toggle automation:", e);
@@ -134,7 +134,7 @@ function ConnectionsTab() {
   const deleteAutomation = async (id: string) => {
     try {
       await invoke<boolean>("delete_automation", { id });
-      setAutomations(automations.filter((a) => a.id !== id));
+      setAutomations(prev => prev.filter((a) => a.id !== id));
     } catch (e) {
       console.error("Failed to delete automation:", e);
     }

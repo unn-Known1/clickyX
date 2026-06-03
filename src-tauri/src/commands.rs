@@ -463,7 +463,7 @@ pub fn transcribe_audio(
     pipeline: State<'_, Mutex<VoicePipeline>>,
 ) -> Result<String, String> {
     let pipe = pipeline.lock().map_err(|e| format!("lock error: {e}"))?;
-    let stt_cfg = pipe.stt_config();
+    let stt_cfg = pipe.stt_config()?;
     let sample_rate = 16000;
 
     let rt = tokio::runtime::Handle::try_current()

@@ -113,15 +113,16 @@ impl VoicePipeline {
     }
 
     pub fn stop_ptt_and_transcribe(&self) -> Result<String, String> {
-        let mut state = self
-            .state
-            .lock()
-            .map_err(|e| format!("State lock error: {e}"))?;
-        if *state != PipelineState::Listening {
-            return Err(format!("Pipeline is {:?}, not listening", state));
+        {
+            let mut state = self
+                .state
+                .lock()
+                .map_err(|e| format!("State lock error: {e}"))?;
+            if *state != PipelineState::Listening {
+                return Err(format!("Pipeline is {:?}, not listening", state));
+            }
+            *state = PipelineState::Processing;
         }
-
-        *state = PipelineState::Processing;
 
         let audio_data = {
             let mut capture = self
@@ -154,16 +155,20 @@ impl VoicePipeline {
             }
         }
 
-        *state = PipelineState::Idle;
+        if let Ok(mut state) = self.state.lock() {
+            *state = PipelineState::Idle;
+        }
         result
     }
 
     pub fn speak_response(&self, text: &str) -> Result<Vec<u8>, String> {
-        let mut state = self
-            .state
-            .lock()
-            .map_err(|e| format!("State lock error: {e}"))?;
-        *state = PipelineState::Speaking;
+        {
+            let mut state = self
+                .state
+                .lock()
+                .map_err(|e| format!("State lock error: {e}"))?;
+            *state = PipelineState::Speaking;
+        }
 
         let tts_cfg = self
             .tts_config
@@ -186,7 +191,9 @@ impl VoicePipeline {
             }
         }
 
-        *state = PipelineState::Idle;
+        if let Ok(mut state) = self.state.lock() {
+            *state = PipelineState::Idle;
+        }
         result
     }
 
@@ -376,11 +383,11 @@ impl VoicePipeline {
         self.capture.clone()
     }
 
-    pub fn stt_config(&self) -> SttConfig {
+    pub fn stt_config(&self) -> Result<SttConfig, String> {
         self.stt_config
             .lock()
             .map(|c| c.clone())
-            .unwrap_or_default()
+            .map_err(|e| format!("STT config lock poisoned: {e}"))
     }
 }
 

@@ -1,9 +1,10 @@
 import { useState, useRef, useEffect, useCallback } from "react";
+import { invoke } from "@tauri-apps/api/core";
 import { useChat, ChatMessage } from "../hooks/useChat";
 import { useVision } from "../hooks/useVision";
 import ModelSelector from "./ModelSelector";
 
-function ChatTab() {
+function ChatTab({ initialText }: { initialText?: string }) {
   const {
     messages,
     streaming,
@@ -15,7 +16,7 @@ function ChatTab() {
   const { images, addImageFromDataUrl, removeImage, clearImages, getImageDataUrls } =
     useVision();
 
-  const [input, setInput] = useState("");
+  const [input, setInput] = useState(initialText ?? "");
   const [selectedModel, setSelectedModel] = useState(
     "claude-sonnet-4-20250514",
   );
@@ -34,17 +35,15 @@ function ChatTab() {
       setInput("");
 
       if (images.length > 0) {
-        import("@tauri-apps/api/core").then(({ invoke }) => {
-          invoke<string>("chat_with_vision", {
-            message: text,
-            images: getImageDataUrls(),
-            model: selectedModel,
+        invoke<string>("chat_with_vision", {
+          message: text,
+          images: getImageDataUrls(),
+          model: selectedModel,
+        })
+          .then(() => {
+            clearImages();
           })
-            .then(() => {
-              clearImages();
-            })
-            .catch((err) => console.error(err));
-        });
+          .catch((err) => console.error(err));
       } else {
         sendMessageStream(text, selectedModel);
       }

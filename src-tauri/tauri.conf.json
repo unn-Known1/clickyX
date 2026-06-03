@@ -30,6 +30,7 @@
       {
         "label": "overlay",
         "title": "ClickyX Overlay",
+        "url": "/src/overlay/index.html",
         "width": 800,
         "height": 600,
         "decorations": false,
@@ -46,7 +47,7 @@
       "tooltip": "ClickyX"
     },
     "security": {
-      "csp": null
+      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self' https://*.clickyx.app https://api.openai.com https://api.anthropic.com https://api.deepgram.com https://api.elevenlabs.io wss://api.deepgram.com; img-src 'self' data: blob:"
     }
   },
   "bundle": {
@@ -77,10 +78,5 @@
       }
     }
   },
-  "plugins": {
-    "updater": {
-      "endpoints": ["https://releases.clickyx.app/{{target}}/{{arch}}/{{current_version}}"],
-      "pubkey": "your-public-key-here"
-    }
-  }
+  "plugins": {}
 }

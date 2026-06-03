@@ -9,7 +9,7 @@ param(
     [string]$TimestampServer = "http://timestamp.digicert.com",
 
     [Parameter(Mandatory = $false)]
-    [string]$SearchPattern = "src-tauri/target/release/bundle/**/*.msi"
+    [string]$SearchPattern = "src-tauri/target/release/bundle/**/*.exe"
 )
 
 if (-not $CertPath) {
@@ -20,7 +20,7 @@ if (-not $CertPath) {
 $files = Get-ChildItem -Path $SearchPattern -Recurse -ErrorAction SilentlyContinue
 
 if (-not $files) {
-    Write-Host "No MSI files found matching pattern: $SearchPattern"
+    Write-Host "No installer files found matching pattern: $SearchPattern"
     exit 1
 }
 

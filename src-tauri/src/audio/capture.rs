@@ -99,7 +99,7 @@ impl AudioCapture {
     pub fn new(sample_rate: u32, buffer_size: u32) -> Self {
         Self {
             stream: StreamWrapper(None),
-            buffer: Arc::new(Mutex::new(RingBuffer::new(360))),
+            buffer: Arc::new(Mutex::new(RingBuffer::new(buffer_size as usize))),
             sample_rate,
             buffer_size,
             recording: Arc::new(AtomicBool::new(false)),
@@ -126,7 +126,6 @@ impl AudioCapture {
 
         let buffer = self.buffer.clone();
         let recording = self.recording.clone();
-        recording.store(true, Ordering::SeqCst);
 
         let err_callback = move |err: cpal::StreamError| {
             log::error!("Audio capture stream error: {err}");
@@ -149,6 +148,7 @@ impl AudioCapture {
             .map_err(|e| format!("Failed to start stream: {e}"))?;
 
         self.stream = StreamWrapper(Some(stream));
+        recording.store(true, Ordering::SeqCst);
         log::info!("Audio capture started");
         Ok(())
     }

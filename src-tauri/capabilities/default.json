@@ -4,6 +4,13 @@
   "windows": ["main", "overlay"],
   "permissions": [
     "core:default",
+    "core:window:allow-show",
+    "core:window:allow-hide",
+    "core:window:allow-set-focus",
+    "core:window:allow-is-visible",
+    "core:window:allow-eval",
+    "core:window:allow-center",
+    "core:window:allow-close",
     "shell:allow-open",
     "global-shortcut:default"
   ]

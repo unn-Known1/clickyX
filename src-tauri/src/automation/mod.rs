@@ -251,6 +251,10 @@ fn parse_rfc3339_secs(s: &str) -> Option<u64> {
     let min: u32 = s[14..16].parse().ok()?;
     let sec: u32 = s[17..19].parse().ok()?;
 
+    if !(1..=12).contains(&month) {
+        return None;
+    }
+
     let days_from_epoch = days_before_year(year) + days_before_month(year, month) + day as i64 - 1;
     let total_secs = days_from_epoch * 86400 + hour as i64 * 3600 + min as i64 * 60 + sec as i64;
     Some(total_secs as u64)

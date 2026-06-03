@@ -176,11 +176,11 @@ function OverlayApp() {
     }).then(fn => unlisteners.push(fn));
 
     listen<ScribbleState>("show-scribble", (e) => {
-      setScribbles(prev => [...prev, e.payload]);
+      setScribbles(prev => [...prev.slice(-50), e.payload]);
     }).then(fn => unlisteners.push(fn));
 
     listen<CaptionState>("show-caption", (e) => {
-      setCaptions(prev => [...prev, e.payload]);
+      setCaptions(prev => [...prev.slice(-50), e.payload]);
     }).then(fn => unlisteners.push(fn));
 
     listen<AgentDockState>("show-agent-dock", (e) => {
@@ -191,11 +191,17 @@ function OverlayApp() {
       setDock(null);
     }).then(fn => unlisteners.push(fn));
 
-    window.addEventListener("mousemove", (e) => {
+    const onMouseMove = (e: MouseEvent) => {
       petTarget.current = { x: e.clientX, y: e.clientY };
-    });
+    };
+    window.addEventListener("mousemove", onMouseMove);
 
-    return () => unlisteners.forEach(fn => fn());
+    return () => {
+      Object.values(animRefs.current).forEach(cancel => cancel());
+      animRefs.current = {};
+      window.removeEventListener("mousemove", onMouseMove);
+      unlisteners.forEach(fn => fn());
+    };
   }, []);
 
   return (
@@ -215,7 +221,7 @@ function OverlayApp() {
         </div>
       ))}
       {scribbles.map((s, i) => (
-        <svg key={i} className="overlay-scribble" viewBox="0 0 100 100" preserveAspectRatio="none">
+        <svg key={i} className="overlay-scribble" style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', pointerEvents: 'none', overflow: 'visible' }}>
           <path d={`M ${s.points.map((p, j) => `${j === 0 ? "" : "L"} ${p[0]} ${p[1]}`).join(" ")}`} />
           {s.label && <text>{s.label}</text>}
         </svg>

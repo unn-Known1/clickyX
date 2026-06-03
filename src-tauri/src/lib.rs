@@ -33,13 +33,8 @@ fn init_logging() {
             return;
         }
     };
-    let log_file = log_dir.join("clickyx.log");
-    let file_writer = std::fs::OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open(&log_file)
-        .expect("failed to open log file");
 
+    let log_file = log_dir.join("clickyx.log");
     let rotated = log_dir.join("clickyx.old.log");
     if log_file.exists() {
         let metadata = std::fs::metadata(&log_file).ok();
@@ -47,6 +42,19 @@ fn init_logging() {
             let _ = std::fs::rename(&log_file, &rotated);
         }
     }
+
+    let file_writer = match std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&log_file)
+    {
+        Ok(f) => f,
+        Err(e) => {
+            eprintln!("Warning: could not open log file: {e}");
+            env_logger::init();
+            return;
+        }
+    };
 
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info"))
         .target(env_logger::Target::Pipe(Box::new(file_writer)))
