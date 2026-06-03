@@ -147,6 +147,18 @@ pub fn get_panel_state(state: State<'_, Mutex<AppState>>) -> Result<PanelState, 
 }
 
 #[tauri::command]
+pub fn toggle_panel_pin(
+    state: State<'_, Mutex<AppState>>,
+) -> Result<PanelState, String> {
+    let mut state = state.lock().map_err(|e| format!("lock error: {e}"))?;
+    state.panel_pinned = !state.panel_pinned;
+    Ok(PanelState {
+        panel_visible: state.panel_visible,
+        panel_pinned: state.panel_pinned,
+    })
+}
+
+#[tauri::command]
 pub fn get_app_state(state: State<'_, Mutex<AppState>>) -> Result<AppState, String> {
     let locked = state.lock().map_err(|e| format!("lock error: {e}"))?;
     Ok(locked.clone())
@@ -345,6 +357,33 @@ pub fn overlay_show_cursors(app: AppHandle, cursors: Vec<CursorCommand>) -> Resu
 }
 
 #[tauri::command]
+pub fn overlay_show_animated_cursor(
+    app: AppHandle,
+    x: f64,
+    y: f64,
+    from_x: f64,
+    from_y: f64,
+    animation: String,
+    label: Option<String>,
+    accent: Option<String>,
+) -> Result<(), String> {
+    crate::overlay::show_animated_cursor(&app, x, y, from_x, from_y, &animation, label, accent)
+}
+
+#[tauri::command]
+pub fn overlay_show_agent_dock(
+    app: AppHandle,
+    state: crate::agent::dock::AgentDockState,
+) -> Result<(), String> {
+    crate::overlay::show_agent_dock(&app, &state)
+}
+
+#[tauri::command]
+pub fn overlay_hide_agent_dock(app: AppHandle) -> Result<(), String> {
+    crate::overlay::hide_agent_dock(&app)
+}
+
+#[tauri::command]
 pub fn overlay_show_rect(app: AppHandle, x: f64, y: f64, w: f64, h: f64, label: Option<String>) -> Result<(), String> {
     crate::overlay::show_rect(&app, x, y, w, h, label)
 }
@@ -526,19 +565,29 @@ pub fn get_wake_word_config(app: AppHandle) -> Result<crate::config::WakeWordCon
 }
 
 #[tauri::command]
-pub fn start_wake_word_detection(app: AppHandle) -> Result<bool, String> {
-    let config = crate::config::load_config(&app)?;
-    if !config.wake_word.enabled {
-        return Err("wake word not enabled in config".into());
-    }
-    log::info!("Wake word detection started");
+pub fn start_wake_word_detection(
+    pipeline: State<'_, Mutex<VoicePipeline>>,
+) -> Result<bool, String> {
+    let pipe = pipeline.lock().map_err(|e| format!("lock error: {e}"))?;
+    pipe.start_wake_word()?;
     Ok(true)
 }
 
 #[tauri::command]
-pub fn stop_wake_word_detection() -> Result<bool, String> {
-    log::info!("Wake word detection stopped");
+pub fn stop_wake_word_detection(
+    pipeline: State<'_, Mutex<VoicePipeline>>,
+) -> Result<bool, String> {
+    let pipe = pipeline.lock().map_err(|e| format!("lock error: {e}"))?;
+    pipe.stop_wake_word()?;
     Ok(true)
+}
+
+#[tauri::command]
+pub fn check_wake_word_detected(
+    pipeline: State<'_, Mutex<VoicePipeline>>,
+) -> Result<bool, String> {
+    let pipe = pipeline.lock().map_err(|e| format!("lock error: {e}"))?;
+    Ok(pipe.consume_wake_word_detected())
 }
 
 // --- Google Workspace Commands ---

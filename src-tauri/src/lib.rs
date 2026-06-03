@@ -14,6 +14,7 @@ mod permissions;
 
 use std::path::PathBuf;
 use std::sync::Mutex;
+use std::time::Duration;
 use tauri::{AppHandle, Emitter, Manager};
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
 
@@ -176,6 +177,24 @@ pub fn run() {
                 automation::AutomationEngine::load(&automations_path).unwrap_or_default();
             handle.manage(Mutex::new(automation_engine));
 
+            // Start automation background tick loop
+            {
+                let handle = app.handle().clone();
+                tokio::spawn(async move {
+                    let mut interval = tokio::time::interval(Duration::from_secs(1));
+                    loop {
+                        interval.tick().await;
+                        if let Some(engine) =
+                            handle.try_state::<Mutex<automation::AutomationEngine>>()
+                        {
+                            if let Ok(mut eng) = engine.lock() {
+                                eng.tick();
+                            }
+                        }
+                    }
+                });
+            }
+
             // Initialize agent state
             let agent_store = Mutex::new(agent::session::AgentStore::new());
             handle.manage(agent_store);
@@ -210,6 +229,7 @@ pub fn run() {
             commands::get_config,
             commands::update_config,
             commands::toggle_panel,
+            commands::toggle_panel_pin,
             commands::get_panel_state,
             commands::get_app_state,
             commands::show_overlay,
@@ -230,6 +250,9 @@ pub fn run() {
             commands::overlay_show_caption,
             commands::overlay_clear,
             commands::set_overlay_visible,
+            commands::overlay_show_animated_cursor,
+            commands::overlay_show_agent_dock,
+            commands::overlay_hide_agent_dock,
             commands::start_recording,
             commands::stop_recording,
             commands::get_audio_level,
@@ -242,6 +265,7 @@ pub fn run() {
             commands::get_wake_word_config,
             commands::start_wake_word_detection,
             commands::stop_wake_word_detection,
+            commands::check_wake_word_detected,
             commands::check_google_workspace,
             commands::list_emails,
             commands::list_calendar_events,
