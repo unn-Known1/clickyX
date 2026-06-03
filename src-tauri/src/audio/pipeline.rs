@@ -495,22 +495,28 @@ impl VoicePipeline {
                         } else if silence_start.unwrap().elapsed() >= Duration::from_millis(ao_config.silence_timeout_ms) {
                             if let Some(start) = speech_start {
                                 if start.elapsed() >= Duration::from_millis(ao_config.min_speech_ms) {
-                                    let buffer_clone = audio_buffer.clone();
-                                    let stt_cfg_clone = stt_cfg.clone();
-                                    let on_tx = on_transcript;
+                                    // Check if TTS is speaking — pause VAD during playback
+                                    let is_speaking = state_arc.lock().map(|s| *s == PipelineState::Speaking).unwrap_or(false);
+                                    if !is_speaking {
+                                        let buffer_clone = audio_buffer.clone();
+                                        let stt_cfg_clone = stt_cfg.clone();
+                                        let on_tx = on_transcript;
 
-                                    if let Ok(rt) = tokio::runtime::Handle::try_current() {
-                                        let _ = rt.spawn(async move {
-                                            let result = stt::transcribe(&buffer_clone, &stt_cfg_clone, sample_rate).await;
-                                            match result {
-                                                Ok(text) if !text.trim().is_empty() => {
-                                                    log::info!("VAD auto-transcribed: {}", text);
-                                                    on_tx(text);
+                                        if let Ok(rt) = tokio::runtime::Handle::try_current() {
+                                            let _ = rt.spawn(async move {
+                                                let result = stt::transcribe(&buffer_clone, &stt_cfg_clone, sample_rate).await;
+                                                match result {
+                                                    Ok(text) if !text.trim().is_empty() => {
+                                                        log::info!("VAD auto-transcribed: {}", text);
+                                                        on_tx(text);
+                                                    }
+                                                    Ok(_) => {}
+                                                    Err(e) => log::error!("VAD auto-transcribe error: {e}"),
                                                 }
-                                                Ok(_) => {}
-                                                Err(e) => log::error!("VAD auto-transcribe error: {e}"),
-                                            }
-                                        });
+                                            });
+                                        }
+                                    } else {
+                                        log::debug!("VAD: silence timeout but TTS speaking, deferring transcription");
                                     }
                                 }
                             }

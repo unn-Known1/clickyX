@@ -4,22 +4,95 @@
 [![cargo check](https://img.shields.io/badge/cargo-check-brightgreen)](https://github.com/unn-Known1/clickyX)
 [![npm build](https://img.shields.io/badge/npm-build-brightgreen)](https://github.com/unn-Known1/clickyX)
 
-Cross-platform AI companion — a port of [OpenClicky](https://github.com/jasonkneen/openclicky) for Windows, Linux, and macOS. System-tray AI with voice, screen context, agent mode, cursor overlay, and external HTTP API control.
+Cross-platform AI companion — a port of [OpenClicky](https://github.com/jasonkneen/openclicky) (macOS native) for **Windows, Linux, and macOS**. System-tray AI with voice, screen context, agent mode, cursor overlay, automation, and external HTTP API control.
 
 Built with **Tauri v2** (Rust backend + React/TypeScript frontend).
+
+## Feature Parity: OpenClicky (macOS) vs ClickyX
+
+| Category | OpenClicky (macOS) | ClickyX | Status |
+|----------|-------------------|---------|--------|
+| **Voice Pipeline** | | | |
+| Push-to-talk | `Ctrl+Option` hold | `Ctrl+Shift+V` (configurable) | ✅ |
+| Type mode | `Ctrl` double-tap | Config defined, not wired | ⚠️ |
+| Always-on voice | — | Energy-based VAD, silence timeout | ✅ |
+| Wake word | "Hey Clicky" | "Hey Clicky" (energy-based) | ✅ |
+| STT providers | AssemblyAI, Apple Speech, Deepgram | Deepgram, Whisper, AssemblyAI | ✅ (3 of 3) |
+| TTS providers | ElevenLabs, AVSpeechSynthesizer, Cartesia | ElevenLabs, Cartesia, Edge, Deepgram Aura | ✅ (4 of 3) |
+| Realtime voice | GPT Realtime | GPT-4o Realtime | ✅ |
+| Audio VU meter | Yes | RMS + peak | ✅ |
+| Voice discovery | Drag-to-discover UI | — | ❌ |
+| **Screen & Vision** | | | |
+| Screen capture | ScreenCaptureKit | `xcap` crate (all platforms) | ✅ |
+| Multi-monitor | Yes | Per-screen overlay windows | ✅ |
+| Window capture | Full screen or active | Full, cursor, focused | ✅ |
+| Auto-capture mode | Continuous context | — | ❌ |
+| **Cursor Overlay** | | | |
+| Blue companion cursor | Yes | Yes, animated | ✅ |
+| Color options | 4 accent colors | Configurable | ✅ |
+| Bezier arc animation | Yes | Yes | ✅ |
+| Annotations | POINT, TARGET, HOVER, RECT, SCRIBBLE, HIGHLIGHT, SHAPE | POINT, RECT, SCRIBBLE, CAPTION | ✅ |
+| Annotation lifecycle | Armed → Completed → Missed | Full state machine | ✅ |
+| Text bubble | Word-by-word reveal | Word-by-word + streaming | ✅ |
+| Waveform | Yes | Yes | ✅ |
+| Multi-monitor routing | Natural (macOS) | Per-screen window + coordinate normalizer | ✅ |
+| **Agent Mode (Codex)** | | | |
+| Background agents | Yes | Codex Node.js runtime | ✅ |
+| Agent HUD | Floating window | Inline dashboard | ⚠️ |
+| Agent dock | In overlay | Yes, with status | ✅ |
+| Task types | code, build, research, file, docs, repo, frontend, search | Same | ✅ |
+| Scheduled agents | — | Cron/interval (clickyX add) | ✅ |
+| Voice-agent handoff | Yes | Trigger phrase analysis | ✅ |
+| Skills bundled | 28+ | 4 (screen-control, codex) | ⚠️ |
+| **Computer Use (CUA)** | | | |
+| Click execution | CGEvent → enigo | `enigo` Native + Background | ✅ |
+| Double-click, drag, type | Yes | click/double_click/type_text/key_press/move_cursor | ✅ |
+| App launch, volume, etc. | AppleScript | — | ❌ |
+| Background CUA | No cursor warp | — | ❌ |
+| Element detection | Accessibility API | — | ❌ |
+| **Integrations** | | | |
+| GitHub | Yes | — | ❌ |
+| Google Workspace | Yes | — | ❌ |
+| Notion, Linear, Obsidian | Yes | — | ❌ |
+| Spotify, Maps, Stocks | Yes | — | ❌ |
+| MCP Servers | — | CRUD management (clickyX add) | ✅ |
+| Automation engine | — | Cron/interval scheduling (clickyX add) | ✅ |
+| 3D Model Generation | — | Tripo3D API (clickyX add) | ✅ |
+| **Bridge API** | | | |
+| All 16 endpoints | Yes | All routed | ✅ |
+| Token auth | Yes | Constant-time comparison | ✅ |
+| CORS | Yes | actix-cors | ✅ |
+| SSE events | Yes | Yes | ✅ |
+| **UI & UX** | | | |
+| System tray | NSStatusItem | Tauri tray-icon | ✅ |
+| Floating panel | Notch panel | Home/Agents/Connections/Settings | ✅ |
+| Onboarding | Pre-sign-in flow | 4-step permission wizard | ✅ |
+| Permissions guide | Drag-to-accept | OS-specific step hints | ✅ |
+| Widget dashboard | Place/Stock/Image | Active Agents/Today/Needs Attention | ✅ |
+| Voice picker | Orbit discovery map | — | ❌ |
+| **Backend** | | | |
+| AI providers | Anthropic, OpenAI | Anthropic, OpenAI, OpenRouter, Gemini, NVIDIA | ✅ |
+| Model catalog | Hardcoded | Dynamic remote fetch | ✅ |
+| Multi-platform | macOS only | Windows, Linux, macOS | ✅ |
+| Auto-updater | Sparkle 2 | Custom updater (MSI/DMG/AppImage) | ✅ |
+| Config export/import | — | Yes (clickyX add) | ✅ |
+| Log viewer | — | Built-in w/ 5MB rotation (clickyX add) | ✅ |
+| Local-first | ❌ (Supabase) | ✅ All API keys user-configured | ✅ |
 
 ## Features
 
 | Category | Capabilities |
 |----------|-------------|
-| **Voice** | Push-to-talk, STT (Deepgram, OpenAI Whisper, AssemblyAI), TTS (ElevenLabs, Cartesia, Microsoft Edge, Deepgram Aura), wake word, VU meter |
-| **AI Providers** | Anthropic Claude, OpenAI GPT, **NVIDIA AI Foundation** (OpenAI-compatible endpoint), extensible provider system with dynamic model discovery |
-| **Screen Context** | Screen capture (all monitors, cursor screen, focused window), JPEG encoding, coordinate normalization |
-| **Agent Mode** | Codex runtime management, agent session lifecycle, bundled skills (screen control, codex), agent dock with status indicators |
-| **Cursor Overlay** | Animated cursor guidance, bezier arc flight, rectangles, scribbles, speech bubbles, secondary proxy cursors |
+| **Voice** | Push-to-talk, always-on VAD, wake word, STT (Deepgram, Whisper, AssemblyAI), TTS (ElevenLabs, Cartesia, Microsoft Edge, Deepgram Aura), audio VU meter, realtime voice |
+| **AI Providers** | Anthropic Claude, OpenAI GPT, NVIDIA AI Foundation, OpenRouter, Gemini — extensible provider system with dynamic model discovery |
+| **Screen Context** | Screen capture (all monitors, cursor screen, focused window), JPEG encoding, coordinate normalization, multi-monitor support |
+| **Agent Mode** | Codex runtime management, agent session lifecycle, bundled skills, agent dock with status indicators, voice-agent handoff |
+| **Cursor Overlay** | Animated cursor guidance, bezier arc flight, rectangles, scribbles, speech bubbles, secondary proxy cursors, per-screen windows |
 | **System Tray** | Left-click panel toggle, right-click menu (Quick Ask, Settings, Quit), agent status indicators |
-| **External Bridge** | HTTP API on `localhost:32123` (REST + SSE), MCP tools, AI proxy endpoints, fully OpenClicky-compatible |
+| **External Bridge** | HTTP API on `localhost:32123` (16 endpoints, REST + SSE), token auth, MCP tools, AI proxy, fully OpenClicky-compatible |
+| **CUA Input** | Cross-platform click, double-click, type text, key press, cursor move via `enigo` — rate-limited, bounds-safe |
 | **Automations** | Interval/cron scheduling, agent binding, system app discovery |
+| **Onboarding** | 4-step permission wizard (mic, screen recording, accessibility, notifications) with OS-specific guidance |
 | **Theming** | System/Light/Dark, glass backdrop, configurable accent colors |
 
 ## Prerequisites
@@ -27,8 +100,8 @@ Built with **Tauri v2** (Rust backend + React/TypeScript frontend).
 - **Node.js 24+**
 - **Rust toolchain** (stable, 1.96+)
 - **Platform-specific deps**:
-  - **Linux**: `libwebkit2gtk-4.1-dev`, `libgtk-3-dev`, `libappindicator3-dev`, `librsvg2-dev`
-  - **Windows**: Visual Studio Build Tools
+  - **Linux**: `libwebkit2gtk-4.1-dev`, `libgtk-3-dev`, `libappindicator3-dev`, `librsvg2-dev`, `libasound2-dev`
+  - **Windows**: Visual Studio Build Tools, WebView2
   - **macOS**: Xcode Command Line Tools
 
 See [docs/SETUP.md](docs/SETUP.md) for full details.
@@ -44,25 +117,29 @@ npm run tauri build     # Production build
 ## Architecture
 
 ```
-┌─────────────────────────────────────────────────────┐
-│                   ClickyX App                        │
-├─────────────────────────────────────────────────────┤
-│  UI Layer: System Tray + Floating Panel + Overlay    │
-├─────────────────────────────────────────────────────┤
-│  Rust Backend:                                       │
-│    ├─ audio/     Capture, STT, TTS, Pipeline        │
-│    ├─ ai/        Anthropic, OpenAI, Catalog, Vision │
-│    ├─ agent/     Codex, Sessions, Skills, Dock      │
-│    ├─ screen/    Capture, Coordinate Systems        │
-│    ├─ bridge.rs  HTTP API (127.0.0.1:32123)         │
-│    └─ overlay.rs Cursor Guidance, Visual Elements   │
-├─────────────────────────────────────────────────────┤
-│  Frontend (React + TypeScript):                      │
-│    ├─ Home       Chat, Screen Preview               │
-│    ├─ Agents     Session Management, Skills         │
-│    ├─ Connections Integrations, Automations         │
-│    └─ Settings   All Configuration Sections         │
-└─────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────┐
+│                      ClickyX App                            │
+├─────────────────────────────────────────────────────────────┤
+│  UI Layer: Tray Icon + Floating Panel + Overlay (per-screen)│
+├─────────────────────────────────────────────────────────────┤
+│  Rust Backend:                                              │
+│    ├─ audio/      Capture, STT, TTS, Pipeline, Handoff     │
+│    ├─ ai/         Anthropic, OpenAI, Catalog, Vision        │
+│    ├─ agent/      Codex, Sessions, Skills, Dock             │
+│    ├─ screen/     Capture (xcap), Coordinate Systems        │
+│    ├─ overlay/    Cursor/Rect/Scribble, Lifecycle, Screen   │
+│    │              Router, Window Manager, Annotation Mgr    │
+│    ├─ cua.rs      Click simulation (enigo)                  │
+│    ├─ bridge.rs   HTTP API (127.0.0.1:32123)               │
+│    ├─ bridge_auth Token auth (constant-time)                │
+│    └─ automation/ Cron/interval scheduling                  │
+├─────────────────────────────────────────────────────────────┤
+│  Frontend (React + TypeScript):                              │
+│    ├─ Home        Chat, Screen Preview                     │
+│    ├─ Agents      Session Management, Skills, HUD          │
+│    ├─ Connections Integrations, Automations, MCP           │
+│    └─ Settings    AI, Voice, CUA, Permissions, Logs        │
+└─────────────────────────────────────────────────────────────┘
 ```
 
 ## Using AI Providers
@@ -119,13 +196,20 @@ HTTP server on `localhost:32123` — compatible with OpenClicky's spec:
 | POST | `/panel/toggle` | Toggle floating panel |
 | POST | `/screenshot` | Capture screen(s) |
 | POST | `/cursor` | Show cursor overlay |
+| POST | `/cursors` | Show multiple cursors |
 | POST | `/rectangle` | Draw rectangle |
 | POST | `/scribble` | Draw freehand path |
 | POST | `/caption` | Show caption text |
 | POST | `/speak` | Text-to-speech |
 | POST | `/click` | Left-click coordinates |
+| POST | `/clear` | Clear all overlays |
+| POST | `/notify` | Desktop notification |
+| POST | `/mcp/tools` | List MCP tools |
+| POST | `/mcp/call` | Call MCP tool |
 | POST | `/v1/messages` | Anthropic proxy |
 | POST | `/v1/responses` | OpenAI proxy |
+
+All endpoints support token auth via `x-openclicky-token` header or `Bearer` token.
 
 ## Documentation
 
@@ -133,13 +217,16 @@ HTTP server on `localhost:32123` — compatible with OpenClicky's spec:
 - [Configuration Reference](docs/CONFIGURATION.md)
 - [Contributing Guidelines](docs/CONTRIBUTING.md)
 - [Feature Specification](docs/FEATURE_SPEC.md)
-- [Phase 1: Core Foundation](specs/001-core-foundation/)
-- [Phase 2: Voice Pipeline](specs/002-voice-pipeline/)
-- [Phase 3: AI Integration](specs/003-ai-integration/)
-- [Phase 4: Agent Mode](specs/004-agent-mode/)
-- [Phase 5: Screen Context & Overlay](specs/005-screen-context-overlay/)
-- [Phase 6: Advanced Features](specs/006-advanced-features/)
-- [Phase 7: Polish & Distribution](specs/007-polish-distribution/)
+- [DMG Reverse-Engineering Analysis](docs/CLICKY_APP_ANALYSIS.md)
+- **Feature Gap Specs**:
+  - [Bridge API Completion](specs/001-bridge-completion/)
+  - [Annotation Lifecycle](specs/002-annotation-lifecycle/)
+  - [Multi-Monitor Overlay](specs/003-multi-monitor-overlay/)
+  - [Streaming Overlay UI](specs/004-streaming-overlay-ui/)
+  - [Always-On Voice](specs/005-always-on-voice/)
+  - [CUA Click Execution](specs/006-cua-click-execution/)
+  - [Skills System](specs/007-skills-system/)
+  - [Onboarding & Permissions](specs/008-onboarding-permissions/)
 
 ## License
 

@@ -329,6 +329,46 @@ pub fn show_animated_cursor_on_screen<R: Runtime>(
     }
 }
 
+pub fn start_hotplug_poll<R: Runtime>(app: AppHandle<R>, url: &str) {
+    use window_manager::OverlayWindowManager;
+    let url = url.to_string();
+    std::thread::spawn(move || {
+        let mut last_count = 0usize;
+        let mut last_geoms: Vec<(i32, i32, u32, u32)> = Vec::new();
+        loop {
+            std::thread::sleep(std::time::Duration::from_secs(3));
+
+            let current = match xcap::Monitor::all() {
+                Ok(m) => m
+                    .iter()
+                    .map(|mon| (mon.x(), mon.y(), mon.width(), mon.height()))
+                    .collect::<Vec<_>>(),
+                Err(_) => continue,
+            };
+
+            if current.len() != last_count || current != last_geoms {
+                log::info!(
+                    "Display configuration changed: {} monitors (was {})",
+                    current.len(),
+                    last_count
+                );
+                last_count = current.len();
+                last_geoms = current.clone();
+
+                let mut wm = OverlayWindowManager::<R>::new();
+                if let Err(e) = wm.refresh_windows(&app, &url) {
+                    log::error!("Hotplug window refresh failed: {e}");
+                } else {
+                    let _ = app.emit(
+                        "display-config-changed",
+                        serde_json::json!({ "monitor_count": last_count }),
+                    );
+                }
+            }
+        }
+    });
+}
+
 pub fn get_screen_for_point(x: f64, y: f64) -> usize {
     if let Ok(all) = xcap::Monitor::all() {
         for (i, m) in all.iter().enumerate() {

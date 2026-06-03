@@ -49,13 +49,14 @@ See `docs/FEATURE_SPEC.md#17-implementation-phases` for the full 7-phase build p
 
 | Phase | Feature | Spec | Status |
 |-------|---------|------|--------|
-| 1 | Core Foundation | `specs/001-core-foundation/` | ✅ Complete |
-| 2 | Voice Pipeline | `specs/002-voice-pipeline/` | ✅ Complete |
-| 3 | AI Integration | `specs/003-ai-integration/` | ✅ Complete |
-| 4 | Agent Mode | `specs/004-agent-mode/` | ✅ Complete |
-| 5 | Screen Context & Overlay | `specs/005-screen-context-overlay/` | ✅ Complete |
-| 6 | Advanced Features | `specs/006-advanced-features/` | ✅ Complete |
-| 7 | Polish & Distribution | `specs/007-polish-distribution/` | ✅ Complete |
+| 1 | Bridge API Completion | `specs/001-bridge-completion/` | ✅ Complete |
+| 2 | Annotation Lifecycle | `specs/002-annotation-lifecycle/` | ✅ Complete |
+| 3 | Multi-Monitor Overlay | `specs/003-multi-monitor-overlay/` | ✅ Complete |
+| 4 | Streaming Overlay UI | `specs/004-streaming-overlay-ui/` | ✅ Complete |
+| 5 | Always-On Voice | `specs/005-always-on-voice/` | ✅ Complete |
+| 6 | CUA Click Execution | `specs/006-cua-click-execution/` | ✅ Complete |
+| 7 | Skills System | `specs/007-skills-system/` | ✅ Complete |
+| 8 | Onboarding & Permissions | `specs/008-onboarding-permissions/` | ✅ Complete |
 
 ## Build Status
 - `cargo check` — passes (76 dead_code warnings)
