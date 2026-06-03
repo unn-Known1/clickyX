@@ -1,0 +1,29 @@
+# Rust
+target/
+debug/
+release/
+*.rs.bk
+*.rlib
+*.prof*
+
+# Node.js
+node_modules/
+dist/
+build/
+*.log
+.env*
+
+# Universal
+.DS_Store
+Thumbs.db
+*.tmp
+*.swp
+.vscode/
+.idea/
+
+# Tauri
+src-tauri/target/
+
+# OS
+*.exe
+*.dll

@@ -44,3 +44,15 @@ npm run build        # Frontend build
 ## Development Phases
 
 See `docs/FEATURE_SPEC.md#17-implementation-phases` for the full 7-phase build plan.
+
+## Current Plan
+
+<!-- SPECKIT START -->
+- **Feature**: Core Foundation (Phase 1)
+- **Spec**: `specs/001-core-foundation/spec.md`
+- **Plan**: `specs/001-core-foundation/plan.md`
+- **Research**: `specs/001-core-foundation/research.md`
+- **Design**: `specs/001-core-foundation/data-model.md`
+- **Contracts**: `specs/001-core-foundation/contracts/`
+- **Quickstart**: `specs/001-core-foundation/quickstart.md`
+<!-- SPECKIT END -->
