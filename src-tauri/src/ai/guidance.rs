@@ -1,4 +1,13 @@
+use std::sync::LazyLock;
+
+use regex::Regex;
 use serde::{Deserialize, Serialize};
+
+static RE_POINT: LazyLock<Option<Regex>> = LazyLock::new(|| Regex::new(r"\[POINT:(\d+(?:\.\d+)?),(\d+(?:\.\d+)?)(?::(.+?))?\]").ok());
+static RE_RECT: LazyLock<Option<Regex>> = LazyLock::new(|| Regex::new(r"\[RECT:(\d+(?:\.\d+)?),(\d+(?:\.\d+)?),(\d+(?:\.\d+)?),(\d+(?:\.\d+)?)(?::(.+?))?\]").ok());
+static RE_SCRIBBLE: LazyLock<Option<Regex>> = LazyLock::new(|| Regex::new(r"\[SCRIBBLE:((?:\d+(?:\.\d+)?,\d+(?:\.\d+)?;?)+)(?::(.+?))?\]").ok());
+static RE_OFFER: LazyLock<Option<Regex>> = LazyLock::new(|| Regex::new(r"\[OFFER:(.+?)\]").ok());
+static RE_STRIP: LazyLock<Option<Regex>> = LazyLock::new(|| Regex::new(r"\[(?:POINT|RECT|SCRIBBLE|OFFER)[^\]]*\]").ok());
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum GuidanceTag {
@@ -25,12 +34,8 @@ pub enum GuidanceTag {
 
 pub fn parse_guidance_tags(text: &str) -> Vec<GuidanceTag> {
     let mut tags = Vec::new();
-    let re_point = regex::Regex::new(r"\[POINT:(\d+(?:\.\d+)?),(\d+(?:\.\d+)?)(?::(.+?))?\]").ok();
-    let re_rect = regex::Regex::new(r"\[RECT:(\d+(?:\.\d+)?),(\d+(?:\.\d+)?),(\d+(?:\.\d+)?),(\d+(?:\.\d+)?)(?::(.+?))?\]").ok();
-    let re_scribble = regex::Regex::new(r"\[SCRIBBLE:((?:\d+(?:\.\d+)?,\d+(?:\.\d+)?;?)+)(?::(.+?))?\]").ok();
-    let re_offer = regex::Regex::new(r"\[OFFER:(.+?)\]").ok();
 
-    if let Some(ref re) = re_point {
+    if let Some(ref re) = *RE_POINT {
         for cap in re.captures_iter(text) {
             let x: f64 = cap[1].parse().unwrap_or(0.0);
             let y: f64 = cap[2].parse().unwrap_or(0.0);
@@ -39,7 +44,7 @@ pub fn parse_guidance_tags(text: &str) -> Vec<GuidanceTag> {
         }
     }
 
-    if let Some(ref re) = re_rect {
+    if let Some(ref re) = *RE_RECT {
         for cap in re.captures_iter(text) {
             let x: f64 = cap[1].parse().unwrap_or(0.0);
             let y: f64 = cap[2].parse().unwrap_or(0.0);
@@ -50,7 +55,7 @@ pub fn parse_guidance_tags(text: &str) -> Vec<GuidanceTag> {
         }
     }
 
-    if let Some(ref re) = re_scribble {
+    if let Some(ref re) = *RE_SCRIBBLE {
         for cap in re.captures_iter(text) {
             let points_str = cap[1].to_string();
             let label = cap.get(2).map(|m| m.as_str().to_string());
@@ -69,7 +74,7 @@ pub fn parse_guidance_tags(text: &str) -> Vec<GuidanceTag> {
         }
     }
 
-    if let Some(ref re) = re_offer {
+    if let Some(ref re) = *RE_OFFER {
         for cap in re.captures_iter(text) {
             let slug = cap[1].to_string();
             tags.push(GuidanceTag::Offer { agent_slug: slug });
@@ -80,8 +85,7 @@ pub fn parse_guidance_tags(text: &str) -> Vec<GuidanceTag> {
 }
 
 pub fn strip_guidance_tags(text: &str) -> String {
-    let re = regex::Regex::new(r"\[(?:POINT|RECT|SCRIBBLE|OFFER)[^\]]*\]").ok();
-    match re {
+    match &*RE_STRIP {
         Some(re) => re.replace_all(text, "").to_string(),
         None => text.to_string(),
     }

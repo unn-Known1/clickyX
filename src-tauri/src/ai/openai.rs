@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use super::streaming::{self, StreamEvent, StreamSender};
 use super::{AiError, AiProvider, ChatMessage, ImageInput};
 
@@ -76,7 +78,10 @@ impl AiProvider for OpenAIProvider {
     async fn chat(&self, messages: &[ChatMessage], model: &str) -> Result<String, AiError> {
         let body = self.build_request_body(messages, model, false, &[]);
 
-        let client = reqwest::Client::new();
+        let client = reqwest::Client::builder()
+            .timeout(Duration::from_secs(60))
+            .build()
+            .map_err(|e| AiError::Network(e.to_string()))?;
         let response = client
             .post(self.api_url())
             .header("Authorization", format!("Bearer {}", self.api_key))
@@ -134,7 +139,10 @@ impl AiProvider for OpenAIProvider {
     ) -> Result<String, AiError> {
         let body = self.build_request_body(messages, model, false, images);
 
-        let client = reqwest::Client::new();
+        let client = reqwest::Client::builder()
+            .timeout(Duration::from_secs(60))
+            .build()
+            .map_err(|e| AiError::Network(e.to_string()))?;
         let response = client
             .post(self.api_url())
             .header("Authorization", format!("Bearer {}", self.api_key))
@@ -174,7 +182,10 @@ impl OpenAIProvider {
         sender: StreamSender,
     ) -> Result<(), AiError> {
         let url = format!("{}/v1/chat/completions", base_url.trim_end_matches('/'));
-        let client = reqwest::Client::new();
+        let client = reqwest::Client::builder()
+            .timeout(Duration::from_secs(120))
+            .build()
+            .map_err(|e| AiError::Network(e.to_string()))?;
         let response = client
             .post(url)
             .header("Authorization", format!("Bearer {}", api_key))
@@ -214,7 +225,7 @@ impl OpenAIProvider {
                 buf = buf[newline_pos + 1..].to_string();
 
                 if let Some(data) = line.strip_prefix("data: ") {
-                    if data == "[DONE]" {
+                    if data.trim() == "[DONE]" {
                         let _ = sender.send(StreamEvent::TextDone(full_text.clone())).await;
                         let _ = sender.send(StreamEvent::Done).await;
                         return Ok(());

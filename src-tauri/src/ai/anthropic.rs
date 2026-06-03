@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use super::streaming::{self, StreamEvent, StreamSender};
 use super::{AiError, AiProvider, ChatMessage, ImageInput};
 
@@ -58,9 +60,9 @@ impl AnthropicProvider {
         });
 
         if !self.system_prompt.is_empty() {
-            body.as_object_mut()
-                .unwrap()
-                .insert("system".into(), serde_json::json!(self.system_prompt));
+            if let Some(obj) = body.as_object_mut() {
+                obj.insert("system".into(), serde_json::json!(self.system_prompt));
+            }
         }
 
         body
@@ -72,7 +74,10 @@ impl AiProvider for AnthropicProvider {
     async fn chat(&self, messages: &[ChatMessage], model: &str) -> Result<String, AiError> {
         let body = self.build_request_body(messages, model, false, &[]);
 
-        let client = reqwest::Client::new();
+        let client = reqwest::Client::builder()
+            .timeout(Duration::from_secs(60))
+            .build()
+            .map_err(|e| AiError::Network(e.to_string()))?;
         let response = client
             .post("https://api.anthropic.com/v1/messages")
             .header("x-api-key", &self.api_key)
@@ -142,7 +147,10 @@ impl AiProvider for AnthropicProvider {
     ) -> Result<String, AiError> {
         let body = self.build_request_body(messages, model, false, images);
 
-        let client = reqwest::Client::new();
+        let client = reqwest::Client::builder()
+            .timeout(Duration::from_secs(60))
+            .build()
+            .map_err(|e| AiError::Network(e.to_string()))?;
         let response = client
             .post("https://api.anthropic.com/v1/messages")
             .header("x-api-key", &self.api_key)
@@ -193,7 +201,10 @@ impl AnthropicProvider {
         body: serde_json::Value,
         sender: StreamSender,
     ) -> Result<(), AiError> {
-        let client = reqwest::Client::new();
+        let client = reqwest::Client::builder()
+            .timeout(Duration::from_secs(120))
+            .build()
+            .map_err(|e| AiError::Network(e.to_string()))?;
         let response = client
             .post("https://api.anthropic.com/v1/messages")
             .header("x-api-key", &api_key)

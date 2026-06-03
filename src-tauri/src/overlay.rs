@@ -1,7 +1,15 @@
+use std::sync::atomic::{AtomicU64, Ordering};
+
 use serde::Serialize;
 use tauri::{AppHandle, Emitter, Manager, Runtime, WebviewWindow};
 
 use crate::agent::dock::AgentDockState;
+
+static NEXT_ID: AtomicU64 = AtomicU64::new(1);
+
+fn next_id(prefix: &str) -> String {
+    format!("{}-{}", prefix, NEXT_ID.fetch_add(1, Ordering::Relaxed))
+}
 
 #[derive(Debug, Clone, Serialize)]
 pub struct CursorData {
@@ -105,7 +113,7 @@ fn emit_overlay_event<R: Runtime>(app: &AppHandle<R>, event: &str, payload: impl
 
 pub fn show_cursor<R: Runtime>(app: &AppHandle<R>, x: f64, y: f64, label: Option<String>) -> Result<(), String> {
     let payload = CursorPayload {
-        id: format!("cursor-{}", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_nanos()),
+        id: next_id("cursor"),
         x, y,
         label,
         accent: None,
@@ -148,7 +156,7 @@ pub fn show_animated_cursor<R: Runtime>(
         _ => (None, None),
     };
     let payload = CursorPayload {
-        id: format!("cursor-{}", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_nanos()),
+        id: next_id("cursor"),
         x, y,
         label,
         accent,
@@ -171,7 +179,7 @@ pub fn hide_agent_dock<R: Runtime>(app: &AppHandle<R>) -> Result<(), String> {
 
 pub fn show_rect<R: Runtime>(app: &AppHandle<R>, x: f64, y: f64, w: f64, h: f64, label: Option<String>) -> Result<(), String> {
     let payload = RectPayload {
-        id: format!("rect-{}", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_nanos()),
+        id: next_id("rect"),
         x, y, w, h, label,
     };
     emit_overlay_event(app, "show-rect", payload)

@@ -105,7 +105,11 @@ impl CodexProcess {
     }
 
     pub fn is_running(&self) -> bool {
-        self.child.is_some()
+        if let Some(ref child) = self.child {
+            matches!(child.try_wait(), Ok(None))
+        } else {
+            false
+        }
     }
 
     pub fn generate_config_toml(&self, config: &AgentConfig) -> String {

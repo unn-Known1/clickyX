@@ -31,6 +31,7 @@ export function useAgents() {
       const result = await invoke<AgentInfo[]>("list_agents");
       setAgents(result);
     } catch (e) {
+      setAgents([]);
       setError(String(e));
     }
   }, []);

@@ -149,7 +149,10 @@ impl AutomationEngine {
 
     pub fn start_ticking(engine: Arc<Mutex<Self>>) {
         let stop_rx = {
-            let eng = engine.lock().unwrap();
+            let mut eng = engine.lock().unwrap();
+            if eng.timer.is_none() {
+                eng.start();
+            }
             eng.timer.clone()
         };
         tokio::spawn(async move {

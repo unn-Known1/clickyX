@@ -945,7 +945,7 @@ pub fn stop_agent(
         SessionState::Running => {
             session.state = SessionState::Paused;
         }
-        _ => return Err(format!("agent '{slug}' is not running")),
+        _ => {} // already stopped, no-op
     }
     let now =
         std::time::SystemTime::now()
