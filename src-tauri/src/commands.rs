@@ -230,8 +230,14 @@ pub async fn send_chat_message_stream(
 }
 
 #[tauri::command]
-pub fn get_models(provider: Option<String>) -> Result<Vec<ai::catalog::ModelInfo>, String> {
-    let catalog = ModelCatalog::new();
+pub async fn get_models(app: AppHandle, provider: Option<String>) -> Result<Vec<ai::catalog::ModelInfo>, String> {
+    let mut catalog = ModelCatalog::new();
+    let config = app.state::<AppConfig>().inner().clone();
+    let ai_cfg = &config.ai;
+    if ai_cfg.openai_api_key.as_ref().map_or(false, |k| !k.is_empty()) {
+        let remote = ModelCatalog::fetch_openai_compatible(&ai_cfg.openai_base_url, ai_cfg.openai_api_key.as_deref().unwrap_or("")).await;
+        catalog.merge_remote(remote);
+    }
     match provider {
         Some(p) => Ok(catalog
             .get_provider_models(&p)

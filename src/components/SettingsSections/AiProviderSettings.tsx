@@ -6,6 +6,7 @@ interface AiConfig {
   anthropic_model: string;
   openai_api_key: string | null;
   openai_model: string;
+  openai_base_url: string;
   default_provider: string;
   system_prompt: string;
 }
@@ -105,6 +106,17 @@ function AiProviderSettings() {
             value={aiConfig.openai_model}
             onChange={(e) => updateAiField("openai_model", e.target.value)}
           />
+          <input
+            type="text"
+            className="settings-input"
+            placeholder="Base URL (e.g., https://integrate.api.nvidia.com)"
+            value={aiConfig.openai_base_url}
+            onChange={(e) => updateAiField("openai_base_url", e.target.value)}
+          />
+          <span className="settings-hint">
+            For NVIDIA: use your NVIDIA API key (nvapi-...) with base URL
+            https://integrate.api.nvidia.com/v1
+          </span>
         </div>
         <div className="ai-provider-group">
           <h4>ElevenLabs</h4>

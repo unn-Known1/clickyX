@@ -4,14 +4,20 @@ use super::{AiError, AiProvider, ChatMessage, ImageInput};
 pub struct OpenAIProvider {
     api_key: String,
     system_prompt: String,
+    base_url: String,
 }
 
 impl OpenAIProvider {
-    pub fn new(api_key: String, system_prompt: String) -> Self {
+    pub fn new(api_key: String, system_prompt: String, base_url: String) -> Self {
         Self {
             api_key,
             system_prompt,
+            base_url,
         }
+    }
+
+    fn api_url(&self) -> String {
+        format!("{}/v1/chat/completions", self.base_url.trim_end_matches('/'))
     }
 
     fn build_request_body(
@@ -72,7 +78,7 @@ impl AiProvider for OpenAIProvider {
 
         let client = reqwest::Client::new();
         let response = client
-            .post("https://api.openai.com/v1/chat/completions")
+            .post(self.api_url())
             .header("Authorization", format!("Bearer {}", self.api_key))
             .header("content-type", "application/json")
             .json(&body)
@@ -110,8 +116,9 @@ impl AiProvider for OpenAIProvider {
         let (sender, receiver) = streaming::create_channel();
 
         let api_key = self.api_key.clone();
+        let base_url = self.base_url.clone();
         tokio::spawn(async move {
-            if let Err(e) = Self::stream_request(api_key, body, sender).await {
+            if let Err(e) = Self::stream_request(api_key, base_url, body, sender).await {
                 log::error!("OpenAI stream error: {e}");
             }
         });
@@ -129,7 +136,7 @@ impl AiProvider for OpenAIProvider {
 
         let client = reqwest::Client::new();
         let response = client
-            .post("https://api.openai.com/v1/chat/completions")
+            .post(self.api_url())
             .header("Authorization", format!("Bearer {}", self.api_key))
             .header("content-type", "application/json")
             .json(&body)
@@ -162,12 +169,14 @@ impl AiProvider for OpenAIProvider {
 impl OpenAIProvider {
     async fn stream_request(
         api_key: String,
+        base_url: String,
         body: serde_json::Value,
         sender: StreamSender,
     ) -> Result<(), AiError> {
+        let url = format!("{}/v1/chat/completions", base_url.trim_end_matches('/'));
         let client = reqwest::Client::new();
         let response = client
-            .post("https://api.openai.com/v1/chat/completions")
+            .post(url)
             .header("Authorization", format!("Bearer {}", api_key))
             .header("content-type", "application/json")
             .json(&body)

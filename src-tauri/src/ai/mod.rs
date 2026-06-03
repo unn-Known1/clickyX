@@ -24,6 +24,7 @@ pub struct AiConfig {
     pub anthropic_model: String,
     pub openai_api_key: Option<String>,
     pub openai_model: String,
+    pub openai_base_url: String,
     pub default_provider: String,
     pub system_prompt: String,
 }
@@ -35,6 +36,7 @@ impl Default for AiConfig {
             anthropic_model: "claude-sonnet-4-20250514".into(),
             openai_api_key: None,
             openai_model: "gpt-4o".into(),
+            openai_base_url: "https://api.openai.com".into(),
             default_provider: "anthropic".into(),
             system_prompt: "You are ClickyX, a helpful AI assistant.".into(),
         }
@@ -98,6 +100,7 @@ pub fn create_provider(config: &AiConfig) -> Result<Box<dyn AiProvider>, AiError
             Ok(Box::new(openai::OpenAIProvider::new(
                 api_key,
                 config.system_prompt.clone(),
+                config.openai_base_url.clone(),
             )))
         }
         p => Err(AiError::Config(format!("Unknown provider: {p}"))),
@@ -107,7 +110,10 @@ pub fn create_provider(config: &AiConfig) -> Result<Box<dyn AiProvider>, AiError
 pub fn resolve_provider_for_model(model: &str) -> &str {
     if model.contains("claude") || model.contains("anthropic") {
         "anthropic"
-    } else if model.contains("gpt") || model.contains("o1") || model.contains("o3") {
+    } else if model.contains("gpt") || model.contains("o1") || model.contains("o3")
+        || model.contains("llama") || model.contains("mistral") || model.contains("nemotron")
+        || model.contains("nvidia") || model.contains("nvcf")
+    {
         "openai"
     } else {
         "anthropic"
@@ -135,6 +141,7 @@ pub fn create_provider_for_model(config: &AiConfig, model: &str) -> Result<Box<d
             Ok(Box::new(openai::OpenAIProvider::new(
                 api_key,
                 config.system_prompt.clone(),
+                config.openai_base_url.clone(),
             )))
         }
         p => Err(AiError::Config(format!("Unknown provider for model: {p}"))),
@@ -163,6 +170,9 @@ pub fn merge_ai_config(current: &AiConfig, partial: &serde_json::Value) -> AiCon
         }
         if let Some(v) = obj.get("openai_model").and_then(|v| v.as_str()) {
             config.openai_model = v.to_string();
+        }
+        if let Some(v) = obj.get("openai_base_url").and_then(|v| v.as_str()) {
+            config.openai_base_url = v.to_string();
         }
         if let Some(v) = obj.get("default_provider").and_then(|v| v.as_str()) {
             config.default_provider = v.to_string();
