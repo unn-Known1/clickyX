@@ -13,6 +13,7 @@ interface CursorState {
   fromY?: number;
   controlX?: number;
   controlY?: number;
+  state?: string;
 }
 
 interface RectState {
@@ -22,17 +23,20 @@ interface RectState {
   w: number;
   h: number;
   label?: string;
+  state?: string;
 }
 
 interface ScribbleState {
   points: [number, number][];
   label?: string;
+  state?: string;
 }
 
 interface CaptionState {
   text: string;
   x: number;
   y: number;
+  state?: string;
 }
 
 interface AgentDockItem {
@@ -50,6 +54,11 @@ interface AgentDockState {
 interface AnimatedCursor extends CursorState {
   currentX: number;
   currentY: number;
+}
+
+interface StreamingCaption extends CaptionState {
+  revealedChars: number;
+  done: boolean;
 }
 
 function quadraticBezier(
@@ -92,17 +101,74 @@ function animateCursorArc(
   return () => { running = false; };
 }
 
+function Spinner() {
+  return (
+    <div className="processing-spinner">
+      <svg width="28" height="28" viewBox="0 0 28 28">
+        <circle cx="14" cy="14" r="10" fill="none" stroke="rgba(79,195,247,0.2)" strokeWidth="3" />
+        <path d="M14 4 A10 10 0 0 1 24 14" fill="none" stroke="#4fc3f7" strokeWidth="3" strokeLinecap="round">
+          <animateTransform attributeName="transform" type="rotate" from="0 14 14" to="360 14 14" dur="0.8s" repeatCount="indefinite" />
+        </path>
+      </svg>
+    </div>
+  );
+}
+
+function WaveformBar({ height, color }: { height: number; color: string }) {
+  return (
+    <div
+      className="waveform-bar"
+      style={{
+        height: `${Math.max(4, height)}px`,
+        backgroundColor: color,
+      }}
+    />
+  );
+}
+
+function Waveform({ active }: { active: boolean }) {
+  const [bars, setBars] = useState<number[]>(Array(20).fill(8));
+  const frameRef = useRef<number>(0);
+
+  useEffect(() => {
+    if (!active) {
+      setBars(Array(20).fill(8));
+      return;
+    }
+    function animate() {
+      setBars(prev => prev.map(() => 4 + Math.random() * 28));
+      frameRef.current = requestAnimationFrame(animate);
+    }
+    frameRef.current = requestAnimationFrame(animate);
+    return () => cancelAnimationFrame(frameRef.current);
+  }, [active]);
+
+  if (!active) return null;
+
+  return (
+    <div className="waveform-container">
+      {bars.map((h, i) => (
+        <WaveformBar key={i} height={h} color="#4fc3f7" />
+      ))}
+    </div>
+  );
+}
+
 function OverlayApp() {
   const [cursors, setCursors] = useState<CursorState[]>([]);
   const [animatedCursors, setAnimatedCursors] = useState<Record<string, AnimatedCursor>>({});
   const [rects, setRects] = useState<RectState[]>([]);
   const [scribbles, setScribbles] = useState<ScribbleState[]>([]);
   const [captions, setCaptions] = useState<CaptionState[]>([]);
+  const [streamingCaptions, setStreamingCaptions] = useState<StreamingCaption[]>([]);
   const [dock, setDock] = useState<AgentDockState | null>(null);
+  const [processing, setProcessing] = useState(false);
+  const [waveformActive, setWaveformActive] = useState(false);
   const animRefs = useRef<Record<string, () => void>>({});
   const [petPos, setPetPos] = useState({ x: window.innerWidth / 2, y: window.innerHeight / 2 });
   const petTarget = useRef({ x: window.innerWidth / 2, y: window.innerHeight / 2 });
   const petFrame = useRef<number>(0);
+  const streamTimers = useRef<Record<string, number>>({});
 
   const updatePet = useCallback(() => {
     setPetPos(prev => ({
@@ -116,6 +182,39 @@ function OverlayApp() {
     petFrame.current = requestAnimationFrame(updatePet);
     return () => cancelAnimationFrame(petFrame.current);
   }, [updatePet]);
+
+  const startStreamingCaption = useCallback((cap: CaptionState) => {
+    const id = `stream-${Date.now()}`;
+    const interval = 30;
+    const wordDelay = 200;
+    const words = cap.text.split(/(\s+)/);
+    let charIndex = 0;
+    let wordIndex = 0;
+
+    const entry: StreamingCaption = { ...cap, revealedChars: 0, done: false };
+    setStreamingCaptions(prev => [...prev.slice(-10), entry]);
+
+    function revealNext() {
+      setStreamingCaptions(prev =>
+        prev.map(s => s === entry ? { ...s, revealedChars: Math.min(s.revealedChars + 1, cap.text.length) } : s)
+      );
+      charIndex++;
+      if (charIndex <= cap.text.length) {
+        const isWordBoundary = cap.text[charIndex] === ' ' || cap.text[charIndex] === undefined;
+        const delay = isWordBoundary ? wordDelay : interval;
+        streamTimers.current[id] = window.setTimeout(revealNext, delay);
+      } else {
+        setStreamingCaptions(prev =>
+          prev.map(s => s === entry ? { ...s, done: true } : s)
+        );
+        window.setTimeout(() => {
+          setStreamingCaptions(prev => prev.filter(s => s !== entry));
+        }, 5000);
+      }
+    }
+
+    streamTimers.current[id] = window.setTimeout(revealNext, interval);
+  }, []);
 
   useEffect(() => {
     const unlisteners: (() => void)[] = [];
@@ -163,7 +262,12 @@ function OverlayApp() {
       setRects([]);
       setScribbles([]);
       setCaptions([]);
+      setStreamingCaptions([]);
       setDock(null);
+      setProcessing(false);
+      setWaveformActive(false);
+      Object.values(streamTimers.current).forEach(clearTimeout);
+      streamTimers.current = {};
       Object.values(animRefs.current).forEach(cancel => cancel());
       animRefs.current = {};
     }).then(fn => unlisteners.push(fn));
@@ -180,7 +284,12 @@ function OverlayApp() {
     }).then(fn => unlisteners.push(fn));
 
     listen<CaptionState>("show-caption", (e) => {
-      setCaptions(prev => [...prev.slice(-50), e.payload]);
+      const cap = e.payload;
+      if (cap.text && cap.text.length > 10) {
+        startStreamingCaption(cap);
+      } else {
+        setCaptions(prev => [...prev.slice(-50), cap]);
+      }
     }).then(fn => unlisteners.push(fn));
 
     listen<AgentDockState>("show-agent-dock", (e) => {
@@ -191,22 +300,48 @@ function OverlayApp() {
       setDock(null);
     }).then(fn => unlisteners.push(fn));
 
+    listen("processing-start", () => {
+      setProcessing(true);
+    }).then(fn => unlisteners.push(fn));
+
+    listen("processing-end", () => {
+      setProcessing(false);
+    }).then(fn => unlisteners.push(fn));
+
+    listen("waveform-start", () => {
+      setWaveformActive(true);
+    }).then(fn => unlisteners.push(fn));
+
+    listen("waveform-end", () => {
+      setWaveformActive(false);
+    }).then(fn => unlisteners.push(fn));
+
+    listen("lifecycle-event", (e: { payload: { action: string; id: string; state: string } }) => {
+      const { action, id, state } = e.payload;
+      if (state === "completed" || state === "missed") {
+        setCursors(prev => prev.filter(c => c.id !== id));
+        setRects(prev => prev.filter(r => r.id !== id));
+      }
+    }).then(fn => unlisteners.push(fn));
+
     const onMouseMove = (e: MouseEvent) => {
       petTarget.current = { x: e.clientX, y: e.clientY };
     };
     window.addEventListener("mousemove", onMouseMove);
 
     return () => {
+      Object.values(streamTimers.current).forEach(clearTimeout);
+      streamTimers.current = {};
       Object.values(animRefs.current).forEach(cancel => cancel());
       animRefs.current = {};
       window.removeEventListener("mousemove", onMouseMove);
       unlisteners.forEach(fn => fn());
     };
-  }, []);
+  }, [startStreamingCaption]);
 
   return (
     <div className="overlay-container">
-      <div className="pet-sprite" style={{ left: petPos.x, top: petPos.y }}>
+      <div className="pet-sprite" style={{ left: petPos.x, top: petPos.y - 30 }}>
         <svg width="32" height="32" viewBox="0 0 32 32">
           <circle cx="16" cy="16" r="14" fill="rgba(79,195,247,0.35)" stroke="#4fc3f7" strokeWidth="1.5" />
           <circle cx="12" cy="13" r="2" fill="#fff" />
@@ -215,8 +350,21 @@ function OverlayApp() {
         </svg>
       </div>
 
+      {processing && (
+        <div className="processing-indicator" style={{ left: petPos.x + 20, top: petPos.y - 20 }}>
+          <Spinner />
+        </div>
+      )}
+
+      {waveformActive && (
+        <div className="waveform-wrapper" style={{ left: petPos.x - 80, top: petPos.y + 20 }}>
+          <Waveform active={waveformActive} />
+        </div>
+      )}
+
       {rects.map(r => (
-        <div key={r.id} className="overlay-rect" style={{ left: r.x, top: r.y, width: r.w, height: r.h }}>
+        <div key={r.id} className={`overlay-rect ${r.state === 'missed' ? 'overlay-rect-missed' : ''} ${r.state === 'completed' ? 'overlay-rect-completed' : ''}`}
+             style={{ left: r.x, top: r.y, width: r.w, height: r.h }}>
           {r.label && <span className="overlay-label">{r.label}</span>}
         </div>
       ))}
@@ -246,6 +394,14 @@ function OverlayApp() {
         <div key={i} className="overlay-caption" style={{ left: cap.x, top: cap.y }}>
           <div className="caption-bubble">
             <span>{cap.text}</span>
+          </div>
+        </div>
+      ))}
+      {streamingCaptions.map((cap, i) => (
+        <div key={i} className={`overlay-caption streaming-caption ${cap.done ? 'caption-done' : ''}`}
+             style={{ left: cap.x, top: cap.y }}>
+          <div className="caption-bubble">
+            <span>{cap.text.slice(0, cap.revealedChars)}<span className="caption-cursor">|</span></span>
           </div>
         </div>
       ))}

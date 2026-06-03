@@ -71,7 +71,10 @@ git config user.email "ptelgm.yt@gmail.com"
 ## Current Plan
 
 <!-- SPECKIT START -->
-- **Feature**: All Phases Complete
+- **Feature**: All 8 Feature Groups Implemented
+- **Status**: Specs → Plans → Tasks → Implementation all complete
+- **Remaining**: `cargo check` verification (needs Rust toolchain), display hotplug handler (multi-monitor), VAD pause-when-TTS (always-on voice)
 - **Latest commit**: `43abae1` — Fix CI/CD builds: add libasound2-dev, disable -D warnings for builds, add missing icons
 - **Repo**: `https://github.com/unn-Known1/clickyX`
+- **Feature specs**: `specs/001-bridge-completion` through `specs/008-onboarding-permissions`
 <!-- SPECKIT END -->

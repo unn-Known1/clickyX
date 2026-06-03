@@ -20,6 +20,7 @@ pub struct AppState {
     pub panel_pinned: bool,
     pub active_tab: String,
     pub app_mode: String,
+    pub agent_triggers: Vec<String>,
 }
 
 impl Default for AppState {
@@ -29,6 +30,7 @@ impl Default for AppState {
             panel_pinned: false,
             active_tab: "home".into(),
             app_mode: "idle".into(),
+            agent_triggers: Vec::new(),
         }
     }
 }
@@ -485,6 +487,82 @@ pub fn speak_text(
 ) -> Result<Vec<u8>, String> {
     let pipe = pipeline.lock().map_err(|e| format!("lock error: {e}"))?;
     pipe.speak_response(&text)
+}
+
+#[tauri::command]
+pub fn start_always_on(
+    state: State<'_, Mutex<AppState>>,
+    pipeline: State<'_, Mutex<VoicePipeline>>,
+    app: AppHandle,
+) -> Result<(), String> {
+    let pipe = pipeline.lock().map_err(|e| format!("lock error: {e}"))?;
+    pipe.start_always_on()?;
+    let handle = app.clone();
+    let _ = pipe.run_always_on_vad_loop(Box::new(move |text| {
+        let payload = serde_json::json!({
+            "type": "auto_transcript",
+            "text": text
+        });
+        let _ = handle.emit("voice-transcript", payload);
+    }));
+    let mut s = state.lock().map_err(|e| format!("lock error: {e}"))?;
+    s.app_mode = "always_on".into();
+    Ok(())
+}
+
+#[tauri::command]
+pub fn stop_always_on(
+    state: State<'_, Mutex<AppState>>,
+    pipeline: State<'_, Mutex<VoicePipeline>>,
+) -> Result<(), String> {
+    let pipe = pipeline.lock().map_err(|e| format!("lock error: {e}"))?;
+    pipe.stop_always_on()?;
+    let mut s = state.lock().map_err(|e| format!("lock error: {e}"))?;
+    s.app_mode = "idle".into();
+    Ok(())
+}
+
+#[tauri::command]
+pub fn set_always_on_config(
+    threshold: Option<f32>,
+    silence_timeout_ms: Option<u64>,
+    min_speech_ms: Option<u64>,
+    auto_submit: Option<bool>,
+    pipeline: State<'_, Mutex<VoicePipeline>>,
+) -> Result<(), String> {
+    let pipe = pipeline.lock().map_err(|e| format!("lock error: {e}"))?;
+    let mut cfg = pipe.get_always_on_config()?;
+    if let Some(t) = threshold { cfg.vad_threshold = t; }
+    if let Some(s) = silence_timeout_ms { cfg.silence_timeout_ms = s; }
+    if let Some(m) = min_speech_ms { cfg.min_speech_ms = m; }
+    if let Some(a) = auto_submit { cfg.auto_submit = a; }
+    pipe.set_always_on_config(cfg)
+}
+
+#[tauri::command]
+pub fn get_always_on_config(
+    pipeline: State<'_, Mutex<VoicePipeline>>,
+) -> Result<crate::audio::AlwaysOnConfig, String> {
+    let pipe = pipeline.lock().map_err(|e| format!("lock error: {e}"))?;
+    pipe.get_always_on_config()
+}
+
+#[tauri::command]
+pub fn set_agent_triggers(
+    state: State<'_, Mutex<AppState>>,
+    triggers: Vec<String>,
+) -> Result<(), String> {
+    let mut s = state.lock().map_err(|e| format!("lock error: {e}"))?;
+    s.agent_triggers = triggers;
+    Ok(())
+}
+
+#[tauri::command]
+pub fn get_agent_triggers(
+    state: State<'_, Mutex<AppState>>,
+) -> Result<Vec<String>, String> {
+    let s = state.lock().map_err(|e| format!("lock error: {e}"))?;
+    Ok(s.agent_triggers.clone())
 }
 
 #[tauri::command]

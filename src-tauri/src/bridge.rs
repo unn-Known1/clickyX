@@ -1,6 +1,7 @@
 use std::io::Cursor;
 
 use actix_web::{web, App, HttpServer, HttpResponse, middleware};
+use crate::bridge_auth::{Auth, BridgeAuthConfig};
 use futures_util::stream::Stream;
 use futures_util::StreamExt;
 use serde::{Deserialize, Serialize};
@@ -886,23 +887,41 @@ async fn not_found() -> HttpResponse {
     })
 }
 
-pub fn start_bridge(app_handle: AppHandle) {
+pub fn start_bridge(app_handle: AppHandle, bridge_token: Option<String>) {
     log::info!("Starting bridge server thread");
     std::thread::spawn(move || {
         let bridge_state = BridgeState::new(app_handle);
         let data = web::Data::new(bridge_state);
+        let auth_config = web::Data::new(BridgeAuthConfig { token: bridge_token });
 
         let rt = actix_rt::System::new();
         rt.block_on(async {
             let server = HttpServer::new(move || {
                 App::new()
+                    .wrap(actix_cors::Cors::permissive())
                     .wrap(middleware::Logger::default())
                     .app_data(data.clone())
+                    .app_data(auth_config.clone())
                     .route("/health", web::get().to(health))
                     .route("/panel/toggle", web::post().to(toggle_panel))
                     .route("/v1/messages", web::post().to(proxy_messages))
                     .route("/v1/responses", web::post().to(proxy_responses))
                     .route("/models", web::get().to(list_models))
+                    .route("/screenshot", web::post().to(screenshot))
+                    .route("/cursor", web::post().to(show_cursor))
+                    .route("/cursors", web::post().to(show_cursors))
+                    .route("/rectangle", web::post().to(show_rectangle))
+                    .route("/scribble", web::post().to(show_scribble))
+                    .route("/caption", web::post().to(show_caption))
+                    .route("/click", web::post().to(click))
+                    .route("/clear", web::post().to(clear_overlays))
+                    .route("/speak", web::post().to(speak))
+                    .route("/transcribe", web::post().to(transcribe))
+                    .route("/audio-level", web::get().to(audio_level))
+                    .route("/events", web::get().to(events))
+                    .route("/notify", web::post().to(notify))
+                    .route("/mcp/tools", web::get().to(mcp_tools))
+                    .route("/mcp/call", web::post().to(mcp_call))
                     .route("/agents", web::get().to(bridge_list_agents))
                     .route("/agent/create", web::post().to(bridge_create_agent))
                     .route("/agent/{slug}/run", web::post().to(bridge_run_agent))

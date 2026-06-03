@@ -3,6 +3,7 @@ mod audio;
 mod config;
 mod tray;
 mod bridge;
+mod bridge_auth;
 mod overlay;
 mod commands;
 mod ai;
@@ -11,6 +12,7 @@ mod automation;
 mod gen3d;
 mod updater;
 mod permissions;
+mod cua;
 
 use std::path::PathBuf;
 use std::sync::Mutex;
@@ -174,6 +176,25 @@ pub fn run() {
             };
 
             let pipeline = audio::VoicePipeline::with_config(&config.audio, stt_cfg, tts_cfg);
+
+            // Start always-on voice mode if enabled
+            if config.audio.activation_mode == "always_on" {
+                let ao_handle = handle.clone();
+                if pipeline.start_always_on().is_ok() {
+                    let _ = pipeline.run_always_on_vad_loop(Box::new(move |text| {
+                        let payload = serde_json::json!({
+                            "type": "auto_transcript",
+                            "text": text
+                        });
+                        let _ = ao_handle.emit("voice-transcript", payload);
+                        log::info!("Always-on transcript: {}", text);
+                    }));
+                    log::info!("Voice pipeline: always-on mode started from setup");
+                } else {
+                    log::warn!("Voice pipeline: always-on mode failed to start");
+                }
+            }
+
             handle.manage(std::sync::Mutex::new(pipeline));
 
             // Initialize automation engine
@@ -211,8 +232,15 @@ pub fn run() {
             let codex_state: Mutex<commands::CodexState> = Mutex::new(None);
             handle.manage(codex_state);
 
+            // Initialize overlay annotation lifecycle manager
+            let ann_manager = overlay::init_manager();
+            let ann_mgr_arc = std::sync::Arc::new(ann_manager);
+            handle.manage(ann_mgr_arc.clone());
+            overlay::start_lifecycle_sweep(handle.clone(), ann_mgr_arc);
+
             // Start bridge server on separate thread
-            bridge::start_bridge(handle.clone());
+            let bridge_token = config.bridge_token.clone();
+            bridge::start_bridge(handle.clone(), bridge_token);
 
             // Check for updates on startup (non-blocking)
             {
@@ -314,6 +342,12 @@ pub fn run() {
             commands::get_codex_status,
             commands::get_agent_config,
             commands::update_agent_config,
+            commands::start_always_on,
+            commands::stop_always_on,
+            commands::set_always_on_config,
+            commands::get_always_on_config,
+            commands::set_agent_triggers,
+            commands::get_agent_triggers,
         ])
         .build(tauri::generate_context!())
         .expect("error while building ClickyX")

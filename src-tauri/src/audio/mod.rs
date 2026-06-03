@@ -3,7 +3,8 @@ mod pipeline;
 mod stt;
 mod tts;
 pub mod wake_word;
+pub mod handoff;
 
-pub use pipeline::VoicePipeline;
+pub use pipeline::{VoicePipeline, AlwaysOnConfig, PipelineState};
 pub use stt::{SttConfig, SttProvider, transcribe};
 pub use tts::{TtsConfig, TtsProvider};

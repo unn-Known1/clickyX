@@ -199,6 +199,7 @@ pub struct AppConfig {
     pub mcp_servers: Vec<McpServerConfig>,
     pub automations_file: String,
     pub computer_use: ComputerUseConfig,
+    pub bridge_token: Option<String>,
 }
 
 impl Default for AppConfig {
@@ -218,6 +219,7 @@ impl Default for AppConfig {
             automations_file: "automations.json".into(),
             agent: AgentConfig::default(),
             computer_use: ComputerUseConfig::default(),
+            bridge_token: None,
         }
     }
 }

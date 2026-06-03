@@ -1,0 +1,5 @@
+name = "example-skill"
+description = "Describe what this skill does"
+version = "1.0.0"
+permission_class = "safe"
+entry_point = "example-skill.js"

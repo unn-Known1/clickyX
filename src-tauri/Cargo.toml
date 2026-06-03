@@ -37,6 +37,10 @@ xcap = "0.4"
 base64 = "0.22"
 toml = "0.8"
 image = { version = "0.25", default-features = false, features = ["jpeg"] }
+actix-cors = "0.7"
+subtle = "2"
+enigo = { version = "0.2", features = ["serde"] }
+lazy_static = "1"
 
 [dev-dependencies]
 tempfile = "3"
