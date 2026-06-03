@@ -1,0 +1,5 @@
+name = "screen-point"
+description = "Point at a coordinate on the screen with an optional label"
+version = "1.0.0"
+permission_class = "safe"
+entry_point = "screen-point.js"

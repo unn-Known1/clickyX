@@ -1,0 +1,5 @@
+name = "screen-caption"
+description = "Overlay a caption at a specific screen coordinate"
+version = "1.0.0"
+permission_class = "safe"
+entry_point = "screen-caption.js"

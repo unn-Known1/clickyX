@@ -2,12 +2,17 @@ use serde::{Deserialize, Serialize};
 use std::sync::Mutex;
 use tauri::{AppHandle, Emitter, Manager, State};
 
+use crate::agent::codex::CodexProcess;
+use crate::agent::session::{AgentSession, AgentStore, ChatMessage, SessionState};
+use crate::agent::skills::{self, Skill};
 use crate::ai;
 use crate::ai::catalog::ModelCatalog;
 use crate::ai::streaming::StreamEvent;
 use crate::audio::VoicePipeline;
-use crate::config::{self, AppConfig};
+use crate::config::{self, AgentConfig, AppConfig};
+use crate::permissions::{self, Permission, PermissionStatus};
 use crate::screen::capture;
+use crate::updater::{self, UpdateInfo};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AppState {
@@ -489,4 +494,563 @@ pub fn update_audio_config(
     pipe.update_config(&config.audio)?;
 
     Ok(config.audio)
+}
+
+// --- Wake Word Commands ---
+
+#[tauri::command]
+pub fn set_wake_word_config(
+    app: AppHandle,
+    config: serde_json::Value,
+) -> Result<crate::config::WakeWordConfig, String> {
+    let mut app_config = crate::config::load_config(&app)?;
+    if let Ok(wc) = serde_json::from_value::<crate::config::WakeWordConfig>(config) {
+        app_config.wake_word = wc.clone();
+        crate::config::save_config(&app, &app_config)?;
+        Ok(wc)
+    } else {
+        Err("invalid wake word config".into())
+    }
+}
+
+#[tauri::command]
+pub fn get_wake_word_config(app: AppHandle) -> Result<crate::config::WakeWordConfig, String> {
+    let config = crate::config::load_config(&app)?;
+    Ok(config.wake_word)
+}
+
+#[tauri::command]
+pub fn start_wake_word_detection(app: AppHandle) -> Result<bool, String> {
+    let config = crate::config::load_config(&app)?;
+    if !config.wake_word.enabled {
+        return Err("wake word not enabled in config".into());
+    }
+    log::info!("Wake word detection started");
+    Ok(true)
+}
+
+#[tauri::command]
+pub fn stop_wake_word_detection() -> Result<bool, String> {
+    log::info!("Wake word detection stopped");
+    Ok(true)
+}
+
+// --- Google Workspace Commands ---
+
+#[tauri::command]
+pub fn check_google_workspace() -> Result<crate::agent::google::WorkspaceStatus, String> {
+    crate::agent::google::GoogleWorkspace::check_auth()
+}
+
+#[tauri::command]
+pub fn list_emails(count: Option<u32>) -> Result<Vec<crate::agent::google::Email>, String> {
+    crate::agent::google::GoogleWorkspace::list_emails(count.unwrap_or(10))
+}
+
+#[tauri::command]
+pub fn list_calendar_events(count: Option<u32>) -> Result<Vec<crate::agent::google::CalendarEvent>, String> {
+    crate::agent::google::GoogleWorkspace::list_calendar_events(count.unwrap_or(10))
+}
+
+// --- Automation Commands ---
+
+#[tauri::command]
+pub fn list_automations(
+    state: State<'_, Mutex<crate::automation::AutomationEngine>>,
+) -> Result<Vec<crate::automation::Automation>, String> {
+    let engine = state.lock().map_err(|e| format!("lock error: {e}"))?;
+    Ok(engine.automations.clone())
+}
+
+#[tauri::command]
+pub fn create_automation(
+    state: State<'_, Mutex<crate::automation::AutomationEngine>>,
+    automation: crate::automation::Automation,
+) -> Result<crate::automation::Automation, String> {
+    let mut engine = state.lock().map_err(|e| format!("lock error: {e}"))?;
+    let mut a = automation;
+    if a.id.is_empty() {
+        a.id = uuid::Uuid::new_v4().to_string();
+    }
+    engine.add(a.clone());
+    Ok(a)
+}
+
+#[tauri::command]
+pub fn update_automation(
+    state: State<'_, Mutex<crate::automation::AutomationEngine>>,
+    automation: crate::automation::Automation,
+) -> Result<crate::automation::Automation, String> {
+    let mut engine = state.lock().map_err(|e| format!("lock error: {e}"))?;
+    engine.update(automation.clone());
+    Ok(automation)
+}
+
+#[tauri::command]
+pub fn delete_automation(
+    state: State<'_, Mutex<crate::automation::AutomationEngine>>,
+    id: String,
+) -> Result<bool, String> {
+    let mut engine = state.lock().map_err(|e| format!("lock error: {e}"))?;
+    engine.remove(&id);
+    Ok(true)
+}
+
+#[tauri::command]
+pub fn toggle_automation(
+    state: State<'_, Mutex<crate::automation::AutomationEngine>>,
+    id: String,
+    enabled: bool,
+) -> Result<crate::automation::Automation, String> {
+    let mut engine = state.lock().map_err(|e| format!("lock error: {e}"))?;
+    if let Some(automation) = engine.automations.iter_mut().find(|a| a.id == id) {
+        automation.enabled = enabled;
+        let a = automation.clone();
+        let _ = engine.save();
+        return Ok(a);
+    }
+    Err("automation not found".into())
+}
+
+// --- MCP Commands ---
+
+#[tauri::command]
+pub fn get_mcp_servers(app: AppHandle) -> Result<Vec<crate::config::McpServerConfig>, String> {
+    let config = crate::config::load_config(&app)?;
+    Ok(config.mcp_servers)
+}
+
+#[tauri::command]
+pub fn add_mcp_server(
+    app: AppHandle,
+    config: crate::config::McpServerConfig,
+) -> Result<Vec<crate::config::McpServerConfig>, String> {
+    let mut app_config = crate::config::load_config(&app)?;
+    if app_config.mcp_servers.iter().any(|s| s.name == config.name) {
+        return Err("MCP server with this name already exists".into());
+    }
+    app_config.mcp_servers.push(config);
+    crate::config::save_config(&app, &app_config)?;
+    Ok(app_config.mcp_servers)
+}
+
+#[tauri::command]
+pub fn update_mcp_server(
+    app: AppHandle,
+    name: String,
+    config: crate::config::McpServerConfig,
+) -> Result<Vec<crate::config::McpServerConfig>, String> {
+    let mut app_config = crate::config::load_config(&app)?;
+    if let Some(server) = app_config.mcp_servers.iter_mut().find(|s| s.name == name) {
+        *server = config;
+        crate::config::save_config(&app, &app_config)?;
+        Ok(app_config.mcp_servers)
+    } else {
+        Err("MCP server not found".into())
+    }
+}
+
+#[tauri::command]
+pub fn remove_mcp_server(
+    app: AppHandle,
+    name: String,
+) -> Result<Vec<crate::config::McpServerConfig>, String> {
+    let mut app_config = crate::config::load_config(&app)?;
+    app_config.mcp_servers.retain(|s| s.name != name);
+    crate::config::save_config(&app, &app_config)?;
+    Ok(app_config.mcp_servers)
+}
+
+// --- 3D Generation Command ---
+
+#[tauri::command]
+pub async fn generate_3d_model(
+    prompt: String,
+    style: Option<String>,
+    app: AppHandle,
+) -> Result<String, String> {
+    let config = crate::config::load_config(&app)?;
+    let api_key = config
+        .api_keys
+        .iter()
+        .find(|k| k.provider.to_lowercase() == "tripo3d")
+        .map(|k| k.key.clone())
+        .ok_or_else(|| "Tripo3D API key not configured. Add it in Settings > API Keys.".to_string())?;
+    let style = style.unwrap_or_else(|| "realistic".into());
+    crate::gen3d::generate_3d(&prompt, &style, &api_key).await
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LogEntry {
+    pub timestamp: String,
+    pub level: String,
+    pub message: String,
+    pub target: String,
+}
+
+#[tauri::command]
+pub fn check_permission(permission: String) -> Result<PermissionStatus, String> {
+    let perm = Permission::from_name(&permission)
+        .ok_or_else(|| format!("unknown permission: {}", permission))?;
+    Ok(permissions::check_permission(&perm))
+}
+
+#[tauri::command]
+pub fn request_permission(permission: String) -> Result<bool, String> {
+    let perm = Permission::from_name(&permission)
+        .ok_or_else(|| format!("unknown permission: {}", permission))?;
+    permissions::request_permission(&perm)
+}
+
+#[tauri::command]
+pub async fn check_for_updates(app: AppHandle) -> Result<UpdateInfo, String> {
+    let config = app.state::<AppConfig>();
+    updater::check_for_updates(&config.version).await
+}
+
+#[tauri::command]
+pub async fn install_update(url: String) -> Result<(), String> {
+    let data = updater::download_update(&url).await?;
+    updater::install_update(&data)
+}
+
+#[tauri::command]
+pub fn get_logs(count: Option<u32>) -> Result<Vec<LogEntry>, String> {
+    let count = count.unwrap_or(100) as usize;
+    let log_dir = crate::get_log_dir()?;
+    let mut entries = Vec::new();
+
+    if !log_dir.exists() {
+        return Ok(entries);
+    }
+
+    let mut files: Vec<_> = std::fs::read_dir(&log_dir)
+        .map_err(|e| format!("failed to read log dir: {e}"))?
+        .filter_map(|e| e.ok())
+        .filter(|e| e.path().extension().map(|ext| ext == "log").unwrap_or(false))
+        .collect();
+
+    files.sort_by_key(|e| e.path().metadata().and_then(|m| m.modified()).ok());
+
+    for file in files.iter().rev() {
+        let content = std::fs::read_to_string(file.path())
+            .map_err(|e| format!("failed to read log file: {e}"))?;
+        for line in content.lines().rev() {
+            if entries.len() >= count {
+                break;
+            }
+            let parts: Vec<&str> = line.splitn(4, " | ").collect();
+            if parts.len() == 4 {
+                entries.push(LogEntry {
+                    timestamp: parts[0].into(),
+                    level: parts[1].into(),
+                    target: parts[2].into(),
+                    message: parts[3].into(),
+                });
+            } else {
+                entries.push(LogEntry {
+                    timestamp: String::new(),
+                    level: String::new(),
+                    target: String::new(),
+                    message: line.into(),
+                });
+            }
+        }
+        if entries.len() >= count {
+            break;
+        }
+    }
+
+    entries.reverse();
+    Ok(entries)
+}
+
+#[tauri::command]
+pub fn clear_logs() -> Result<(), String> {
+    let log_dir = crate::get_log_dir()?;
+    if !log_dir.exists() {
+        return Ok(());
+    }
+    for entry in std::fs::read_dir(&log_dir)
+        .map_err(|e| format!("failed to read log dir: {e}"))?
+    {
+        let entry = entry.map_err(|e| format!("failed to read entry: {e}"))?;
+        if entry.path().extension().map(|ext| ext == "log").unwrap_or(false) {
+            std::fs::remove_file(entry.path())
+                .map_err(|e| format!("failed to remove log: {e}"))?;
+        }
+    }
+    Ok(())
+}
+
+#[tauri::command]
+pub fn export_config(app: AppHandle) -> Result<String, String> {
+    let config = config::load_config(&app)?;
+    serde_json::to_string_pretty(&config)
+        .map_err(|e| format!("failed to serialize config: {e}"))
+}
+
+#[tauri::command]
+pub fn import_config(app: AppHandle, json: String) -> Result<AppConfig, String> {
+    let config: AppConfig = serde_json::from_str(&json)
+        .map_err(|e| format!("invalid config JSON: {e}"))?;
+    config::save_config(&app, &config)?;
+    app.manage(config.clone());
+    Ok(config)
+}
+
+#[tauri::command]
+pub fn reset_config(app: AppHandle) -> Result<AppConfig, String> {
+    let config = AppConfig::default();
+    config::save_config(&app, &config)?;
+    app.manage(config.clone());
+    Ok(config)
+}
+
+#[tauri::command]
+pub fn get_app_version() -> Result<String, String> {
+    Ok(env!("CARGO_PKG_VERSION").to_string())
+}
+
+#[tauri::command]
+pub fn toggle_tutor_mode(app: AppHandle) -> Result<bool, String> {
+    let mut config = config::load_config(&app)?;
+    config.overlay.tutor_mode = !config.overlay.tutor_mode;
+    let new_state = config.overlay.tutor_mode;
+    config::save_config(&app, &config)?;
+    app.manage(config);
+    Ok(new_state)
+}
+
+#[tauri::command]
+pub fn set_cursor_accent(app: AppHandle, color: String) -> Result<(), String> {
+    let mut config = config::load_config(&app)?;
+    config.overlay.cursor_accent = color;
+    config::save_config(&app, &config)?;
+    app.manage(config);
+    Ok(())
+}
+
+pub type AgentState = AgentStore;
+pub type CodexState = Option<CodexProcess>;
+
+#[tauri::command]
+pub fn list_agents(state: tauri::State<'_, Mutex<AgentStore>>) -> Result<Vec<AgentSession>, String> {
+    let store = state.lock().map_err(|e| format!("lock error: {e}"))?;
+    Ok(store.list())
+}
+
+#[tauri::command]
+pub fn create_agent(
+    name: String,
+    slug: String,
+    skills: Vec<String>,
+    state: tauri::State<'_, Mutex<AgentStore>>,
+) -> Result<AgentSession, String> {
+    let mut store = state.lock().map_err(|e| format!("lock error: {e}"))?;
+    let session = store.create(name, slug, skills);
+    Ok(session)
+}
+
+#[tauri::command]
+pub async fn run_agent(
+    slug: String,
+    prompt: String,
+    state: tauri::State<'_, Mutex<AgentStore>>,
+) -> Result<(), String> {
+    let mut store = state.lock().map_err(|e| format!("lock error: {e}"))?;
+    let session = store
+        .get_mut(&slug)
+        .ok_or_else(|| format!("agent '{slug}' not found"))?;
+    session.state = SessionState::Running;
+    session.transcript.push(ChatMessage {
+        role: "user".into(),
+        content: prompt,
+    });
+    let now =
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs()
+            .to_string();
+    session.updated_at = now;
+    Ok(())
+}
+
+#[tauri::command]
+pub fn stop_agent(
+    slug: String,
+    state: tauri::State<'_, Mutex<AgentStore>>,
+) -> Result<(), String> {
+    let mut store = state.lock().map_err(|e| format!("lock error: {e}"))?;
+    let session = store
+        .get_mut(&slug)
+        .ok_or_else(|| format!("agent '{slug}' not found"))?;
+    match &session.state {
+        SessionState::Running => {
+            session.state = SessionState::Paused;
+        }
+        _ => return Err(format!("agent '{slug}' is not running")),
+    }
+    let now =
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs()
+            .to_string();
+    session.updated_at = now;
+    Ok(())
+}
+
+#[tauri::command]
+pub fn archive_agent(
+    slug: String,
+    state: tauri::State<'_, Mutex<AgentStore>>,
+) -> Result<(), String> {
+    let mut store = state.lock().map_err(|e| format!("lock error: {e}"))?;
+    let session = store
+        .get_mut(&slug)
+        .ok_or_else(|| format!("agent '{slug}' not found"))?;
+    session.state = SessionState::Archived;
+    let now =
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs()
+            .to_string();
+    session.updated_at = now;
+    Ok(())
+}
+
+#[tauri::command]
+pub fn get_agent_status(
+    slug: String,
+    state: tauri::State<'_, Mutex<AgentStore>>,
+) -> Result<AgentSession, String> {
+    let store = state.lock().map_err(|e| format!("lock error: {e}"))?;
+    store
+        .get(&slug)
+        .cloned()
+        .ok_or_else(|| format!("agent '{slug}' not found"))
+}
+
+#[tauri::command]
+pub fn get_agent_transcript(
+    slug: String,
+    state: tauri::State<'_, Mutex<AgentStore>>,
+) -> Result<Vec<ChatMessage>, String> {
+    let store = state.lock().map_err(|e| format!("lock error: {e}"))?;
+    let session = store
+        .get(&slug)
+        .ok_or_else(|| format!("agent '{slug}' not found"))?;
+    Ok(session.transcript.clone())
+}
+
+#[tauri::command]
+pub fn list_skills() -> Result<Vec<Skill>, String> {
+    Ok(skills::load_skills())
+}
+
+#[tauri::command]
+pub fn enable_skill(
+    slug: String,
+    skill_name: String,
+    state: tauri::State<'_, Mutex<AgentStore>>,
+) -> Result<(), String> {
+    let mut store = state.lock().map_err(|e| format!("lock error: {e}"))?;
+    let session = store
+        .get_mut(&slug)
+        .ok_or_else(|| format!("agent '{slug}' not found"))?;
+    if !session.skills.contains(&skill_name) {
+        session.skills.push(skill_name);
+    }
+    Ok(())
+}
+
+#[tauri::command]
+pub fn disable_skill(
+    slug: String,
+    skill_name: String,
+    state: tauri::State<'_, Mutex<AgentStore>>,
+) -> Result<(), String> {
+    let mut store = state.lock().map_err(|e| format!("lock error: {e}"))?;
+    let session = store
+        .get_mut(&slug)
+        .ok_or_else(|| format!("agent '{slug}' not found"))?;
+    session.skills.retain(|s| s != &skill_name);
+    Ok(())
+}
+
+#[tauri::command]
+pub fn start_codex(
+    app: tauri::AppHandle,
+    codex_state: tauri::State<'_, Mutex<CodexState>>,
+) -> Result<(), String> {
+    let mut state = codex_state.lock().map_err(|e| format!("lock error: {e}"))?;
+    if state.is_some() {
+        return Err("Codex already running".into());
+    }
+    let config = app.state::<AppConfig>();
+    let mut process = CodexProcess::new(&config.agent);
+    process.start(&config.agent)?;
+    *state = Some(process);
+    Ok(())
+}
+
+#[tauri::command]
+pub fn stop_codex(
+    codex_state: tauri::State<'_, Mutex<CodexState>>,
+) -> Result<(), String> {
+    let mut state = codex_state.lock().map_err(|e| format!("lock error: {e}"))?;
+    if let Some(process) = state.as_mut() {
+        process.stop()?;
+    }
+    *state = None;
+    Ok(())
+}
+
+#[tauri::command]
+pub fn get_codex_status(
+    codex_state: tauri::State<'_, Mutex<CodexState>>,
+) -> Result<bool, String> {
+    let state = codex_state.lock().map_err(|e| format!("lock error: {e}"))?;
+    Ok(state.is_some())
+}
+
+#[tauri::command]
+pub fn get_agent_config(app: tauri::AppHandle) -> Result<AgentConfig, String> {
+    let config = app.state::<AppConfig>();
+    Ok(config.agent.clone())
+}
+
+#[tauri::command]
+pub fn update_agent_config(
+    app: tauri::AppHandle,
+    partial: serde_json::Value,
+) -> Result<AgentConfig, String> {
+    let mut config = app.state::<AppConfig>().inner().clone();
+    if let Some(obj) = partial.as_object() {
+        if let Some(path) = obj.get("codex_path").and_then(|v| v.as_str()) {
+            config.agent.codex_path = Some(path.to_string());
+        }
+        if let Some(home) = obj.get("codex_home").and_then(|v| v.as_str()) {
+            config.agent.codex_home = home.to_string();
+        }
+        if let Some(workers) = obj.get("max_workers").and_then(|v| v.as_u64()) {
+            config.agent.max_workers = workers as u32;
+        }
+        if let Some(pos) = obj.get("agent_dock_position").and_then(|v| v.as_str()) {
+            config.agent.agent_dock_position = pos.to_string();
+        }
+        if let Some(skills) = obj.get("enabled_skills").and_then(|v| v.as_array()) {
+            config.agent.enabled_skills = skills
+                .iter()
+                .filter_map(|v| v.as_str().map(String::from))
+                .collect();
+        }
+    }
+    config::save_config(&app, &config)?;
+    app.manage(config);
+    let updated = app.state::<AppConfig>();
+    Ok(updated.agent.clone())
 }

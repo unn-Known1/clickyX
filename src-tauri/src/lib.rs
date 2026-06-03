@@ -1,3 +1,4 @@
+mod agent;
 mod audio;
 mod config;
 mod tray;
@@ -6,10 +7,51 @@ mod overlay;
 mod commands;
 mod ai;
 mod screen;
+mod automation;
+mod gen3d;
+mod updater;
+mod permissions;
 
+use std::path::PathBuf;
 use std::sync::Mutex;
-use tauri::{AppHandle, Manager};
+use tauri::{AppHandle, Emitter, Manager};
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
+
+pub fn get_log_dir() -> Result<PathBuf, String> {
+    let base = dirs::config_dir().ok_or("could not find config directory")?;
+    let dir = base.join("clickyx").join("logs");
+    std::fs::create_dir_all(&dir).map_err(|e| format!("failed to create log dir: {e}"))?;
+    Ok(dir)
+}
+
+fn init_logging() {
+    let log_dir = match get_log_dir() {
+        Ok(d) => d,
+        Err(_) => {
+            env_logger::init();
+            return;
+        }
+    };
+    let log_file = log_dir.join("clickyx.log");
+    let file_writer = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&log_file)
+        .expect("failed to open log file");
+
+    let rotated = log_dir.join("clickyx.old.log");
+    if log_file.exists() {
+        let metadata = std::fs::metadata(&log_file).ok();
+        if metadata.map(|m| m.len() > 5 * 1024 * 1024).unwrap_or(false) {
+            let _ = std::fs::rename(&log_file, &rotated);
+        }
+    }
+
+    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info"))
+        .target(env_logger::Target::Pipe(Box::new(file_writer)))
+        .format_timestamp_secs()
+        .init();
+}
 
 pub(crate) fn register_hotkeys(app: &AppHandle) -> Result<(), String> {
     let _ = app
@@ -66,9 +108,12 @@ pub(crate) fn register_hotkeys(app: &AppHandle) -> Result<(), String> {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    init_logging();
+
     tauri::Builder::default()
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .plugin(tauri_plugin_shell::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .setup(|app| {
             let handle = app.handle().clone();
 
@@ -122,8 +167,42 @@ pub fn run() {
             let pipeline = audio::VoicePipeline::with_config(&config.audio, stt_cfg, tts_cfg);
             handle.manage(std::sync::Mutex::new(pipeline));
 
+            // Initialize automation engine
+            let automations_path = dirs::config_dir()
+                .unwrap_or_else(|| std::path::PathBuf::from("."))
+                .join("clickyx")
+                .join(&config.automations_file);
+            let automation_engine =
+                automation::AutomationEngine::load(&automations_path).unwrap_or_default();
+            handle.manage(Mutex::new(automation_engine));
+
+            // Initialize agent state
+            let agent_store = Mutex::new(agent::session::AgentStore::new());
+            handle.manage(agent_store);
+
+            // Initialize codex state
+            let codex_state: Mutex<commands::CodexState> = Mutex::new(None);
+            handle.manage(codex_state);
+
             // Start bridge server on separate thread
             bridge::start_bridge(handle.clone());
+
+            // Check for updates on startup (non-blocking)
+            {
+                let handle = app.handle().clone();
+                let version = config.version.clone();
+                tokio::spawn(async move {
+                    match crate::updater::check_for_updates(&version).await {
+                        Ok(info) if info.available => {
+                            let ver = info.version.clone().unwrap_or_default();
+                            log::info!("Update available: v{}", ver);
+                            let _ = handle.emit("update-available", &info);
+                        }
+                        Ok(_) => log::info!("No updates available"),
+                        Err(e) => log::warn!("Update check failed: {e}"),
+                    }
+                });
+            }
 
             Ok(())
         })
@@ -159,6 +238,50 @@ pub fn run() {
             commands::set_ptt_hotkey,
             commands::get_audio_config,
             commands::update_audio_config,
+            commands::set_wake_word_config,
+            commands::get_wake_word_config,
+            commands::start_wake_word_detection,
+            commands::stop_wake_word_detection,
+            commands::check_google_workspace,
+            commands::list_emails,
+            commands::list_calendar_events,
+            commands::list_automations,
+            commands::create_automation,
+            commands::update_automation,
+            commands::delete_automation,
+            commands::toggle_automation,
+            commands::get_mcp_servers,
+            commands::add_mcp_server,
+            commands::update_mcp_server,
+            commands::remove_mcp_server,
+            commands::generate_3d_model,
+            commands::check_permission,
+            commands::request_permission,
+            commands::check_for_updates,
+            commands::install_update,
+            commands::get_logs,
+            commands::clear_logs,
+            commands::export_config,
+            commands::import_config,
+            commands::reset_config,
+            commands::get_app_version,
+            commands::toggle_tutor_mode,
+            commands::set_cursor_accent,
+            commands::list_agents,
+            commands::create_agent,
+            commands::run_agent,
+            commands::stop_agent,
+            commands::archive_agent,
+            commands::get_agent_status,
+            commands::get_agent_transcript,
+            commands::list_skills,
+            commands::enable_skill,
+            commands::disable_skill,
+            commands::start_codex,
+            commands::stop_codex,
+            commands::get_codex_status,
+            commands::get_agent_config,
+            commands::update_agent_config,
         ])
         .build(tauri::generate_context!())
         .expect("error while building ClickyX")

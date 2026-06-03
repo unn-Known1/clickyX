@@ -1,0 +1,5 @@
+name = "screenshot"
+description = "Capture a screenshot of the current screen"
+version = "1.0.0"
+permission_class = "safe"
+entry_point = "screenshot.js"

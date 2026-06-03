@@ -1,0 +1,114 @@
+name: Release
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          toolchain: stable
+          cache: true
+
+      - name: Install system deps (Linux)
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libxdo-dev
+
+      - name: Install npm dependencies
+        run: npm ci
+
+      - name: Build frontend
+        run: npm run build
+
+      - name: Build Tauri app
+        run: npm run tauri build
+
+      - name: Sign (Windows)
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
+        env:
+          SIGNING_CERT: ${{ secrets.WINDOWS_SIGNING_CERT }}
+          SIGNING_PASSWORD: ${{ secrets.WINDOWS_SIGNING_PASSWORD }}
+        run: |
+          if ($env:SIGNING_CERT) {
+            powershell -File scripts/sign-windows.ps1 -CertPath "$env:SIGNING_CERT" -Password "$env:SIGNING_PASSWORD"
+          } else {
+            Write-Host "No signing cert available, skipping sign"
+          }
+
+      - name: Sign (macOS)
+        if: matrix.os == 'macos-latest'
+        env:
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_NOTARIZATION_USERNAME: ${{ secrets.APPLE_NOTARIZATION_USERNAME }}
+          APPLE_NOTARIZATION_PASSWORD: ${{ secrets.APPLE_NOTARIZATION_PASSWORD }}
+        run: |
+          if [ -n "$APPLE_SIGNING_IDENTITY" ]; then
+            bash scripts/sign-macos.sh "$APPLE_SIGNING_IDENTITY"
+            bash scripts/notarize-macos.sh "$APPLE_NOTARIZATION_USERNAME" "$APPLE_NOTARIZATION_PASSWORD"
+          else
+            echo "No signing identity available, skipping sign"
+          fi
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: clickyx-${{ matrix.os }}
+          path: src-tauri/target/release/bundle/
+
+  release:
+    name: Create Release
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Generate release notes
+        id: notes
+        run: |
+          echo "## Release ${{ github.ref_name }}" > release-notes.md
+          echo "" >> release-notes.md
+          echo "### Downloads" >> release-notes.md
+          echo "" >> release-notes.md
+          find artifacts -type f -name "*.msi" -o -name "*.dmg" -o -name "*.AppImage" -o -name "*.deb" -o -name "*.rpm" | while read f; do
+            basename=$(basename "$f")
+            echo "- $basename" >> release-notes.md
+          done
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: ClickyX ${{ github.ref_name }}
+          body_path: release-notes.md
+          draft: true
+          prerelease: false
+          files: |
+            artifacts/**/*.msi
+            artifacts/**/*.dmg
+            artifacts/**/*.AppImage
+            artifacts/**/*.deb
+            artifacts/**/*.rpm

@@ -1,6 +1,8 @@
 use std::io::Cursor;
 
 use actix_web::{web, App, HttpServer, HttpResponse, middleware};
+use futures_util::stream::Stream;
+use futures_util::StreamExt;
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager};
 
@@ -9,6 +11,22 @@ use crate::screen::capture;
 #[derive(Clone)]
 pub struct BridgeState {
     pub app_handle: AppHandle,
+    pub event_tx: tokio::sync::broadcast::Sender<String>,
+}
+
+impl BridgeState {
+    pub fn new(app_handle: AppHandle) -> Self {
+        let (event_tx, _) = tokio::sync::broadcast::channel(256);
+        Self {
+            app_handle,
+            event_tx,
+        }
+    }
+}
+
+pub fn emit_event(state: &BridgeState, event_type: &str, payload: &str) {
+    let msg = format!("event: {}\ndata: {}\n\n", event_type, payload);
+    let _ = state.event_tx.send(msg);
 }
 
 #[derive(Serialize)]
@@ -608,6 +626,259 @@ async fn list_models() -> HttpResponse {
     HttpResponse::Ok().json(ModelsResponse { models })
 }
 
+#[derive(Deserialize)]
+struct NotifyRequest {
+    title: String,
+    body: String,
+    icon: Option<String>,
+}
+
+#[derive(Serialize)]
+struct McpToolsResponse {
+    tools: Vec<McpToolInfo>,
+}
+
+#[derive(Serialize)]
+struct McpToolInfo {
+    server: String,
+    name: String,
+    description: String,
+}
+
+#[derive(Deserialize)]
+struct McpCallRequest {
+    server: String,
+    tool: String,
+    args: serde_json::Value,
+}
+
+async fn events(data: web::Data<BridgeState>) -> HttpResponse {
+    let rx = data.event_tx.subscribe();
+    let stream: Box<dyn Stream<Item = Result<actix_web::web::Bytes, actix_web::Error>> + Unpin> =
+        Box::new(tokio_stream::wrappers::BroadcastStream::new(rx).map(|result| {
+            result
+                .map(|msg| actix_web::web::Bytes::from(msg))
+                .map_err(|_| actix_web::error::ErrorGone("channel closed"))
+        }));
+    HttpResponse::Ok()
+        .insert_header(("Content-Type", "text/event-stream"))
+        .insert_header(("Cache-Control", "no-cache"))
+        .insert_header(("Connection", "keep-alive"))
+        .streaming(stream)
+}
+
+async fn click_handler(data: web::Data<BridgeState>, body: web::Json<ClickRequest>) -> HttpResponse {
+    let _app = &data.app_handle;
+    log::info!("Click at ({}, {})", body.x, body.y);
+    emit_event(&data, "guidance_update", &format!("{{\"action\":\"click\",\"x\":{},\"y\":{}}}", body.x, body.y));
+    HttpResponse::Ok().json(OkResponse { ok: true })
+}
+
+async fn notify(data: web::Data<BridgeState>, body: web::Json<NotifyRequest>) -> HttpResponse {
+    let _app = &data.app_handle;
+    log::info!("Notification: {} - {}", body.title, body.body);
+    if let Some(window) = _app.get_webview_window("main") {
+        let _ = window.show();
+        let _ = window.set_focus();
+    }
+    HttpResponse::Ok().json(OkResponse { ok: true })
+}
+
+async fn mcp_tools() -> HttpResponse {
+    let tools = vec![McpToolInfo {
+        server: "placeholder".into(),
+        name: "no_mcp_servers_configured".into(),
+        description: "Add MCP servers in Settings > Connections".into(),
+    }];
+    HttpResponse::Ok().json(McpToolsResponse { tools })
+}
+
+async fn mcp_call(body: web::Json<McpCallRequest>) -> HttpResponse {
+    log::info!("MCP call: server={}, tool={}", body.server, body.tool);
+    HttpResponse::Ok().json(serde_json::json!({
+        "result": format!("MCP tool '{}' called on server '{}'", body.tool, body.server)
+    }))
+}
+
+async fn bridge_list_agents(data: web::Data<BridgeState>) -> HttpResponse {
+    let app = &data.app_handle;
+    if let Some(store) = app.try_state::<std::sync::Mutex<crate::agent::session::AgentStore>>() {
+        match store.lock() {
+            Ok(s) => {
+                let agents = s.list();
+                HttpResponse::Ok().json(serde_json::json!({ "agents": agents }))
+            }
+            Err(e) => HttpResponse::InternalServerError().json(ErrorResponse {
+                error: "internal_error".into(),
+                message: format!("lock error: {e}"),
+            }),
+        }
+    } else {
+        HttpResponse::InternalServerError().json(ErrorResponse {
+            error: "internal_error".into(),
+            message: "agent store not available".into(),
+        })
+    }
+}
+
+async fn bridge_create_agent(
+    data: web::Data<BridgeState>,
+    body: web::Json<serde_json::Value>,
+) -> HttpResponse {
+    let app = &data.app_handle;
+    let name = body.get("name").and_then(|v| v.as_str()).unwrap_or("Agent");
+    let slug = body.get("slug").and_then(|v| v.as_str()).unwrap_or("");
+    let skills: Vec<String> = body
+        .get("skills")
+        .and_then(|v| v.as_array())
+        .map(|arr| arr.iter().filter_map(|v| v.as_str().map(String::from)).collect())
+        .unwrap_or_default();
+
+    if slug.is_empty() {
+        return HttpResponse::BadRequest().json(ErrorResponse {
+            error: "bad_request".into(),
+            message: "slug is required".into(),
+        });
+    }
+
+    if let Some(store) = app.try_state::<std::sync::Mutex<crate::agent::session::AgentStore>>() {
+        match store.lock() {
+            Ok(mut s) => {
+                let session = s.create(name.to_string(), slug.to_string(), skills);
+                HttpResponse::Ok().json(session)
+            }
+            Err(e) => HttpResponse::InternalServerError().json(ErrorResponse {
+                error: "internal_error".into(),
+                message: format!("lock error: {e}"),
+            }),
+        }
+    } else {
+        HttpResponse::InternalServerError().json(ErrorResponse {
+            error: "internal_error".into(),
+            message: "agent store not available".into(),
+        })
+    }
+}
+
+async fn bridge_run_agent(
+    data: web::Data<BridgeState>,
+    path: web::Path<String>,
+    body: web::Json<serde_json::Value>,
+) -> HttpResponse {
+    let app = &data.app_handle;
+    let slug = path.into_inner();
+    let prompt = body
+        .get("prompt")
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
+
+    if let Some(store) = app.try_state::<std::sync::Mutex<crate::agent::session::AgentStore>>() {
+        match store.lock() {
+            Ok(mut s) => {
+                if let Some(session) = s.get_mut(&slug) {
+                    session.state = crate::agent::session::SessionState::Running;
+                    session.transcript.push(crate::agent::session::ChatMessage {
+                        role: "user".into(),
+                        content: prompt.to_string(),
+                    });
+                    let now =
+                        std::time::SystemTime::now()
+                            .duration_since(std::time::UNIX_EPOCH)
+                            .unwrap_or_default()
+                            .as_secs()
+                            .to_string();
+                    session.updated_at = now;
+                    HttpResponse::Ok().json(serde_json::json!({ "ok": true }))
+                } else {
+                    HttpResponse::NotFound().json(ErrorResponse {
+                        error: "not_found".into(),
+                        message: format!("agent '{slug}' not found"),
+                    })
+                }
+            }
+            Err(e) => HttpResponse::InternalServerError().json(ErrorResponse {
+                error: "internal_error".into(),
+                message: format!("lock error: {e}"),
+            }),
+        }
+    } else {
+        HttpResponse::InternalServerError().json(ErrorResponse {
+            error: "internal_error".into(),
+            message: "agent store not available".into(),
+        })
+    }
+}
+
+async fn bridge_stop_agent(
+    data: web::Data<BridgeState>,
+    path: web::Path<String>,
+) -> HttpResponse {
+    let app = &data.app_handle;
+    let slug = path.into_inner();
+
+    if let Some(store) = app.try_state::<std::sync::Mutex<crate::agent::session::AgentStore>>() {
+        match store.lock() {
+            Ok(mut s) => {
+                if let Some(session) = s.get_mut(&slug) {
+                    session.state = crate::agent::session::SessionState::Paused;
+                    HttpResponse::Ok().json(serde_json::json!({ "ok": true }))
+                } else {
+                    HttpResponse::NotFound().json(ErrorResponse {
+                        error: "not_found".into(),
+                        message: format!("agent '{slug}' not found"),
+                    })
+                }
+            }
+            Err(e) => HttpResponse::InternalServerError().json(ErrorResponse {
+                error: "internal_error".into(),
+                message: format!("lock error: {e}"),
+            }),
+        }
+    } else {
+        HttpResponse::InternalServerError().json(ErrorResponse {
+            error: "internal_error".into(),
+            message: "agent store not available".into(),
+        })
+    }
+}
+
+async fn bridge_agent_status(
+    data: web::Data<BridgeState>,
+    path: web::Path<String>,
+) -> HttpResponse {
+    let app = &data.app_handle;
+    let slug = path.into_inner();
+
+    if let Some(store) = app.try_state::<std::sync::Mutex<crate::agent::session::AgentStore>>() {
+        match store.lock() {
+            Ok(s) => {
+                if let Some(session) = s.get(&slug) {
+                    HttpResponse::Ok().json(session)
+                } else {
+                    HttpResponse::NotFound().json(ErrorResponse {
+                        error: "not_found".into(),
+                        message: format!("agent '{slug}' not found"),
+                    })
+                }
+            }
+            Err(e) => HttpResponse::InternalServerError().json(ErrorResponse {
+                error: "internal_error".into(),
+                message: format!("lock error: {e}"),
+            }),
+        }
+    } else {
+        HttpResponse::InternalServerError().json(ErrorResponse {
+            error: "internal_error".into(),
+            message: "agent store not available".into(),
+        })
+    }
+}
+
+async fn bridge_list_skills() -> HttpResponse {
+    let skills = crate::agent::skills::load_skills();
+    HttpResponse::Ok().json(serde_json::json!({ "skills": skills }))
+}
+
 async fn not_found() -> HttpResponse {
     HttpResponse::NotFound().json(ErrorResponse {
         error: "not_found".into(),
@@ -618,7 +889,7 @@ async fn not_found() -> HttpResponse {
 pub fn start_bridge(app_handle: AppHandle) {
     log::info!("Starting bridge server thread");
     std::thread::spawn(move || {
-        let bridge_state = BridgeState { app_handle };
+        let bridge_state = BridgeState::new(app_handle);
         let data = web::Data::new(bridge_state);
 
         let rt = actix_rt::System::new();
@@ -632,6 +903,12 @@ pub fn start_bridge(app_handle: AppHandle) {
                     .route("/v1/messages", web::post().to(proxy_messages))
                     .route("/v1/responses", web::post().to(proxy_responses))
                     .route("/models", web::get().to(list_models))
+                    .route("/agents", web::get().to(bridge_list_agents))
+                    .route("/agent/create", web::post().to(bridge_create_agent))
+                    .route("/agent/{slug}/run", web::post().to(bridge_run_agent))
+                    .route("/agent/{slug}/stop", web::post().to(bridge_stop_agent))
+                    .route("/agent/{slug}/status", web::get().to(bridge_agent_status))
+                    .route("/skills", web::get().to(bridge_list_skills))
                     .default_service(web::route().to(not_found))
             })
             .bind("127.0.0.1:32123");

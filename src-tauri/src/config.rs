@@ -6,6 +6,34 @@ use tauri::AppHandle;
 use crate::ai::AiConfig;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AgentConfig {
+    pub codex_path: Option<String>,
+    pub codex_home: String,
+    pub max_workers: u32,
+    pub agent_dock_position: String,
+    pub enabled_skills: Vec<String>,
+}
+
+impl Default for AgentConfig {
+    fn default() -> Self {
+        Self {
+            codex_path: None,
+            codex_home: agent_data_dir(),
+            max_workers: 1,
+            agent_dock_position: "bottom".into(),
+            enabled_skills: vec![],
+        }
+    }
+}
+
+fn agent_data_dir() -> String {
+    let base = dirs::data_dir()
+        .map(|p| p.join("clickyx").join("codex"))
+        .unwrap_or_else(|| std::path::PathBuf::from("codex"));
+    base.to_string_lossy().to_string()
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AudioConfig {
     pub ptt_hotkey: String,
     pub stt_provider: String,
@@ -111,6 +139,34 @@ impl Default for OverlayPrefs {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WakeWordConfig {
+    pub enabled: bool,
+    pub phrase: String,
+    pub sensitivity: f32,
+    pub activation_mode: String,
+}
+
+impl Default for WakeWordConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            phrase: "hey clicky".into(),
+            sensitivity: 0.5,
+            activation_mode: "ptt".into(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct McpServerConfig {
+    pub name: String,
+    pub command: String,
+    pub args: Vec<String>,
+    pub env: std::collections::HashMap<String, String>,
+    pub enabled: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AppConfig {
     pub hotkeys: Vec<HotkeyBinding>,
     pub theme: String,
@@ -121,6 +177,10 @@ pub struct AppConfig {
     pub screen: ScreenConfig,
     pub overlay: OverlayPrefs,
     pub audio: AudioConfig,
+    pub agent: AgentConfig,
+    pub wake_word: WakeWordConfig,
+    pub mcp_servers: Vec<McpServerConfig>,
+    pub automations_file: String,
 }
 
 impl Default for AppConfig {
@@ -135,6 +195,10 @@ impl Default for AppConfig {
             screen: ScreenConfig::default(),
             overlay: OverlayPrefs::default(),
             audio: AudioConfig::default(),
+            wake_word: WakeWordConfig::default(),
+            mcp_servers: vec![],
+            automations_file: "automations.json".into(),
+            agent: AgentConfig::default(),
         }
     }
 }

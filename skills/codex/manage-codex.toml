@@ -1,0 +1,5 @@
+name = "manage-codex"
+description = "Start, stop, and manage the Codex agent runtime"
+version = "1.0.0"
+permission_class = "shell"
+entry_point = "manage-codex.js"
