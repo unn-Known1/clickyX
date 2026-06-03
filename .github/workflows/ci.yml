@@ -22,7 +22,15 @@ jobs:
       - uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
           toolchain: stable
-          cache: true
+          cache: false
+      - name: Cache Rust dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            src-tauri/target
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: ubuntu-cargo-${{ hashFiles('src-tauri/Cargo.lock') }}
       - name: Install system deps (Linux)
         run: |
           sudo apt-get update -y
@@ -32,8 +40,10 @@ jobs:
       - name: Build frontend
         run: npm run build
       - name: Check Rust compilation
+        working-directory: src-tauri
         run: cargo check
       - name: Run Rust tests
+        working-directory: src-tauri
         run: cargo test
       - name: Lint
         run: cargo clippy -- -D warnings 2>/dev/null || true
@@ -56,7 +66,15 @@ jobs:
         with:
           toolchain: stable
           rustflags: ''
-          cache: true
+          cache: false
+      - name: Cache Rust dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            src-tauri/target
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: ${{ matrix.os }}-cargo-${{ hashFiles('src-tauri/Cargo.lock') }}
 
       - name: Install system deps (Linux)
         if: matrix.os == 'ubuntu-latest'
