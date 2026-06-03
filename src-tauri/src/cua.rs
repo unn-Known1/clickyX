@@ -3,7 +3,7 @@ use enigo::{
 };
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum CuaBackend {
     Native,
     Background,
@@ -261,8 +261,8 @@ mod tests {
     fn test_coordinate_bounds_safety() {
         // Verify coordinates don't overflow
         let big: f64 = 1e8;
-        assert!(big as i32 > 0);
+        assert!((big as i32) > 0);
         let neg: f64 = -1e8;
-        assert!(neg as i32 < 0);
+        assert!((neg as i32) < 0);
     }
 }
