@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
+use std::sync::{Arc, Mutex};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type")]
@@ -113,6 +114,7 @@ impl AutomationEngine {
 
     pub fn tick(&mut self) {
         let now = chrono_now_rfc3339();
+        let dt = chrono_datetime_now();
         for automation in &mut self.automations {
             if !automation.enabled {
                 continue;
@@ -129,8 +131,8 @@ impl AutomationEngine {
                     };
                     due
                 }
-                Schedule::Cron { expression: _ } => {
-                    false
+                Schedule::Cron { expression } => {
+                    matches_cron(expression, dt)
                 }
             };
             if should_run {
@@ -143,6 +145,28 @@ impl AutomationEngine {
             }
         }
         let _ = self.save();
+    }
+
+    pub fn start_ticking(engine: Arc<Mutex<Self>>) {
+        let stop_rx = {
+            let eng = engine.lock().unwrap();
+            eng.timer.clone()
+        };
+        tokio::spawn(async move {
+            loop {
+                if let Some(ref rx) = stop_rx {
+                    if *rx.borrow() {
+                        log::info!("Automation engine: tick loop stopped");
+                        break;
+                    }
+                }
+                {
+                    let mut eng = engine.lock().unwrap();
+                    eng.tick();
+                }
+                tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+            }
+        });
     }
 }
 
@@ -157,16 +181,26 @@ fn chrono_now_rfc3339() -> String {
     format_datetime_rfc3339(datetime)
 }
 
+fn chrono_datetime_now() -> ChronoDatetime {
+    use std::time::{SystemTime, UNIX_EPOCH};
+    let duration = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default();
+    let secs = duration.as_secs();
+    let nanos = duration.subsec_nanos();
+    chrono_datetime_from_unix(secs, nanos)
+}
+
 type ChronoDatetime = (i32, u32, u32, u32, u32, u32, u32);
 
 fn chrono_datetime_from_unix(secs: u64, _nanos: u32) -> ChronoDatetime {
     let mut s = secs as i64;
-    let days = s / 86400;
-    s %= 86400;
-    let h = (s / 3600) as u32;
-    s %= 3600;
-    let m = (s / 60) as u32;
-    let sec = (s % 60) as u32;
+    let days = s.div_euclid(86400);
+    s = s.rem_euclid(86400);
+    let h = (s.div_euclid(3600)) as u32;
+    s = s.rem_euclid(3600);
+    let m = (s.div_euclid(60)) as u32;
+    let sec = (s.rem_euclid(60)) as u32;
 
     let mut y = 1970i32;
     let mut remaining = days;
@@ -234,4 +268,66 @@ fn days_before_month(year: i32, month: u32) -> i64 {
         [0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334]
     };
     months_days[(month as usize).saturating_sub(1)]
+}
+
+fn day_of_week(y: i32, m: u32, d: u32) -> u32 {
+    let base = days_before_year(y) + days_before_month(y, m) + d as i64 - 1;
+    ((base + 1).rem_euclid(7)) as u32
+}
+
+fn matches_cron(expression: &str, dt: ChronoDatetime) -> bool {
+    let fields: Vec<&str> = expression.split_whitespace().collect();
+    if fields.len() != 5 {
+        log::warn!(
+            "Invalid cron expression: expected 5 fields, got {}",
+            fields.len()
+        );
+        return false;
+    }
+    let (y, mo, d, h, mn, _s, _ns) = dt;
+    let dw = day_of_week(y, mo, d);
+
+    cron_field_matches(fields[0], mn, 0, 59)
+        && cron_field_matches(fields[1], h, 0, 23)
+        && cron_field_matches(fields[2], d, 1, 31)
+        && cron_field_matches(fields[3], mo, 1, 12)
+        && (cron_field_matches(fields[4], dw, 0, 6)
+            || cron_field_matches(fields[4], dw + 7, 0, 6))
+}
+
+fn cron_field_matches(field: &str, value: u32, min: u32, max: u32) -> bool {
+    for segment in field.split(',') {
+        let segment = segment.trim();
+        if segment.is_empty() {
+            continue;
+        }
+        if segment == "*" {
+            return true;
+        }
+        let (range_part, step) = if let Some(pos) = segment.find('/') {
+            (&segment[..pos], segment[pos + 1..].parse::<u32>().unwrap_or(1))
+        } else {
+            (segment, 1)
+        };
+        let step = if step == 0 { 1 } else { step };
+        let (lo, hi) = if range_part == "*" {
+            (min, max)
+        } else if let Some(pos) = range_part.find('-') {
+            let l = range_part[..pos].trim().parse::<u32>();
+            let r = range_part[pos + 1..].trim().parse::<u32>();
+            match (l, r) {
+                (Ok(l), Ok(r)) if l <= r => (l, r),
+                _ => continue,
+            }
+        } else {
+            match range_part.trim().parse::<u32>() {
+                Ok(n) => (n, n),
+                Err(_) => continue,
+            }
+        };
+        if value >= lo && value <= hi && (value - lo) % step == 0 {
+            return true;
+        }
+    }
+    false
 }

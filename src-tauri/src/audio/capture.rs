@@ -3,6 +3,11 @@ use std::sync::{Arc, Mutex};
 
 struct StreamWrapper(Option<cpal::Stream>);
 
+// Safety: cpal::Stream is !Send on some platforms, but the stream handle only
+// holds a reference to the audio thread's internal resources. We ensure the
+// stream is paused (via StreamTrait::pause()) before it is dropped or moved
+// across threads in stop_recording(), which stops the audio callback before
+// the stream is destroyed on a different thread.
 unsafe impl Send for StreamWrapper {}
 
 pub struct RingBuffer {
@@ -155,6 +160,12 @@ impl AudioCapture {
 
         self.recording.store(false, Ordering::SeqCst);
 
+        // Ensure audio callbacks stop before the stream is dropped/moved
+        if let Some(ref stream) = self.stream.0 {
+            use cpal::traits::StreamTrait;
+            let _ = stream.pause();
+        }
+
         self.stream = StreamWrapper(None);
 
         let data = {
@@ -188,5 +199,13 @@ impl AudioCapture {
 
     pub fn is_recording(&self) -> bool {
         self.recording.load(Ordering::SeqCst)
+    }
+
+    pub fn get_buffer_samples(&self) -> Vec<f32> {
+        if let Ok(buf) = self.buffer.lock() {
+            buf.get_all()
+        } else {
+            vec![]
+        }
     }
 }

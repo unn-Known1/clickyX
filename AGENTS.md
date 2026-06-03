@@ -72,6 +72,6 @@ git config user.email "ptelgm.yt@gmail.com"
 
 <!-- SPECKIT START -->
 - **Feature**: All Phases Complete
-- **Latest commit**: `47986a8` — Add nightly build workflow and pre-release tag support
+- **Latest commit**: `43abae1` — Fix CI/CD builds: add libasound2-dev, disable -D warnings for builds, add missing icons
 - **Repo**: `https://github.com/unn-Known1/clickyX`
 <!-- SPECKIT END -->

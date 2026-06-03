@@ -1,6 +1,8 @@
 use serde::Serialize;
 use tauri::{AppHandle, Emitter, Manager, Runtime, WebviewWindow};
 
+use crate::agent::dock::AgentDockState;
+
 #[derive(Debug, Clone, Serialize)]
 pub struct CursorData {
     pub x: f64,
@@ -22,6 +24,10 @@ pub struct CursorPayload {
     pub from_x: Option<f64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub from_y: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub control_x: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub control_y: Option<f64>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -106,8 +112,61 @@ pub fn show_cursor<R: Runtime>(app: &AppHandle<R>, x: f64, y: f64, label: Option
         animation: "none".into(),
         from_x: None,
         from_y: None,
+        control_x: None,
+        control_y: None,
     };
     emit_overlay_event(app, "show-cursor", payload)
+}
+
+fn compute_arc_control_point(from_x: f64, from_y: f64, to_x: f64, to_y: f64) -> (f64, f64) {
+    let mid_x = (from_x + to_x) / 2.0;
+    let mid_y = (from_y + to_y) / 2.0;
+    let dx = to_x - from_x;
+    let dy = to_y - from_y;
+    let dist = (dx * dx + dy * dy).sqrt().max(1.0);
+    let offset = dist * 0.3;
+    let perp_x = -dy / dist;
+    let perp_y = dx / dist;
+    (mid_x + perp_x * offset, mid_y + perp_y * offset)
+}
+
+pub fn show_animated_cursor<R: Runtime>(
+    app: &AppHandle<R>,
+    x: f64,
+    y: f64,
+    from_x: f64,
+    from_y: f64,
+    animation: &str,
+    label: Option<String>,
+    accent: Option<String>,
+) -> Result<(), String> {
+    let (control_x, control_y) = match animation {
+        "arc" | "bounce" => {
+            let (cx, cy) = compute_arc_control_point(from_x, from_y, x, y);
+            (Some(cx), Some(cy))
+        }
+        _ => (None, None),
+    };
+    let payload = CursorPayload {
+        id: format!("cursor-{}", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_nanos()),
+        x, y,
+        label,
+        accent,
+        animation: animation.into(),
+        from_x: Some(from_x),
+        from_y: Some(from_y),
+        control_x,
+        control_y,
+    };
+    emit_overlay_event(app, "show-cursor", payload)
+}
+
+pub fn show_agent_dock<R: Runtime>(app: &AppHandle<R>, state: &AgentDockState) -> Result<(), String> {
+    emit_overlay_event(app, "show-agent-dock", state)
+}
+
+pub fn hide_agent_dock<R: Runtime>(app: &AppHandle<R>) -> Result<(), String> {
+    emit_overlay_event(app, "hide-agent-dock", serde_json::json!({}))
 }
 
 pub fn show_rect<R: Runtime>(app: &AppHandle<R>, x: f64, y: f64, w: f64, h: f64, label: Option<String>) -> Result<(), String> {

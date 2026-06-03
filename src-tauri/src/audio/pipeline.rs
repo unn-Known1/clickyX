@@ -1,16 +1,20 @@
 use serde::{Deserialize, Serialize};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 
 use crate::config::AudioConfig;
+use crate::config::WakeWordConfig;
 
 use super::capture::AudioCapture;
 use super::stt::{self, SttConfig, SttProvider};
 use super::tts::{self, TtsConfig, TtsProvider};
+use super::wake_word::WakeWordDetector;
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub enum PipelineState {
     Idle,
     Listening,
+    WakeWordListening,
     Processing,
     Speaking,
 }
@@ -44,6 +48,8 @@ pub struct VoicePipeline {
     stt_config: Arc<Mutex<SttConfig>>,
     tts_config: Arc<Mutex<TtsConfig>>,
     sample_rate: u32,
+    wake_word_detector: Arc<Mutex<WakeWordDetector>>,
+    wake_word_detected: Arc<AtomicBool>,
 }
 
 impl VoicePipeline {
@@ -58,6 +64,10 @@ impl VoicePipeline {
             stt_config: Arc::new(Mutex::new(SttConfig::default())),
             tts_config: Arc::new(Mutex::new(TtsConfig::default())),
             sample_rate: config.sample_rate,
+            wake_word_detector: Arc::new(Mutex::new(WakeWordDetector::new(
+                WakeWordConfig::default(),
+            ))),
+            wake_word_detected: Arc::new(AtomicBool::new(false)),
         }
     }
 
@@ -71,6 +81,10 @@ impl VoicePipeline {
             stt_config: Arc::new(Mutex::new(stt)),
             tts_config: Arc::new(Mutex::new(tts)),
             sample_rate: config.sample_rate,
+            wake_word_detector: Arc::new(Mutex::new(WakeWordDetector::new(
+                WakeWordConfig::default(),
+            ))),
+            wake_word_detected: Arc::new(AtomicBool::new(false)),
         }
     }
 
@@ -79,7 +93,7 @@ impl VoicePipeline {
             .state
             .lock()
             .map_err(|e| format!("State lock error: {e}"))?;
-        if *state != PipelineState::Idle {
+        if *state != PipelineState::Idle && *state != PipelineState::WakeWordListening {
             return Err(format!("Pipeline is {:?}, cannot start recording", state));
         }
 
@@ -87,7 +101,12 @@ impl VoicePipeline {
             .capture
             .lock()
             .map_err(|e| format!("Capture lock error: {e}"))?;
-        capture.start_recording()?;
+
+        if *state == PipelineState::Idle {
+            capture.start_recording()?;
+        }
+        // If WakeWordListening, capture is already recording
+
         *state = PipelineState::Listening;
         log::info!("Voice pipeline: started listening");
         Ok(())
@@ -185,6 +204,134 @@ impl VoicePipeline {
             }
         }
         AudioLevel::zero()
+    }
+
+    pub fn start_wake_word(&self) -> Result<(), String> {
+        let mut state = self
+            .state
+            .lock()
+            .map_err(|e| format!("State lock error: {e}"))?;
+        if *state != PipelineState::Idle {
+            return Err(format!(
+                "Pipeline is {:?}, cannot start wake word",
+                state
+            ));
+        }
+
+        let mut capture = self
+            .capture
+            .lock()
+            .map_err(|e| format!("Capture lock error: {e}"))?;
+        capture.start_recording()?;
+
+        let mut detector = self
+            .wake_word_detector
+            .lock()
+            .map_err(|e| format!("Detector lock error: {e}"))?;
+        detector.start_listening();
+
+        *state = PipelineState::WakeWordListening;
+        self.wake_word_detected.store(false, Ordering::SeqCst);
+        log::info!("Voice pipeline: wake word listening started");
+        Ok(())
+    }
+
+    pub fn stop_wake_word(&self) -> Result<(), String> {
+        let mut state = self
+            .state
+            .lock()
+            .map_err(|e| format!("State lock error: {e}"))?;
+        if *state != PipelineState::WakeWordListening {
+            return Err(format!(
+                "Pipeline is {:?}, not wake word listening",
+                state
+            ));
+        }
+
+        let data = {
+            let mut capture = self
+                .capture
+                .lock()
+                .map_err(|e| format!("Capture lock error: {e}"))?;
+            capture.stop_recording()?
+        };
+        log::info!(
+            "Wake word mode stopped, {} samples discarded",
+            data.len()
+        );
+
+        let mut detector = self
+            .wake_word_detector
+            .lock()
+            .map_err(|e| format!("Detector lock error: {e}"))?;
+        detector.stop_listening();
+
+        *state = PipelineState::Idle;
+        Ok(())
+    }
+
+    pub fn check_wake_word(&self) -> Result<bool, String> {
+        let state = *self
+            .state
+            .lock()
+            .map_err(|e| format!("State lock error: {e}"))?;
+        if state != PipelineState::WakeWordListening {
+            return Ok(false);
+        }
+
+        let samples = {
+            let capture = self
+                .capture
+                .lock()
+                .map_err(|e| format!("Capture lock error: {e}"))?;
+            if !capture.is_recording() {
+                return Ok(false);
+            }
+            capture.get_buffer_samples()
+        };
+
+        if samples.len() < 160 {
+            return Ok(false);
+        }
+
+        let mut detector = self
+            .wake_word_detector
+            .lock()
+            .map_err(|e| format!("Detector lock error: {e}"))?;
+
+        if detector.detect(&samples) {
+            self.wake_word_detected.store(true, Ordering::SeqCst);
+            // Auto-start full recording if activation mode is "voice"
+            if detector.config.activation_mode == "voice" {
+                drop(detector);
+                let mut state = self
+                    .state
+                    .lock()
+                    .map_err(|e| format!("State lock error: {e}"))?;
+                *state = PipelineState::Listening;
+                log::info!("Wake word: auto-started recording");
+            }
+            return Ok(true);
+        }
+
+        Ok(false)
+    }
+
+    pub fn wake_word_detected(&self) -> bool {
+        self.wake_word_detected.load(Ordering::SeqCst)
+    }
+
+    pub fn consume_wake_word_detected(&self) -> bool {
+        self.wake_word_detected.swap(false, Ordering::SeqCst)
+    }
+
+    pub fn set_wake_word_config(&self, config: WakeWordConfig) -> Result<(), String> {
+        let mut detector = self
+            .wake_word_detector
+            .lock()
+            .map_err(|e| format!("Detector lock error: {e}"))?;
+        detector.config = config;
+        Ok(())
     }
 
     pub fn update_config(&self, config: &crate::config::AudioConfig) -> Result<(), String> {

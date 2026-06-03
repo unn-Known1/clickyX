@@ -3,6 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import ActiveAgentsWidget from "./ActiveAgentsWidget";
 import TodayStatsWidget from "./TodayStatsWidget";
 import NeedsAttentionWidget from "./NeedsAttentionWidget";
+import { useAgents } from "../hooks/useAgents";
 
 interface McpServer {
   name: string;
@@ -42,6 +43,7 @@ function ConnectionsTab() {
   const [workspace, setWorkspace] = useState<WorkspaceStatus | null>(null);
   const [mcpServers, setMcpServers] = useState<McpServer[]>([]);
   const [automations, setAutomations] = useState<Automation[]>([]);
+  const { agents } = useAgents();
 
   const [newMcp, setNewMcp] = useState<McpServer>({
     name: "",
@@ -138,12 +140,34 @@ function ConnectionsTab() {
     }
   };
 
-  const mockAgents: ActiveAgent[] = [];
-  const mockAttention: NeedsAttentionItem[] = [];
+  const activeAgents: ActiveAgent[] = agents.map((a) => ({
+    id: a.id,
+    title: a.name,
+    status: (["running", "idle", "error"].includes(a.state.toLowerCase())
+      ? a.state.toLowerCase()
+      : "idle") as "running" | "idle" | "error",
+  }));
+
+  const runningCount = activeAgents.filter((a) => a.status === "running").length;
+  const idleCount = activeAgents.filter((a) => a.status === "idle").length;
+
+  const needsAttention: NeedsAttentionItem[] = [];
   if (workspace && !workspace.authenticated) {
-    mockAttention.push({
+    needsAttention.push({
       type: "warning",
       message: "Google Workspace not authenticated",
+    });
+  }
+  if (agents.some((a) => a.state.toLowerCase() === "error" || a.state.toLowerCase() === "failed")) {
+    needsAttention.push({
+      type: "error",
+      message: `${agents.filter((a) => a.state.toLowerCase() === "error" || a.state.toLowerCase() === "failed").length} agent(s) in error state`,
+    });
+  }
+  if (mcpServers.length === 0) {
+    needsAttention.push({
+      type: "info",
+      message: "No MCP servers configured — add one to extend capabilities",
     });
   }
 
@@ -152,9 +176,9 @@ function ConnectionsTab() {
       <h2>Connections & Integrations</h2>
 
       <section className="widgets-dashboard">
-        <ActiveAgentsWidget agents={mockAgents} />
-        <TodayStatsWidget agentsRun={0} voiceCommands={0} itemsForReview={0} />
-        <NeedsAttentionWidget items={mockAttention} />
+        <ActiveAgentsWidget agents={activeAgents} />
+        <TodayStatsWidget agentsRun={runningCount} voiceCommands={0} itemsForReview={idleCount} />
+        <NeedsAttentionWidget items={needsAttention} />
       </section>
 
       <section className="connections-section">
