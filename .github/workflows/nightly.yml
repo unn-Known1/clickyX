@@ -30,7 +30,15 @@ jobs:
         with:
           toolchain: stable
           rustflags: ''
-          cache: true
+          cache: false
+      - name: Cache Rust dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            src-tauri/target
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: ${{ matrix.os }}-cargo-${{ hashFiles('src-tauri/Cargo.lock') }}
 
       - name: Install system deps (Linux)
         if: matrix.os == 'ubuntu-latest'
