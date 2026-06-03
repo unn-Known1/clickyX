@@ -187,9 +187,7 @@ function OverlayApp() {
     const id = `stream-${Date.now()}`;
     const interval = 30;
     const wordDelay = 200;
-    const words = cap.text.split(/(\s+)/);
     let charIndex = 0;
-    let wordIndex = 0;
 
     const entry: StreamingCaption = { ...cap, revealedChars: 0, done: false };
     setStreamingCaptions(prev => [...prev.slice(-10), entry]);
@@ -317,7 +315,7 @@ function OverlayApp() {
     }).then(fn => unlisteners.push(fn));
 
     listen("lifecycle-event", (e: { payload: { action: string; id: string; state: string } }) => {
-      const { action, id, state } = e.payload;
+      const { id, state } = e.payload;
       if (state === "completed" || state === "missed") {
         setCursors(prev => prev.filter(c => c.id !== id));
         setRects(prev => prev.filter(r => r.id !== id));
