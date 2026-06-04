@@ -42,11 +42,11 @@ actix-cors = "0.7"
 subtle = "2"
 enigo = { version = "0.2", features = ["serde"] }
 lazy_static = "1"
+specta = { version = "2", features = ["export"], optional = true }
+specta-typescript = { version = "0.0.7", optional = true }
 
 [dev-dependencies]
 tempfile = "3"
-specta = { version = "2", features = ["export"], optional = true }
-specta-typescript = { version = "0.0.7", optional = true }
 
 [features]
 specta-export = ["specta", "specta-typescript"]
