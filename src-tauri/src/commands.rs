@@ -14,6 +14,7 @@ use crate::accessibility::{AccessibilityElement, AccessibilityTree};
 use crate::permissions::{self, Permission, PermissionStatus};
 use crate::screen::auto_capture::{AutoCaptureConfig, AutoCaptureEngine, CapturedFrame};
 use crate::screen::capture;
+use crate::type_mode::TypeModeEngine;
 use crate::updater::{self, UpdateInfo};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -113,6 +114,11 @@ pub fn update_config(app: AppHandle, partial: serde_json::Value) -> Result<AppCo
         if let Some(computer_use) = obj.get("computer_use") {
             if let Ok(c) = serde_json::from_value(computer_use.clone()) {
                 config.computer_use = c;
+            }
+        }
+        if let Some(type_mode) = obj.get("type_mode") {
+            if let Ok(t) = serde_json::from_value(type_mode.clone()) {
+                config.type_mode = t;
             }
         }
     }
@@ -417,6 +423,11 @@ pub fn overlay_show_cursor(app: AppHandle, x: f64, y: f64, label: Option<String>
 }
 
 #[tauri::command]
+pub fn overlay_show_cursor_on_screen(app: AppHandle, x: f64, y: f64, label: Option<String>, screen_idx: usize) -> Result<(), String> {
+    crate::overlay::show_cursor_on_screen(&app, x, y, label, screen_idx)
+}
+
+#[tauri::command]
 pub fn overlay_show_cursors(app: AppHandle, cursors: Vec<CursorCommand>) -> Result<(), String> {
     for c in cursors {
         crate::overlay::show_cursor(&app, c.x, c.y, c.label)?;
@@ -439,6 +450,21 @@ pub fn overlay_show_animated_cursor(
 }
 
 #[tauri::command]
+pub fn overlay_show_animated_cursor_on_screen(
+    app: AppHandle,
+    x: f64,
+    y: f64,
+    from_x: f64,
+    from_y: f64,
+    animation: String,
+    label: Option<String>,
+    accent: Option<String>,
+    screen_idx: usize,
+) -> Result<(), String> {
+    crate::overlay::show_animated_cursor_on_screen(&app, x, y, from_x, from_y, &animation, label, accent, screen_idx)
+}
+
+#[tauri::command]
 pub fn overlay_show_agent_dock(
     app: AppHandle,
     state: crate::agent::dock::AgentDockState,
@@ -457,13 +483,28 @@ pub fn overlay_show_rect(app: AppHandle, x: f64, y: f64, w: f64, h: f64, label: 
 }
 
 #[tauri::command]
+pub fn overlay_show_rect_on_screen(app: AppHandle, x: f64, y: f64, w: f64, h: f64, label: Option<String>, screen_idx: usize) -> Result<(), String> {
+    crate::overlay::show_rect_on_screen(&app, x, y, w, h, label, screen_idx)
+}
+
+#[tauri::command]
 pub fn overlay_show_scribble(app: AppHandle, points: Vec<[f64; 2]>, label: Option<String>) -> Result<(), String> {
     crate::overlay::show_scribble(&app, points, label)
 }
 
 #[tauri::command]
+pub fn overlay_show_scribble_on_screen(app: AppHandle, points: Vec<[f64; 2]>, label: Option<String>, screen_idx: usize) -> Result<(), String> {
+    crate::overlay::show_scribble_on_screen(&app, points, label, screen_idx)
+}
+
+#[tauri::command]
 pub fn overlay_show_caption(app: AppHandle, text: String, x: f64, y: f64) -> Result<(), String> {
     crate::overlay::show_caption(&app, &text, x, y)
+}
+
+#[tauri::command]
+pub fn overlay_show_caption_on_screen(app: AppHandle, text: String, x: f64, y: f64, screen_idx: usize) -> Result<(), String> {
+    crate::overlay::show_caption_on_screen(&app, &text, x, y, screen_idx)
 }
 
 #[tauri::command]
@@ -662,7 +703,35 @@ pub fn update_audio_config(
             config.audio.tts_provider = tts.to_string();
         }
         if let Some(mode) = obj.get("activation_mode").and_then(|v| v.as_str()) {
+            let prev_mode = config.audio.activation_mode.clone();
             config.audio.activation_mode = mode.to_string();
+
+            // Start or stop always-on mode when activation_mode changes
+            let pipe = pipeline.lock().map_err(|e| format!("lock error: {e}"))?;
+            if mode == "always_on" && prev_mode != "always_on" {
+                if pipe.is_always_on_running() {
+                    log::info!("Always-on already running");
+                } else if let Err(e) = pipe.start_always_on() {
+                    log::error!("Failed to start always-on: {e}");
+                } else {
+                    let handle = app.clone();
+                    let _ = pipe.run_always_on_vad_loop(Box::new(move |text| {
+                        let payload = serde_json::json!({
+                            "type": "auto_transcript",
+                            "text": text
+                        });
+                        let _ = handle.emit("voice-transcript", payload);
+                    }));
+                    log::info!("Always-on mode started from settings change");
+                }
+            } else if prev_mode == "always_on" && mode != "always_on" {
+                if let Err(e) = pipe.stop_always_on() {
+                    log::error!("Failed to stop always-on: {e}");
+                } else {
+                    log::info!("Always-on mode stopped from settings change");
+                }
+            }
+            drop(pipe);
         }
         if let Some(auto) = obj.get("auto_submit").and_then(|v| v.as_bool()) {
             config.audio.auto_submit = auto;
@@ -858,6 +927,73 @@ pub fn remove_mcp_server(
     app_config.mcp_servers.retain(|s| s.name != name);
     crate::config::save_config(&app, &app_config)?;
     Ok(app_config.mcp_servers)
+}
+
+// --- Type Mode Commands ---
+
+#[tauri::command]
+pub fn activate_type_mode(
+    engine: State<'_, Mutex<TypeModeEngine>>,
+    state: State<'_, Mutex<AppState>>,
+) -> Result<String, String> {
+    let eng = engine.lock().map_err(|e| format!("lock error: {e}"))?;
+    let result = eng.handle_ctrl_press();
+    if result == crate::type_mode::TypeModeState::Active {
+        let mut s = state.lock().map_err(|e| format!("lock error: {e}"))?;
+        s.app_mode = "typing".into();
+    }
+    Ok(format!("{:?}", result))
+}
+
+#[tauri::command]
+pub fn deactivate_type_mode(
+    engine: State<'_, Mutex<TypeModeEngine>>,
+    state: State<'_, Mutex<AppState>>,
+) -> Result<(), String> {
+    let eng = engine.lock().map_err(|e| format!("lock error: {e}"))?;
+    eng.deactivate();
+    let mut s = state.lock().map_err(|e| format!("lock error: {e}"))?;
+    s.app_mode = "idle".into();
+    Ok(())
+}
+
+#[tauri::command]
+pub fn get_type_mode_state(
+    engine: State<'_, Mutex<TypeModeEngine>>,
+) -> Result<String, String> {
+    let eng = engine.lock().map_err(|e| format!("lock error: {e}"))?;
+    Ok(format!("{:?}", eng.get_state()))
+}
+
+#[tauri::command]
+pub fn type_text(
+    text: String,
+    engine: State<'_, Mutex<TypeModeEngine>>,
+) -> Result<(), String> {
+    let eng = engine.lock().map_err(|e| format!("lock error: {e}"))?;
+    eng.type_text(&text)
+}
+
+#[tauri::command]
+pub fn set_type_mode_config(
+    config: crate::config::TypeModeConfig,
+    app: AppHandle,
+) -> Result<(), String> {
+    let mut app_config = config::load_config(&app)?;
+    app_config.type_mode = config;
+    config::save_config(&app, &app_config)?;
+    if let Some(engine) = app.try_state::<Mutex<TypeModeEngine>>() {
+        if let Ok(eng) = engine.lock() {
+            eng.set_config(app_config.type_mode);
+        }
+    }
+    Ok(())
+}
+
+#[tauri::command]
+pub fn get_type_mode_config(app: AppHandle) -> Result<crate::config::TypeModeConfig, String> {
+    let config = config::load_config(&app)?;
+    Ok(config.type_mode)
 }
 
 // --- 3D Generation Command ---

@@ -42,7 +42,7 @@ impl ScreenManager {
                         width: m.width().unwrap_or(0),
                         height: m.height().unwrap_or(0),
                         scale_factor: 1.0,
-                        is_primary: m.x().unwrap_or(0) == 0 && m.y().unwrap_or(0) == 0,
+                        is_primary: m.is_primary().unwrap_or(false),
                     });
                 }
             }
@@ -150,6 +150,19 @@ impl CoordinateNormalizer {
                 format!("screen{}", idx.unwrap_or(0) + 1)
             })
             .unwrap_or_else(|| "screen1".into())
+    }
+
+    pub fn get_screen_idx(&self, x: f64, y: f64) -> usize {
+        self.screen_mgr
+            .find_by_point(x, y)
+            .and_then(|m| self.screen_mgr.monitors().iter().position(|r| std::ptr::eq(r, m)))
+            .unwrap_or(0)
+    }
+
+    pub fn normalize_coordinates(&self, virtual_x: f64, virtual_y: f64, target_screen_idx: usize) -> Option<(f64, f64)> {
+        let monitors = self.screen_mgr.monitors();
+        let target = monitors.get(target_screen_idx)?;
+        Some((virtual_x - target.x as f64, virtual_y - target.y as f64))
     }
 }
 

@@ -2,10 +2,10 @@ import { useCallback, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 
 export interface ScreenImage {
+  id: number;
   data: string;
   width: number;
   height: number;
-  monitor_id: number;
 }
 
 export function useScreenCapture() {

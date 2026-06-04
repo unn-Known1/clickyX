@@ -64,6 +64,7 @@ struct CursorRequest {
     y: f64,
     label: Option<String>,
     accent: Option<String>,
+    screen: Option<usize>,
 }
 
 #[derive(Deserialize)]
@@ -78,12 +79,14 @@ struct RectRequest {
     w: f64,
     h: f64,
     label: Option<String>,
+    screen: Option<usize>,
 }
 
 #[derive(Deserialize)]
 struct ScribbleRequest {
     points: Vec<[f64; 2]>,
     label: Option<String>,
+    screen: Option<usize>,
 }
 
 #[derive(Deserialize)]
@@ -91,6 +94,7 @@ struct CaptionRequest {
     text: String,
     x: f64,
     y: f64,
+    screen: Option<usize>,
 }
 
 #[derive(Deserialize)]
@@ -141,7 +145,11 @@ async fn screenshot(data: web::Data<BridgeState>) -> HttpResponse {
 
 async fn show_cursor(data: web::Data<BridgeState>, body: web::Json<CursorRequest>) -> HttpResponse {
     let app = &data.app_handle;
-    match crate::overlay::show_cursor(app, body.x, body.y, body.label.clone()) {
+    let result = match body.screen {
+        Some(idx) => crate::overlay::show_cursor_on_screen(app, body.x, body.y, body.label.clone(), idx),
+        None => crate::overlay::show_cursor(app, body.x, body.y, body.label.clone()),
+    };
+    match result {
         Ok(_) => HttpResponse::Ok().json(OkResponse { ok: true }),
         Err(e) => HttpResponse::InternalServerError().json(ErrorResponse {
             error: "overlay_error".into(),
@@ -153,7 +161,11 @@ async fn show_cursor(data: web::Data<BridgeState>, body: web::Json<CursorRequest
 async fn show_cursors(data: web::Data<BridgeState>, body: web::Json<CursorsRequest>) -> HttpResponse {
     let app = &data.app_handle;
     for c in &body.cursors {
-        if let Err(e) = crate::overlay::show_cursor(app, c.x, c.y, c.label.clone()) {
+        let result = match c.screen {
+            Some(idx) => crate::overlay::show_cursor_on_screen(app, c.x, c.y, c.label.clone(), idx),
+            None => crate::overlay::show_cursor(app, c.x, c.y, c.label.clone()),
+        };
+        if let Err(e) = result {
             return HttpResponse::InternalServerError().json(ErrorResponse {
                 error: "overlay_error".into(),
                 message: e,
@@ -165,7 +177,11 @@ async fn show_cursors(data: web::Data<BridgeState>, body: web::Json<CursorsReque
 
 async fn show_rectangle(data: web::Data<BridgeState>, body: web::Json<RectRequest>) -> HttpResponse {
     let app = &data.app_handle;
-    match crate::overlay::show_rect(app, body.x, body.y, body.w, body.h, body.label.clone()) {
+    let result = match body.screen {
+        Some(idx) => crate::overlay::show_rect_on_screen(app, body.x, body.y, body.w, body.h, body.label.clone(), idx),
+        None => crate::overlay::show_rect(app, body.x, body.y, body.w, body.h, body.label.clone()),
+    };
+    match result {
         Ok(_) => HttpResponse::Ok().json(OkResponse { ok: true }),
         Err(e) => HttpResponse::InternalServerError().json(ErrorResponse {
             error: "overlay_error".into(),
@@ -176,7 +192,11 @@ async fn show_rectangle(data: web::Data<BridgeState>, body: web::Json<RectReques
 
 async fn show_scribble(data: web::Data<BridgeState>, body: web::Json<ScribbleRequest>) -> HttpResponse {
     let app = &data.app_handle;
-    match crate::overlay::show_scribble(app, body.points.clone(), body.label.clone()) {
+    let result = match body.screen {
+        Some(idx) => crate::overlay::show_scribble_on_screen(app, body.points.clone(), body.label.clone(), idx),
+        None => crate::overlay::show_scribble(app, body.points.clone(), body.label.clone()),
+    };
+    match result {
         Ok(_) => HttpResponse::Ok().json(OkResponse { ok: true }),
         Err(e) => HttpResponse::InternalServerError().json(ErrorResponse {
             error: "overlay_error".into(),
@@ -187,7 +207,11 @@ async fn show_scribble(data: web::Data<BridgeState>, body: web::Json<ScribbleReq
 
 async fn show_caption(data: web::Data<BridgeState>, body: web::Json<CaptionRequest>) -> HttpResponse {
     let app = &data.app_handle;
-    match crate::overlay::show_caption(app, &body.text, body.x, body.y) {
+    let result = match body.screen {
+        Some(idx) => crate::overlay::show_caption_on_screen(app, &body.text, body.x, body.y, idx),
+        None => crate::overlay::show_caption(app, &body.text, body.x, body.y),
+    };
+    match result {
         Ok(_) => HttpResponse::Ok().json(OkResponse { ok: true }),
         Err(e) => HttpResponse::InternalServerError().json(ErrorResponse {
             error: "overlay_error".into(),
@@ -202,9 +226,18 @@ async fn click(data: web::Data<BridgeState>, body: web::Json<ClickRequest>) -> H
     HttpResponse::Ok().json(OkResponse { ok: true })
 }
 
-async fn clear_overlays(data: web::Data<BridgeState>) -> HttpResponse {
+#[derive(Deserialize)]
+struct ClearRequest {
+    screen: Option<usize>,
+}
+
+async fn clear_overlays(data: web::Data<BridgeState>, body: Option<web::Json<ClearRequest>>) -> HttpResponse {
     let app = &data.app_handle;
-    match crate::overlay::clear_overlays(app) {
+    let result = match body {
+        Some(ref req) if req.screen.is_some() => crate::overlay::clear_overlays_on_screen(app, req.screen.unwrap()),
+        _ => crate::overlay::clear_overlays(app),
+    };
+    match result {
         Ok(_) => HttpResponse::Ok().json(OkResponse { ok: true }),
         Err(e) => HttpResponse::InternalServerError().json(ErrorResponse {
             error: "overlay_error".into(),

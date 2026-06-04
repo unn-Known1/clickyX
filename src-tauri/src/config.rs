@@ -77,6 +77,16 @@ impl Default for HotkeyBinding {
     }
 }
 
+impl HotkeyBinding {
+    pub fn new(key: &str, action: &str) -> Self {
+        Self {
+            key: key.into(),
+            enabled: true,
+            action: action.into(),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ApiKey {
     pub provider: String,
@@ -113,6 +123,23 @@ impl Default for ScreenConfig {
             max_dimension: 1280,
             jpeg_quality: 80,
             cache_ttl_secs: 3,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TypeModeConfig {
+    pub enabled: bool,
+    pub double_tap_timeout_ms: u64,
+    pub indicator_color: String,
+}
+
+impl Default for TypeModeConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            double_tap_timeout_ms: 400,
+            indicator_color: "#4fc3f7".into(),
         }
     }
 }
@@ -199,13 +226,17 @@ pub struct AppConfig {
     pub mcp_servers: Vec<McpServerConfig>,
     pub automations_file: String,
     pub computer_use: ComputerUseConfig,
+    pub type_mode: TypeModeConfig,
     pub bridge_token: Option<String>,
 }
 
 impl Default for AppConfig {
     fn default() -> Self {
         Self {
-            hotkeys: vec![HotkeyBinding::default()],
+            hotkeys: vec![
+                HotkeyBinding::default(),
+                HotkeyBinding::new("Ctrl+Shift+T", "toggle_type_mode"),
+            ],
             theme: "system".into(),
             api_keys: vec![],
             window: WindowPrefs::default(),
@@ -219,6 +250,7 @@ impl Default for AppConfig {
             automations_file: "automations.json".into(),
             agent: AgentConfig::default(),
             computer_use: ComputerUseConfig::default(),
+            type_mode: TypeModeConfig::default(),
             bridge_token: None,
         }
     }

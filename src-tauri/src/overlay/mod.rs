@@ -236,6 +236,17 @@ pub fn clear_overlays<R: Runtime>(app: &AppHandle<R>) -> Result<(), String> {
     emit_overlay_event(app, "clear-overlays", serde_json::json!({}))
 }
 
+pub fn clear_overlays_on_screen<R: Runtime>(app: &AppHandle<R>, screen_idx: usize) -> Result<(), String> {
+    let window_label = format!("overlay-{}", screen_idx);
+    if let Some(window) = app.get_webview_window(&window_label) {
+        window
+            .emit("clear-overlays", serde_json::json!({}))
+            .map_err(|e| format!("emit on {window_label}: {e}"))
+    } else {
+        emit_overlay_event(app, "clear-overlays", serde_json::json!({}))
+    }
+}
+
 pub fn show_cursor_on_screen<R: Runtime>(
     app: &AppHandle<R>,
     x: f64,
@@ -263,6 +274,69 @@ pub fn show_cursor_on_screen<R: Runtime>(
             .map_err(|e| format!("emit on {window_label}: {e}"))
     } else {
         emit_overlay_event(app, "show-cursor", payload)
+    }
+}
+
+pub fn show_rect_on_screen<R: Runtime>(
+    app: &AppHandle<R>,
+    x: f64,
+    y: f64,
+    w: f64,
+    h: f64,
+    label: Option<String>,
+    screen_idx: usize,
+) -> Result<(), String> {
+    let payload = RectPayload {
+        id: next_id("rect"),
+        x, y, w, h, label,
+        state: AnnotationState::Armed,
+    };
+    let window_label = format!("overlay-{}", screen_idx);
+    if let Some(window) = app.get_webview_window(&window_label) {
+        window
+            .emit("show-rect", payload)
+            .map_err(|e| format!("emit on {window_label}: {e}"))
+    } else {
+        emit_overlay_event(app, "show-rect", payload)
+    }
+}
+
+pub fn show_scribble_on_screen<R: Runtime>(
+    app: &AppHandle<R>,
+    points: Vec<[f64; 2]>,
+    label: Option<String>,
+    screen_idx: usize,
+) -> Result<(), String> {
+    let payload = ScribblePayload { points, label, state: AnnotationState::Armed };
+    let window_label = format!("overlay-{}", screen_idx);
+    if let Some(window) = app.get_webview_window(&window_label) {
+        window
+            .emit("show-scribble", payload)
+            .map_err(|e| format!("emit on {window_label}: {e}"))
+    } else {
+        emit_overlay_event(app, "show-scribble", payload)
+    }
+}
+
+pub fn show_caption_on_screen<R: Runtime>(
+    app: &AppHandle<R>,
+    text: &str,
+    x: f64,
+    y: f64,
+    screen_idx: usize,
+) -> Result<(), String> {
+    let payload = CaptionPayload {
+        text: text.to_string(),
+        x, y,
+        state: AnnotationState::Armed,
+    };
+    let window_label = format!("overlay-{}", screen_idx);
+    if let Some(window) = app.get_webview_window(&window_label) {
+        window
+            .emit("show-caption", payload)
+            .map_err(|e| format!("emit on {window_label}: {e}"))
+    } else {
+        emit_overlay_event(app, "show-caption", payload)
     }
 }
 

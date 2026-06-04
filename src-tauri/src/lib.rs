@@ -16,6 +16,7 @@ mod updater;
 mod permissions;
 mod cua;
 mod accessibility;
+mod type_mode;
 
 use std::path::PathBuf;
 use std::sync::Mutex;
@@ -108,6 +109,21 @@ pub(crate) fn register_hotkeys(app: &AppHandle) -> Result<(), String> {
                                         if let Ok(mut s) = state.lock() {
                                             s.panel_visible = true;
                                         }
+                                    }
+                                }
+                            }
+                        }
+                        "toggle_type_mode" => {
+                            if let Some(engine) =
+                                handler_app.try_state::<Mutex<type_mode::TypeModeEngine>>()
+                            {
+                                if let Ok(eng) = engine.lock() {
+                                    let result = eng.handle_ctrl_press();
+                                    if result == type_mode::TypeModeState::Active {
+                                        log::info!("Type mode activated via hotkey");
+                                        let _ = handler_app.emit("type-mode-changed", "active");
+                                    } else {
+                                        let _ = handler_app.emit("type-mode-changed", format!("{:?}", result));
                                     }
                                 }
                             }
@@ -229,6 +245,10 @@ pub fn run() {
                 });
             }
 
+            // Initialize type mode engine
+            let type_mode_engine = type_mode::TypeModeEngine::new(config.type_mode.clone());
+            handle.manage(Mutex::new(type_mode_engine));
+
             // Initialize auto-capture engine
             let auto_capture_engine = AutoCaptureEngine::new(AutoCaptureConfig::default());
             handle.manage(Mutex::new(auto_capture_engine));
@@ -290,13 +310,18 @@ pub fn run() {
             commands::capture_cursor_screen,
             commands::capture_focused_window,
             commands::overlay_show_cursor,
+            commands::overlay_show_cursor_on_screen,
             commands::overlay_show_cursors,
             commands::overlay_show_rect,
+            commands::overlay_show_rect_on_screen,
             commands::overlay_show_scribble,
+            commands::overlay_show_scribble_on_screen,
             commands::overlay_show_caption,
+            commands::overlay_show_caption_on_screen,
             commands::overlay_clear,
             commands::set_overlay_visible,
             commands::overlay_show_animated_cursor,
+            commands::overlay_show_animated_cursor_on_screen,
             commands::overlay_show_agent_dock,
             commands::overlay_hide_agent_dock,
             commands::start_recording,
@@ -358,6 +383,12 @@ pub fn run() {
             commands::get_always_on_config,
             commands::set_agent_triggers,
             commands::get_agent_triggers,
+            commands::activate_type_mode,
+            commands::deactivate_type_mode,
+            commands::get_type_mode_state,
+            commands::type_text,
+            commands::set_type_mode_config,
+            commands::get_type_mode_config,
             commands::start_auto_capture,
             commands::stop_auto_capture,
             commands::get_auto_capture_status,

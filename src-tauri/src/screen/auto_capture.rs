@@ -1,4 +1,6 @@
 use image::codecs::jpeg::JpegEncoder;
+use image::GenericImage;
+use image::GenericImageView;
 use serde::{Deserialize, Serialize};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
@@ -94,6 +96,7 @@ impl AutoCaptureEngine {
                 let result = match mode.as_str() {
                     "cursor" => capture_cursor_jpeg(),
                     "focused" => capture_focused_window_jpeg(),
+                    "all" => capture_all_jpeg(),
                     _ => capture_primary_jpeg(),
                 };
 
@@ -240,6 +243,31 @@ fn capture_focused_window_jpeg() -> Result<(Vec<u8>, u32, u32), String> {
         }
     }
     capture_primary_jpeg()
+}
+
+fn capture_all_jpeg() -> Result<(Vec<u8>, u32, u32), String> {
+    let monitors = Monitor::all().map_err(|e| format!("enumerate monitors: {e}"))?;
+    let monitor = monitors.first().ok_or_else(|| "no monitors found".to_string())?;
+    let width = monitor.width().map_err(|e| format!("monitor width: {e}"))?;
+    let height = monitor.height().map_err(|e| format!("monitor height: {e}"))?;
+    let mut img = image::RgbaImage::new(width, height);
+    for m in &monitors {
+        if let Ok(cap) = m.capture_image() {
+            let ox = (m.x().unwrap_or(0).max(0) as u32).min(width.saturating_sub(1));
+            let oy = (m.y().unwrap_or(0).max(0) as u32).min(height.saturating_sub(1));
+            for py in 0..cap.height().min(height.saturating_sub(oy)) {
+                for px in 0..cap.width().min(width.saturating_sub(ox)) {
+                    let dp = cap.get_pixel(px, py);
+                    img.put_pixel(ox + px, oy + py, *dp);
+                }
+            }
+        }
+    }
+    let mut buf = Vec::new();
+    JpegEncoder::new_with_quality(&mut buf, 85)
+        .encode(img.as_raw(), width, height, image::ColorType::Rgba8.into())
+        .map_err(|e| format!("jpeg encoding: {e}"))?;
+    Ok((buf, width, height))
 }
 
 fn compute_diff(prev: &[u8], curr: &[u8]) -> f64 {

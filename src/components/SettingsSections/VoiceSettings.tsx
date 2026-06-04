@@ -90,6 +90,7 @@ function VoiceSettings() {
         >
           <option value="ptt">Push to Talk</option>
           <option value="voice">Voice Activation</option>
+          <option value="always_on">Always-On (Hands-Free)</option>
           <option value="disabled">Disabled</option>
         </select>
       </div>

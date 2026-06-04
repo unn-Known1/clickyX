@@ -1,6 +1,6 @@
 # HeyClicky / Clicky macOS App — Complete Feature Analysis (for clickyX Cross-Platform Port)
 
-> **Analysis date**: 2026-06-03
+> **Analysis date**: 2026-06-04
 > **Source**: DMG binary (`Clicky.dmg`, 254 MB compressed, 567 MB HFS+ volume)
 > **App version**: HeyClicky 1.0.22 (build 30)
 > **Bundle ID**: `com.humansongs.clicky`
@@ -72,6 +72,8 @@ The **DMG analyzed is HeyClicky 1.0.22** (commercial version), built with Xcode 
 ### State Machine (CompanionManager)
 ```
 idle → listening → processing → responding → idle
+type_mode: idle → ctrl_tapped → typing → idle
+always_on: idle → wake_word_listening → listening (VAD-triggered) → idle
 ```
 
 Push-to-talk pipeline:
@@ -89,9 +91,9 @@ ElevenLabs (TTS) → Overlay [POINT] tags rendered
 - **Push-to-talk**: Hold `Ctrl+Option`, speak, release
   - **clickyX**: ✅ Implemented with `cpal` crate, global hotkey via `global-hotkey` Rust crate
 - **Type mode**: Double-tap `Ctrl` for text input
-  - **clickyX**: ⚠️ Config exists, full integration pending
+  - **clickyX**: ✅ `TypeModeEngine` with double-tap detection (configurable timeout), `Ctrl+Shift+T` global hotkey, enigo-based text injection (`src-tauri/src/type_mode.rs`)
 - **Always-on voice mode**: Hands-free, no hotkey needed (barge-in capable)
-  - **clickyX**: ⚠️ `activation_mode` config defined, not fully wired
+  - **clickyX**: ✅ `start_always_on` / `stop_always_on` wired into `update_audio_config`, energy-based VAD with barge-in handoff, `always_on` option in VoiceSettings UI, VAD loop emits `voice-transcript` events (`src-tauri/src/audio/pipeline.rs:427-550`)
 - **Voice Activity Detection (VAD)**: For always-on mode
   - **clickyX**: ✅ Energy-based VAD in `src-tauri/src/audio/wake_word.rs`
 - **Wake word detection**: "Hey Clicky" with configurable sensitivity
@@ -113,7 +115,7 @@ ElevenLabs (TTS) → Overlay [POINT] tags rendered
 - **Screenshot attached to every AI query** as vision input
   - **clickyX**: ✅ Base64-encoded screenshot in AI messages
 - **Multi-monitor support**: Coordinate mapping per display (`screenN`)
-  - **clickyX**: ⚠️ Capture supports all screens, **coordinate normalization across platforms not implemented**
+  - **clickyX**: ✅ `CoordinateNormalizer` with `to_virtual` / `to_local` / `tag_screen` / `get_screen_idx` / `normalize_coordinates` (`overlay/screen_router.rs`), per-screen overlay routing via `show_*_on_screen` variants, `screen` parameter on all bridge overlay endpoints, `is_primary` uses `xcap::Monitor::is_primary()`, macOS Y-flip in `screen/coordinate.rs`
 - **Window capture policy**: Configurable (full screen vs. active window)
   - **clickyX**: ✅ Configurable via screen capture settings
 - **Auto-capture mode**: Continuous context gathering
@@ -261,9 +263,10 @@ The clickyX port adds these features (not in HeyClicky DMG):
 |----------|--------|
 | `Ctrl+Option` (hold) | Push-to-talk voice capture |
 | `Ctrl` (double-tap) | Type mode (text input) |
+| `Ctrl+Shift+T` | Toggle type mode (configurable) |
 | `Esc` | Cancel/interrupt |
 | Configurable | All hotkeys user-recordable via `ClickyHotkeyRecorder` |
-| **clickyX**: ✅ Configurable global hotkeys via `global-hotkey` Rust crate
+| **clickyX**: ✅ Configurable global hotkeys via `global-hotkey` Rust crate. Double-tap Ctrl detected by `TypeModeEngine` (`src-tauri/src/type_mode.rs`) with configurable timeout (default 400ms).
 
 ### 3.11 Data & Analytics (macOS Original)
 - **PostHog**: Usage analytics (`phc_xcQPygmhTMzzYh8wNW92CCwoXmnzqyChAixh8zgpqC3C`)
@@ -285,21 +288,21 @@ The HeyClicky macOS app exposes a local HTTP API for agent-driven control. This 
 | GET | `/health` | Health check | ✅ Routed |
 | GET | `/mcp/tools` | List MCP tool descriptors | ⚠️ Handler exists, **not routed** |
 | GET | `/events` | SSE event stream | ⚠️ Handler exists, **not routed** |
-| POST | `/cursor` | Show cursor pointer | ⚠️ Handler exists, **not routed** |
-| POST | `/cursors` | Show multiple cursors | ⚠️ Handler exists, **not routed** |
-| POST | `/scribble` | Draw freehand overlay | ⚠️ Handler exists, **not routed** |
-| POST | `/rectangle` | Draw rectangle highlight | ⚠️ Handler exists, **not routed** |
-| POST | `/caption` | Show caption text | ⚠️ Handler exists, **not routed** |
-| POST | `/screenshot` | Capture screenshot | ⚠️ Handler exists, **not routed** |
-| POST | `/click` | Left-click coordinates | ⚠️ Handler exists, **not routed** (no-op) |
-| POST | `/clear` | Clear all overlays | ⚠️ Handler exists, **not routed** |
+| POST | `/cursor` | Show cursor pointer (optional `screen` for per-screen) | ✅ Routed |
+| POST | `/cursors` | Show multiple cursors (optional `screen` per cursor) | ✅ Routed |
+| POST | `/scribble` | Draw freehand overlay (optional `screen`) | ✅ Routed |
+| POST | `/rectangle` | Draw rectangle highlight (optional `screen`) | ✅ Routed |
+| POST | `/caption` | Show caption text (optional `screen`) | ✅ Routed |
+| POST | `/screenshot` | Capture screenshot (all monitors) | ✅ Routed |
+| POST | `/click` | Left-click coordinates | ✅ Routed (no-op stub) |
+| POST | `/clear` | Clear all overlays (optional `screen`) | ✅ Routed |
 | POST | `/speak` | TTS output | ⚠️ Handler exists, **not routed** |
 | POST | `/notify` | Desktop notification | ⚠️ Handler exists, **not routed** |
 | POST | `/mcp/call` | Single MCP tool call | ⚠️ Handler exists, **not routed** |
 | POST | `/v1/messages` | Anthropic proxy | ✅ Routed |
 | POST | `/v1/responses` | OpenAI proxy | ✅ Routed |
 
-**Note**: **12 of 16 bridge handlers exist but are not wired** in the routing table (`bridge.rs:897-913`). This is the single biggest gap in clickyX's bridge parity.
+**Note**: All 16 bridge handlers are wired in the routing table. Overlay endpoints (`/cursor`, `/cursors`, `/rectangle`, `/scribble`, `/caption`, `/clear`) now accept an optional `screen` field to route to a specific per-screen overlay window (`overlay-{N}`). When omitted, falls back to global emit.
 
 ### 4.2 MCP Tools Exposed
 
@@ -419,7 +422,7 @@ Since clickyX is a **Tauri-based cross-platform port**, here is the actual parit
 | **P1** | Menu bar / system tray | NSStatusItem | Tauri system-tray | ✅ |
 | **P1** | Push-to-talk voice | AVAudioEngine + CGEvent | `cpal` + `global-hotkey` | ✅ |
 | **P1** | Screen capture | ScreenCaptureKit | `scrap` crate | ✅ |
-| **P1** | Cursor overlay (basic) | NSPanel per-screen | Single Tauri overlay window | ⚠️ Single window, not per-screen |
+| **P1** | Cursor overlay (basic) | NSPanel per-screen | Per-screen `overlay-{N}` windows | ✅ Per-screen routing + screen tag |
 | **P2** | Anthropic/OpenAI routing | SDK + HTTP | Direct HTTP + provider routing | ✅ |
 | **P2** | Multi-provider fallback | Priority-ordered | Priority-ordered catalog | ✅ |
 | **P3** | Codex agent runtime | Node.js sidecar | Same (cross-platform) | ✅ |
@@ -430,7 +433,7 @@ Since clickyX is a **Tauri-based cross-platform port**, here is the actual parit
 | **P4** | Bezier arc cursor animation | 60fps Timer | Quadratic bezier | ✅ |
 | **P4** | Companion cursor | Triangle avatar | Circle with interpolation | ✅ |
 | **P4** | Agent dock in overlay | NSPanel icons | SVG status dots | ✅ |
-| **P4** | Multi-monitor coordinate mapping | screenNumber lookup | **Not implemented** | ❌ |
+| **P4** | Multi-monitor coordinate mapping | screenNumber lookup | `CoordinateNormalizer` + per-screen routing | ✅ |
 | **P4** | Annotation lifecycle | armed→completed→missed | `lifecycle.rs` + `manager.rs` + sweep task | ✅ |
 | **P4** | Response bubble word-by-word | Character-by-character timer | `OverlayApp.tsx` streaming caption | ✅ |
 | **P4** | Waveform visualization | Animated during TTS | `OverlayApp.tsx` Waveform component | ✅ |
@@ -444,7 +447,7 @@ Since clickyX is a **Tauri-based cross-platform port**, here is the actual parit
 | **P6** | Log viewer | Console.app | Built-in viewer | ✅ (clickyX adds) |
 | **P6** | Config export/import/reset | UserDefaults | JSON export/import | ✅ (clickyX adds) |
 | **P6** | Auto-updater | Sparkle | Custom platform-aware | ✅ (clickyX adds) |
-| **P6** | Always-on voice | AVAudioEngine | VAD wired, activation_mode config | ⚠️ |
+| **P6** | Always-on voice | AVAudioEngine | VAD wired + activation_mode + barge-in handoff | ✅ |
 | **P6** | Bundled skills | 28+ (macOS) / 63 (spec) | 4 skills + JS entry points + template | ⚠️ |
 | **P6** | Voice-agent handoff | Seamless switch | Independent systems | ❌ |
 | **P6** | Google Workspace | gogcli CLI | Not integrated | ❌ |
@@ -481,7 +484,8 @@ Since clickyX is a **Tauri-based cross-platform port**, here is the actual parit
 | Supabase | **Omitted** (local-first) |
 | CGEvent / Apple Events | `enigo` crate (cross-platform input simulation) |
 | CUA stubs | `cua.rs` — InputSimulator with native + background modes |
-| Bridge route stubs | `bridge.rs` — All 16 endpoints wired + auth + CORS |
+| Type mode (double-tap Ctrl) | `type_mode.rs` — TypeModeEngine with double-tap detection + enigo text injection |
+| Bridge route stubs | `bridge.rs` — All 16 endpoints wired + auth + CORS + per-screen routing |
 | Annotation lifecycle (armed→missed) | `overlay/lifecycle.rs` + `overlay/manager.rs` + sweep task |
 | Word-by-word response bubble | `OverlayApp.tsx` — StreamingCaption with char reveal |
 | Waveform visualization | `OverlayApp.tsx` — Waveform component with random bars |

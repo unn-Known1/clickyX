@@ -591,6 +591,10 @@ impl VoicePipeline {
             tts_cfg.provider = provider;
         }
 
+        if let Ok(mut ao_cfg) = self.always_on_config.lock() {
+            ao_cfg.enabled = config.activation_mode == "always_on";
+        }
+
         Ok(())
     }
 
