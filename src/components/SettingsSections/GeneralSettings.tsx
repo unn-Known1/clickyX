@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 
 interface OverlayPrefs {
   cursor_accent: string;
@@ -47,14 +48,28 @@ function GeneralSettings() {
   }, []);
 
   useEffect(() => {
-    const refresh = () => {
+    // Initial fetch
+    invoke<AutoCaptureStatus>("get_auto_capture_status")
+      .then(setAcStatus)
+      .catch((e) => setAcError(String(e)));
+
+    // Event-driven updates — listen for Rust-emitted status changes
+    let unlisten: (() => void) | null = null;
+    listen<AutoCaptureStatus>("auto-capture-status", (e) => {
+      setAcStatus(e.payload);
+    }).then((fn) => { unlisten = fn; });
+
+    // Fallback lightweight poll every 5s (not 2s) while event isn't emitted yet
+    const id = setInterval(() => {
       invoke<AutoCaptureStatus>("get_auto_capture_status")
         .then(setAcStatus)
-        .catch((e) => setAcError(String(e)));
+        .catch(() => {});
+    }, 5000);
+
+    return () => {
+      if (unlisten) unlisten();
+      clearInterval(id);
     };
-    refresh();
-    const id = setInterval(refresh, 2000);
-    return () => clearInterval(id);
   }, []);
 
   const updateTheme = useCallback(async (theme: string) => {

@@ -66,40 +66,22 @@ function VoiceOrbitNode({
       onMouseEnter={() => onHover(voice)}
       onMouseLeave={() => onHover(null)}
       onClick={() => onSelect(voice)}
+      role="button"
+      aria-label={`Select voice ${voice.name}`}
+      aria-pressed={selected}
+      tabIndex={0}
+      onKeyDown={(e) => e.key === "Enter" && onSelect(voice)}
     >
       <svg width="56" height="56" viewBox="0 0 56 56">
-        <circle
-          cx="28"
-          cy="28"
-          r="22"
-          fill={voice.accent_color}
-          fillOpacity="0.25"
-          stroke={voice.accent_color}
-          strokeWidth={selected ? 3 : 1.5}
-        />
-        <circle
-          cx="28"
-          cy="28"
-          r="14"
-          fill="none"
-          stroke={voice.accent_color}
-          strokeWidth="1.5"
-          opacity="0.5"
-        />
-        <text
-          x="28"
-          y="32"
-          textAnchor="middle"
-          fill="#fff"
-          fontSize="11"
-          fontWeight="600"
-        >
+        <circle cx="28" cy="28" r="22" fill={voice.accent_color} fillOpacity="0.25"
+          stroke={voice.accent_color} strokeWidth={selected ? 3 : 1.5} />
+        <circle cx="28" cy="28" r="14" fill="none" stroke={voice.accent_color}
+          strokeWidth="1.5" opacity="0.5" />
+        <text x="28" y="32" textAnchor="middle" fill="#fff" fontSize="11" fontWeight="600">
           {voice.name.charAt(0)}
         </text>
       </svg>
-      {selected && (
-        <div className="orbit-node-selected-ring" />
-      )}
+      {selected && <div className="orbit-node-selected-ring" />}
     </div>
   );
 }
@@ -112,8 +94,15 @@ export default function VoiceDiscovery({ audioConfig, onSelected }: VoiceDiscove
   const [selected, setSelected] = useState<string>(audioConfig.selected_voice_id);
   const [dragging, setDragging] = useState(false);
   const [orbitRotation, setOrbitRotation] = useState(0);
-  const orbitRef = useRef<HTMLDivElement>(null);
-  const dragStart = useRef<{ x: number; rot: number } | null>(null);
+
+  // Use refs so drag callbacks always see the latest values without re-creating
+  const voicesRef = useRef<VoiceInfo[]>([]);
+  const orbitRotRef = useRef(0);
+  const dragStartRef = useRef<{ x: number; rot: number } | null>(null);
+  const selectCooldownRef = useRef(false);
+
+  useEffect(() => { voicesRef.current = voices; }, [voices]);
+  useEffect(() => { orbitRotRef.current = orbitRotation; }, [orbitRotation]);
 
   useEffect(() => {
     invoke<VoiceProvider[]>("get_voice_providers")
@@ -124,7 +113,7 @@ export default function VoiceDiscovery({ audioConfig, onSelected }: VoiceDiscove
         }
       })
       .catch((e) => console.error("Failed to load providers:", e));
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!selectedProvider) return;
@@ -143,32 +132,41 @@ export default function VoiceDiscovery({ audioConfig, onSelected }: VoiceDiscove
     }
   }, [onSelected]);
 
-  const onPointerDown = (e: React.PointerEvent) => {
+  const onPointerDown = useCallback((e: React.PointerEvent) => {
     setDragging(true);
-    dragStart.current = { x: e.clientX, rot: orbitRotation };
+    dragStartRef.current = { x: e.clientX, rot: orbitRotRef.current };
     (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
-  };
+  }, []);
 
-  const onPointerMove = (e: React.PointerEvent) => {
-    if (!dragging || !dragStart.current) return;
-    const dx = e.clientX - dragStart.current.x;
-    const newRot = dragStart.current.rot + dx * 0.5;
+  const onPointerMove = useCallback((e: React.PointerEvent) => {
+    if (!dragStartRef.current) return;
+    const dx = e.clientX - dragStartRef.current.x;
+    const newRot = dragStartRef.current.rot + dx * 0.5;
     setOrbitRotation(newRot);
-    if (voices.length > 0) {
-      const segWidth = 360 / voices.length;
-      const idx = Math.round(((newRot % 360) + 360) % 360 / segWidth) % voices.length;
-      const focused = voices[(voices.length - idx) % voices.length];
-      if (focused && focused.id !== selected) {
-        onSelect(focused);
-      }
-    }
-  };
 
-  const onPointerUp = (e: React.PointerEvent) => {
+    // Throttle voice selection during drag to avoid spamming invoke
+    if (selectCooldownRef.current) return;
+    const currentVoices = voicesRef.current;
+    if (currentVoices.length === 0) return;
+    selectCooldownRef.current = true;
+    requestAnimationFrame(() => { selectCooldownRef.current = false; });
+
+    const segWidth = 360 / currentVoices.length;
+    const normalised = ((newRot % 360) + 360) % 360;
+    const idx = Math.round(normalised / segWidth) % currentVoices.length;
+    // Orbit is displayed with nodes going CCW as we drag right, so invert
+    const focusedIdx = (currentVoices.length - idx) % currentVoices.length;
+    const focused = currentVoices[focusedIdx];
+    if (focused && focused.id !== selected) {
+      onSelect(focused);
+    }
+  }, [selected, onSelect]);
+
+  const onPointerUp = useCallback((e: React.PointerEvent) => {
     setDragging(false);
-    dragStart.current = null;
+    dragStartRef.current = null;
     (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
-  };
+  }, []);
 
   const selectedVoice = voices.find((v) => v.id === selected) ?? voices[0];
   const previewVoice = hovered ?? selectedVoice;
@@ -180,6 +178,7 @@ export default function VoiceDiscovery({ audioConfig, onSelected }: VoiceDiscove
           className="setting-select"
           value={selectedProvider}
           onChange={(e) => setSelectedProvider(e.target.value)}
+          aria-label="TTS provider"
         >
           {providers.map((p) => (
             <option key={p.id} value={p.id}>
@@ -194,15 +193,13 @@ export default function VoiceDiscovery({ audioConfig, onSelected }: VoiceDiscove
 
       <div
         className="voice-orbit"
-        ref={orbitRef}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
         onPointerCancel={onPointerUp}
-        style={{
-          cursor: dragging ? "grabbing" : "grab",
-          userSelect: "none",
-        }}
+        style={{ cursor: dragging ? "grabbing" : "grab", userSelect: "none" }}
+        role="group"
+        aria-label="Voice orbit selector"
       >
         <div className="orbit-center">
           <div className="orbit-center-inner">
@@ -225,13 +222,14 @@ export default function VoiceDiscovery({ audioConfig, onSelected }: VoiceDiscove
         </div>
 
         {voices.map((v, i) => {
-          const rotatedIndex = (i + Math.round(orbitRotation / (360 / Math.max(voices.length, 1)))) % voices.length;
+          const segCount = Math.max(voices.length, 1);
+          const rotatedIndex = (i + Math.round(orbitRotation / (360 / segCount))) % segCount;
           return (
             <VoiceOrbitNode
               key={v.id}
               voice={v}
-              index={rotatedIndex}
-              total={voices.length}
+              index={(rotatedIndex + segCount) % segCount}
+              total={segCount}
               radius={140}
               selected={v.id === selected}
               hovered={hovered?.id === v.id}
@@ -242,17 +240,17 @@ export default function VoiceDiscovery({ audioConfig, onSelected }: VoiceDiscove
         })}
       </div>
 
-      <div className="voice-list">
+      <div className="voice-list" role="listbox" aria-label="Voice list">
         {voices.map((v) => (
           <button
             key={v.id}
             className={`voice-list-item ${v.id === selected ? "active" : ""}`}
             onClick={() => onSelect(v)}
             style={{ borderLeftColor: v.accent_color }}
+            role="option"
+            aria-selected={v.id === selected}
           >
-            <span className="voice-list-name" style={{ color: v.accent_color }}>
-              {v.name}
-            </span>
+            <span className="voice-list-name" style={{ color: v.accent_color }}>{v.name}</span>
             <span className="voice-list-desc">{v.description}</span>
           </button>
         ))}

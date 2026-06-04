@@ -309,3 +309,151 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
+
+/* ── Active-control glow (5 concentric pulsing rings) ──────────────────────── */
+.overlay-glow {
+  position: absolute;
+  pointer-events: none;
+  z-index: 30;
+}
+
+.overlay-glow-ring {
+  position: absolute;
+  border: 1.5px solid var(--accent, #4fc3f7);
+  border-radius: 8px;
+  animation: glow-pulse 1.8s ease-in-out infinite;
+  pointer-events: none;
+}
+
+@keyframes glow-pulse {
+  0%, 100% {
+    opacity: 0.7;
+    box-shadow: 0 0 6px var(--accent, #4fc3f7);
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.25;
+    box-shadow: 0 0 18px var(--accent, #4fc3f7);
+    transform: scale(1.04);
+  }
+}
+
+.overlay-glow-label {
+  position: absolute;
+  bottom: calc(100% + 4px);
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 11px;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.7);
+  padding: 2px 8px;
+  border-radius: 4px;
+  white-space: nowrap;
+}
+
+/* ── Calibration box ────────────────────────────────────────────────────────── */
+.overlay-calibration {
+  position: absolute;
+  border: 2px dashed var(--accent, #4fc3f7);
+  border-radius: 4px;
+  animation: calibration-pulse 1s ease-in-out infinite;
+  pointer-events: none;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+@keyframes calibration-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+.calibration-label {
+  font-size: 12px;
+  font-weight: 600;
+  background: rgba(0, 0, 0, 0.65);
+  padding: 3px 10px;
+  border-radius: 6px;
+}
+
+.calibration-corner {
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  border-color: inherit;
+  border-style: solid;
+  border-width: 0;
+}
+
+.calibration-corner.tl { top: -2px; left: -2px; border-top-width: 3px; border-left-width: 3px; border-top-left-radius: 4px; }
+.calibration-corner.tr { top: -2px; right: -2px; border-top-width: 3px; border-right-width: 3px; border-top-right-radius: 4px; }
+.calibration-corner.bl { bottom: -2px; left: -2px; border-bottom-width: 3px; border-left-width: 3px; border-bottom-left-radius: 4px; }
+.calibration-corner.br { bottom: -2px; right: -2px; border-bottom-width: 3px; border-right-width: 3px; border-bottom-right-radius: 4px; }
+
+/* ── Processing indicator ───────────────────────────────────────────────────── */
+.processing-indicator {
+  position: fixed;
+  pointer-events: none;
+  z-index: 35;
+}
+
+.processing-spinner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* ── Waveform ───────────────────────────────────────────────────────────────── */
+.waveform-wrapper {
+  position: fixed;
+  pointer-events: none;
+  z-index: 35;
+}
+
+.waveform-container {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 32px;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(8px);
+  padding: 4px 8px;
+  border-radius: 8px;
+}
+
+.waveform-bar {
+  width: 3px;
+  border-radius: 2px;
+  transition: height 0.08s ease-out;
+}
+
+/* ── Overlay rect states ────────────────────────────────────────────────────── */
+.overlay-rect-missed {
+  opacity: 0.4;
+  border-style: dotted !important;
+}
+
+.overlay-rect-completed {
+  border-style: solid !important;
+  opacity: 0.2;
+}
+
+/* ── Streaming caption done state ───────────────────────────────────────────── */
+.caption-done {
+  animation: caption-fade-out 0.5s ease-in 4.5s forwards;
+}
+
+@keyframes caption-fade-out {
+  to { opacity: 0; transform: translateY(-4px); }
+}
+
+.caption-cursor {
+  animation: blink-cursor 0.7s step-end infinite;
+  margin-left: 1px;
+}
+
+@keyframes blink-cursor {
+  50% { opacity: 0; }
+}
+

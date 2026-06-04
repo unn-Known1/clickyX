@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 
 export interface AgentInfo {
   id: string;
@@ -45,19 +46,30 @@ export function useAgents() {
     }
   }, []);
 
+  // Initial load
   useEffect(() => {
     setLoading(true);
     Promise.all([fetchAgents(), fetchSkills()]).finally(() => setLoading(false));
   }, [fetchAgents, fetchSkills]);
 
+  // Live-poll every 5s so running agents update without user action
+  useEffect(() => {
+    const id = setInterval(fetchAgents, 5000);
+    return () => clearInterval(id);
+  }, [fetchAgents]);
+
+  // React to agent-state-changed events emitted by Rust
+  useEffect(() => {
+    let unlisten: (() => void) | null = null;
+    listen("agent-state-changed", () => fetchAgents())
+      .then((fn) => { unlisten = fn; });
+    return () => { if (unlisten) unlisten(); };
+  }, [fetchAgents]);
+
   const createAgent = useCallback(
     async (name: string, slug: string, agentSkills: string[]) => {
       try {
-        await invoke<AgentInfo>("create_agent", {
-          name,
-          slug,
-          skills: agentSkills,
-        });
+        await invoke<AgentInfo>("create_agent", { name, slug, skills: agentSkills });
         await fetchAgents();
       } catch (e) {
         setError(String(e));
@@ -106,20 +118,6 @@ export function useAgents() {
     [fetchAgents],
   );
 
-  const getAgentStatus = useCallback(
-    async (slug: string): Promise<AgentInfo> => {
-      return await invoke("get_agent_status", { slug });
-    },
-    [],
-  );
-
-  const getAgentTranscript = useCallback(
-    async (slug: string): Promise<{ role: string; content: string }[]> => {
-      return await invoke("get_agent_transcript", { slug });
-    },
-    [],
-  );
-
   const enableSkill = useCallback(
     async (slug: string, skillName: string) => {
       try {
@@ -145,18 +143,8 @@ export function useAgents() {
   );
 
   return {
-    agents,
-    skills,
-    loading,
-    error,
-    fetchAgents,
-    createAgent,
-    runAgent,
-    stopAgent,
-    archiveAgent,
-    getAgentStatus,
-    getAgentTranscript,
-    enableSkill,
-    disableSkill,
+    agents, skills, loading, error,
+    fetchAgents, createAgent, runAgent,
+    stopAgent, archiveAgent, enableSkill, disableSkill,
   };
 }

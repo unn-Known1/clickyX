@@ -1,6 +1,8 @@
 import { useState, useCallback } from "react";
 import ChatTab from "./ChatTab";
 import { useAgents } from "../hooks/useAgents";
+import { agentStatusColor, agentStatusLabel } from "../utils/agentStatus";
+import { useAppContext } from "../context/AppContext";
 
 const suggestions = [
   "What can you help me with?",
@@ -9,40 +11,29 @@ const suggestions = [
   "Open settings",
 ];
 
-const agentStatusColor: Record<string, string> = {
-  idle: "#ff9800",
-  created: "#ff9800",
-  running: "#4caf50",
-  done: "#4fc3f7",
-  completed: "#4fc3f7",
-  error: "#f44336",
-  failed: "#f44336",
-  paused: "#a0a0b0",
-  archived: "#555",
-};
-
 function AgentDockStrip() {
   const { agents, loading } = useAgents();
+  const { setActiveTab } = useAppContext();
 
   if (loading || agents.length === 0) return null;
 
   return (
-    <div className="agent-dock-strip">
+    <div className="agent-dock-strip" role="list" aria-label="Active agents">
       <span className="agent-dock-label">Agents</span>
       <div className="agent-dock-items">
         {agents.slice(0, 6).map((agent) => {
-          const status = agent.state.toLowerCase();
-          const color = agentStatusColor[status] || "#a0a0b0";
+          const label = agentStatusLabel(agent.state);
+          const color = agentStatusColor(agent.state);
           return (
             <div
               key={agent.slug}
               className="agent-dock-item"
-              title={`${agent.name} (${status})`}
+              title={`${agent.name} (${label})`}
+              role="listitem"
+              onClick={() => setActiveTab("agents")}
+              style={{ cursor: "pointer" }}
             >
-              <span
-                className="agent-dock-dot"
-                style={{ backgroundColor: color }}
-              />
+              <span className="agent-dock-dot" style={{ backgroundColor: color }} />
               <span className="agent-dock-name">{agent.name}</span>
             </div>
           );
@@ -64,6 +55,9 @@ function HomeTab() {
   if (showChat) {
     return (
       <div className="home-tab">
+        <button className="home-back-btn" onClick={() => setShowChat(false)} aria-label="Back to home">
+          ← Back
+        </button>
         <ChatTab initialText={initialSuggestion ?? undefined} />
       </div>
     );
@@ -81,11 +75,7 @@ function HomeTab() {
       </button>
       <div className="suggestions-grid">
         {suggestions.map((s) => (
-          <button
-            key={s}
-            className="suggestion-chip"
-            onClick={() => handleSuggestion(s)}
-          >
+          <button key={s} className="suggestion-chip" onClick={() => handleSuggestion(s)}>
             {s}
           </button>
         ))}

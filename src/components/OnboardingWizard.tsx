@@ -32,6 +32,13 @@ const STEPS: PermissionStep[] = [
     osHint: "Windows: Settings > Accessibility > Keyboard\nmacOS: System Settings > Privacy & Security > Accessibility\nLinux: Install at-spi2-core for accessibility bridge",
   },
   {
+    id: "camera",
+    title: "Camera Access",
+    description: "Optional: allow ClickyX to use your camera for visual context features.",
+    icon: "📷",
+    osHint: "Windows: Settings > Privacy & Security > Camera\nmacOS: System Settings > Privacy & Security > Camera\nLinux: Ensure V4L2 device is accessible",
+  },
+  {
     id: "notifications",
     title: "Notifications",
     description: "Receive desktop notifications for agent task completion, reminders, and updates.",

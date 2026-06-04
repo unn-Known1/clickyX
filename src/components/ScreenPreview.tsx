@@ -4,7 +4,6 @@ interface ScreenPreviewProps {
   data: string;
   width: number;
   height: number;
-  monitor_id: number;
   label?: string;
 }
 
@@ -36,15 +35,13 @@ function ScreenPreview({ data, width, height, label }: ScreenPreviewProps) {
       {label && <div className="screen-preview-label">{label}</div>}
       <img
         src={toDataUrl(data)}
-        alt={`Screen ${width}x${height}`}
+        alt={`Screen capture ${width}×${height}`}
         className="screen-preview-thumb"
-        onClick={() => setExpanded(!expanded)}
+        onClick={() => setExpanded((v) => !v)}
         onError={handleError}
         style={{ cursor: "pointer", maxWidth: expanded ? "100%" : "200px" }}
       />
-      <div className="screen-preview-meta">
-        {width}×{height}
-      </div>
+      <div className="screen-preview-meta">{width}×{height}</div>
     </div>
   );
 }

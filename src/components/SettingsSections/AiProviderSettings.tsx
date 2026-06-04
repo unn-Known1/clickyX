@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { useAppContext } from "../../context/AppContext";
 
 interface AiConfig {
   anthropic_api_key: string | null;
@@ -17,6 +18,7 @@ interface AppConfig {
 }
 
 function AiProviderSettings() {
+  const { showToast } = useAppContext();
   const [aiConfig, setAiConfig] = useState<AiConfig | null>(null);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -26,10 +28,6 @@ function AiProviderSettings() {
   const [cartesiaKey, setCartesiaKey] = useState("");
   const [deepgramKey, setDeepgramKey] = useState("");
   const [assemblyaiKey, setAssemblyaiKey] = useState("");
-
-  const showToast = (text: string, type: "success" | "error" | "info" = "info") => {
-    window.__showToast?.(text, type);
-  };
 
   useEffect(() => {
     setError(null);

@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { useAppContext } from "../../context/AppContext";
 
 interface ComputerUseConfig {
   pointing_model: string;
@@ -14,27 +15,17 @@ const DEFAULT_CONFIG: ComputerUseConfig = {
 };
 
 function ComputerUseSettings() {
+  const { showToast } = useAppContext();
   const [config, setConfig] = useState<ComputerUseConfig | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const showToast = (text: string, type: "success" | "error" | "info" = "info") => {
-    window.__showToast?.(text, type);
-  };
-
   useEffect(() => {
     setError(null);
     invoke<{ computer_use: ComputerUseConfig }>("get_config")
-      .then((cfg) => {
-        setConfig(cfg.computer_use || DEFAULT_CONFIG);
-        setLoading(false);
-      })
-      .catch((e) => {
-        console.error("Failed to load computer use config:", e);
-        setError("Failed to load settings");
-        setLoading(false);
-      });
+      .then((cfg) => { setConfig(cfg.computer_use || DEFAULT_CONFIG); setLoading(false); })
+      .catch((e) => { console.error(e); setError("Failed to load settings"); setLoading(false); });
   }, []);
 
   const updateField = useCallback(async (key: string, value: unknown) => {
@@ -44,17 +35,15 @@ function ComputerUseSettings() {
     setSaving(true);
     setError(null);
     try {
-      await invoke("update_config", {
-        partial: { computer_use: updated },
-      });
+      await invoke("update_config", { partial: { computer_use: updated } });
     } catch (e) {
-      console.error("Failed to save computer use config:", e);
+      console.error(e);
       setError("Failed to save");
       showToast("Failed to save computer use settings", "error");
     } finally {
       setSaving(false);
     }
-  }, [config]);
+  }, [config, showToast]);
 
   if (error && !config) {
     return (
@@ -76,14 +65,15 @@ function ComputerUseSettings() {
 
   return (
     <section className="settings-section">
-      <h3>Computer Use {saving && <span className="saving-indicator">saving...</span>}</h3>
+      <h3>
+        Computer Use{" "}
+        {saving && <span className="saving-indicator">saving…</span>}
+      </h3>
       <div className="setting-row">
         <label>Screen Pointing Model</label>
-        <select
-          className="setting-select"
+        <select className="setting-select"
           value={config?.pointing_model || DEFAULT_CONFIG.pointing_model}
-          onChange={(e) => updateField("pointing_model", e.target.value)}
-        >
+          onChange={(e) => updateField("pointing_model", e.target.value)}>
           <option value="claude-sonnet-4-20250514">Claude Sonnet 4</option>
           <option value="claude-opus-4-20250514">Claude Opus 4</option>
           <option value="gpt-4o">GPT-4o</option>
@@ -91,22 +81,18 @@ function ComputerUseSettings() {
       </div>
       <div className="setting-row">
         <label>CUA Backend</label>
-        <select
-          className="setting-select"
+        <select className="setting-select"
           value={config?.cua_backend || DEFAULT_CONFIG.cua_backend}
-          onChange={(e) => updateField("cua_backend", e.target.value)}
-        >
+          onChange={(e) => updateField("cua_backend", e.target.value)}>
           <option value="anthropic">Anthropic CUA</option>
           <option value="openai">OpenAI CUA</option>
         </select>
       </div>
       <div className="setting-row">
         <label>Native CUA</label>
-        <input
-          type="checkbox"
+        <input type="checkbox"
           checked={config?.native_cua ?? DEFAULT_CONFIG.native_cua}
-          onChange={(e) => updateField("native_cua", e.target.checked)}
-        />
+          onChange={(e) => updateField("native_cua", e.target.checked)} />
       </div>
       {error && <div className="settings-error">{error}</div>}
     </section>

@@ -17,18 +17,32 @@
     "@tauri-apps/plugin-shell": "^2",
     "@tauri-apps/plugin-updater": "^2",
     "react": "^19",
-    "react-dom": "^19"
+    "react-dom": "^19",
+    "react-markdown": "^9",
+    "remark-gfm": "^4",
+    "rehype-highlight": "^7",
+    "highlight.js": "^11",
+    "three": "^0.170",
+    "@react-three/fiber": "^8",
+    "@react-three/drei": "^9",
+    "i18next": "^23",
+    "react-i18next": "^14",
+    "@tanstack/react-query": "^5",
+    "zustand": "^5"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "@types/three": "^0.170",
     "@vitejs/plugin-react": "^4",
     "typescript": "^5",
     "vite": "^6",
     "vitest": "^3",
     "@testing-library/react": "^16",
     "@testing-library/jest-dom": "^6",
-    "jsdom": "^26"
+    "@testing-library/user-event": "^14",
+    "jsdom": "^26",
+    "msw": "^2"
   }
 }

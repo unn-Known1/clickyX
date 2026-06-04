@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import VoiceDiscovery from "../VoiceDiscovery";
+import { HotkeyInput } from "../HotkeyInput";
 
 interface AudioConfig {
   ptt_hotkey: string;
@@ -110,12 +111,9 @@ function VoiceSettings() {
       </div>
       <div className="setting-row">
         <label>PTT Hotkey</label>
-        <input
-          type="text"
-          className="settings-input"
-          style={{ width: 160 }}
+        <HotkeyInput
           value={audioConfig.ptt_hotkey}
-          onChange={(e) => updateAudio("ptt_hotkey", e.target.value)}
+          onChange={(hotkey) => updateAudio("ptt_hotkey", hotkey)}
         />
       </div>
       <div className="setting-row">
