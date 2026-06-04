@@ -1,0 +1,5 @@
+name = "airtable"
+description = "Read and write records in Airtable bases and tables via Airtable API"
+version = "1.0.0"
+permission_class = "network"
+entry_point = "airtable.js"

@@ -44,7 +44,7 @@ jobs:
         run: cargo check
       - name: Run Rust tests
         working-directory: src-tauri
-        run: cargo test
+        run: cargo test --all-features
       - name: Lint
         run: cargo clippy -- -D warnings 2>/dev/null || true
 
@@ -89,7 +89,14 @@ jobs:
         run: npm run build
 
       - name: Build Tauri app
-        run: npm run tauri build ${{ matrix.os == 'macos-latest' && '-- --bundles app' || '' }}
+        run: npm run tauri build ${{ matrix.os == 'macos-latest' && '-- --bundles dmg,app' || '' }}
+
+      - name: Create macOS zip (fallback)
+        if: matrix.os == 'macos-latest'
+        run: |
+          cd src-tauri/target/release/bundle/macos 2>/dev/null || true
+          zip -r ClickyX.app.zip ClickyX.app 2>/dev/null || true
+          mv ClickyX.app.zip ../dmg/ 2>/dev/null || true
 
       - name: Upload artifacts (Linux)
         if: matrix.os == 'ubuntu-latest'

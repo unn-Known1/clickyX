@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { OnboardingIntro } from "./OnboardingMedia";
 
 interface PermissionStep {
   id: string;
@@ -128,6 +129,7 @@ export default function OnboardingWizard({ onComplete, onSkip }: OnboardingWizar
         </div>
 
         <div className="onboarding-step-content">
+          {currentStep === 0 && <OnboardingIntro />}
           <div className="onboarding-step-icon">{step.icon}</div>
           <h2>{step.title}</h2>
           <p>{step.description}</p>

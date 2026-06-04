@@ -1,41 +1,40 @@
-import { useState, useEffect, useCallback } from "react";
-import { invoke } from "@tauri-apps/api/core";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { commands } from "../bindings";
+import type { AppConfig } from "../bindings";
 
-interface AppConfig {
-  hotkeys: { key: string; enabled: boolean; action: string }[];
-  theme: string;
-  api_keys: { provider: string; key: string }[];
-  window: { pin: boolean; width: number; height: number };
-  version: string;
-}
+export type { AppConfig };
 
 export function useConfig() {
-  const [config, setConfig] = useState<AppConfig | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const queryClient = useQueryClient();
 
-  useEffect(() => {
-    invoke<AppConfig>("get_config")
-      .then((cfg) => {
-        setConfig(cfg);
-        setLoading(false);
-      })
-      .catch((e) => {
-        setError(String(e));
-        setLoading(false);
-      });
-  }, []);
+  const {
+    data: config,
+    isLoading,
+    error,
+  } = useQuery<AppConfig, Error>({
+    queryKey: ["config"],
+    queryFn: () => commands.getConfig(),
+    staleTime: 30_000,
+    retry: 2,
+  });
 
-  const updateConfig = useCallback(async (partial: Record<string, unknown>) => {
-    try {
-      const updated = await invoke<AppConfig>("update_config", { partial });
-      setConfig(updated);
-      return updated;
-    } catch (e) {
-      setError(String(e));
-      throw e;
-    }
-  }, []);
+  const updateMutation = useMutation<AppConfig, Error, Partial<AppConfig>>({
+    mutationFn: (partial) => commands.updateConfig(partial),
+    onSuccess: (updated) => {
+      queryClient.setQueryData(["config"], updated);
+    },
+  });
 
-  return { config, loading, error, updateConfig };
+  const updateConfig = (partial: Partial<AppConfig> | Record<string, unknown>) =>
+    updateMutation.mutateAsync(partial as Partial<AppConfig>);
+
+  return {
+    config: config ?? null,
+    loading: isLoading,
+    isLoading,
+    error: error ? error.message : null,
+    updateConfig,
+    isSaving: updateMutation.isPending,
+    saveError: updateMutation.error?.message ?? null,
+  };
 }

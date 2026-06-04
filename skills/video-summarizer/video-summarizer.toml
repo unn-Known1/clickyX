@@ -1,0 +1,5 @@
+name = "video-summarizer"
+description = "Extract info from video files using ffprobe and summarize with AI"
+version = "1.0.0"
+permission_class = "system"
+entry_point = "video-summarizer.js"

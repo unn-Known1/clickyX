@@ -1,0 +1,5 @@
+name = "obsidian"
+description = "Read and write Obsidian vault files on the local filesystem"
+version = "1.0.0"
+permission_class = "filesystem"
+entry_point = "obsidian.js"

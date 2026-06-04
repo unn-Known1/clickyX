@@ -1,0 +1,5 @@
+name = "quiz-generator"
+description = "Generate multiple-choice and open-ended quizzes from content"
+version = "1.0.0"
+permission_class = "network"
+entry_point = "quiz-generator.js"

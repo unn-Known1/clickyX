@@ -1,0 +1,5 @@
+name = "docker-manager"
+description = "List, start, stop, inspect, and remove Docker containers and images"
+version = "1.0.0"
+permission_class = "system"
+entry_point = "docker-manager.js"

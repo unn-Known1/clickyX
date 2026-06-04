@@ -1,9 +1,11 @@
 /**
- * i18n setup — English (default) + Spanish skeleton.
- * Add more locales by duplicating the en/ folder.
+ * i18n setup — English (default), Spanish, French, Japanese.
+ * Add more locales by adding a JSON file to src/i18n/locales/ and registering it below.
  */
 import i18n from "i18next";
 import { initReactI18next } from "react-i18next";
+import frTranslation from "./locales/fr.json";
+import jaTranslation from "./locales/ja.json";
 
 const en = {
   translation: {
@@ -167,13 +169,24 @@ const es = {
   },
 };
 
+const fr = { translation: frTranslation };
+const ja = { translation: jaTranslation };
+
 i18n
   .use(initReactI18next)
   .init({
-    resources: { en, es },
+    resources: { en, es, fr, ja },
     lng: "en",
     fallbackLng: "en",
     interpolation: { escapeValue: false },
   });
 
 export default i18n;
+
+/** All supported locale codes for the language switcher. */
+export const SUPPORTED_LOCALES: { code: string; label: string }[] = [
+  { code: "en", label: "English" },
+  { code: "es", label: "Español" },
+  { code: "fr", label: "Français" },
+  { code: "ja", label: "日本語" },
+];

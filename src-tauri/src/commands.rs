@@ -1490,7 +1490,30 @@ pub fn update_agent_config(
     Ok(updated.agent.clone())
 }
 
-// --- Accessibility Commands ---
+// --- CUA Scroll Command (B-008) ---
+
+#[tauri::command]
+pub async fn cua_scroll(
+    x: f64,
+    y: f64,
+    delta_x: f64,
+    delta_y: f64,
+) -> Result<(), String> {
+    let mut sim = crate::cua::InputSimulator::new(crate::cua::CuaBackend::Native);
+    sim.scroll(x, y, delta_x, delta_y)
+}
+
+// --- Voice-Agent Triggers Command (B-006) ---
+
+#[tauri::command]
+pub fn set_agent_voice_triggers(
+    triggers: std::collections::HashMap<String, Vec<String>>,
+    pipeline: State<'_, Mutex<VoicePipeline>>,
+) -> Result<(), String> {
+    let pipe = pipeline.lock().map_err(|e| format!("lock error: {e}"))?;
+    pipe.set_agent_triggers(triggers);
+    Ok(())
+}
 
 #[tauri::command]
 pub fn get_element_at_point(x: i32, y: i32) -> Result<AccessibilityElement, String> {
@@ -1517,4 +1540,66 @@ pub fn perform_accessibility_action(
 ) -> Result<(), String> {
     let api = crate::accessibility::create_accessibility_api();
     api.perform_action(&element, &action)
+}
+
+// ── B-010: Agent HUD floating window ─────────────────────────────────────────
+
+#[tauri::command]
+pub fn open_agent_hud(app: AppHandle, slug: String) -> Result<(), String> {
+    use tauri::WebviewUrl;
+    use tauri::webview::WebviewWindowBuilder;
+
+    let label = format!("agent-hud-{}", slug.replace(['.', '/', ' '], "-"));
+    let url = format!("agent-hud.html?agent={}", urlencoding_simple(&slug));
+
+    // If the window already exists, focus it
+    if let Some(existing) = app.get_webview_window(&label) {
+        existing.set_focus().ok();
+        return Ok(());
+    }
+
+    WebviewWindowBuilder::new(&app, &label, WebviewUrl::App(url.into()))
+        .title(format!("Agent HUD — {}", slug))
+        .inner_size(640.0, 520.0)
+        .min_inner_size(480.0, 380.0)
+        .decorations(false)
+        .transparent(true)
+        .always_on_top(false)
+        .resizable(true)
+        .build()
+        .map(|_| ())
+        .map_err(|e| format!("Failed to open Agent HUD: {e}"))
+}
+
+fn urlencoding_simple(s: &str) -> String {
+    s.chars()
+        .map(|c| match c {
+            'A'..='Z' | 'a'..='z' | '0'..='9' | '-' | '_' | '.' | '~' => c.to_string(),
+            ' ' => "%20".to_string(),
+            _ => format!("%{:02X}", c as u32),
+        })
+        .collect()
+}
+
+// ── B-011: Agent file attachment ──────────────────────────────────────────────
+
+#[tauri::command]
+pub fn agent_attach_files(
+    slug: String,
+    paths: Vec<String>,
+    store: State<'_, Mutex<AgentStore>>,
+) -> Result<(), String> {
+    let store = store.lock().map_err(|e| format!("lock: {e}"))?;
+    if let Some(session) = store.sessions.get(&slug) {
+        let mut session = session.lock().map_err(|e| format!("session lock: {e}"))?;
+        // Store attached file paths in the session context
+        for path in &paths {
+            session.transcript.push(ChatMessage {
+                role: "system".to_string(),
+                content: format!("[File attached: {}]", path),
+            });
+        }
+        log::info!("[agent-attach] {} files attached to agent '{}'", paths.len(), slug);
+    }
+    Ok(())
 }

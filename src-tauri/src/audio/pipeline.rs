@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
@@ -7,6 +8,7 @@ use crate::config::AudioConfig;
 use crate::config::WakeWordConfig;
 
 use super::capture::AudioCapture;
+use super::handoff::VoiceAgentHandoff;
 use super::stt::{self, SttConfig, SttProvider};
 use super::tts::{self, TtsConfig, TtsProvider};
 use super::wake_word::WakeWordDetector;
@@ -82,6 +84,12 @@ pub struct VoicePipeline {
     wake_word_detected: Arc<AtomicBool>,
     always_on_running: Arc<AtomicBool>,
     always_on_config: Arc<Mutex<AlwaysOnConfig>>,
+    /// True while TTS output is playing — VAD loop suppresses input when this is set.
+    audio_ducking_active: Arc<AtomicBool>,
+    /// Voice-to-agent handoff trigger matcher.
+    handoff: Arc<Mutex<VoiceAgentHandoff>>,
+    /// Tauri app handle for emitting events from the pipeline.
+    app_handle: Option<Arc<Mutex<tauri::AppHandle>>>,
 }
 
 impl VoicePipeline {
@@ -102,6 +110,9 @@ impl VoicePipeline {
             wake_word_detected: Arc::new(AtomicBool::new(false)),
             always_on_running: Arc::new(AtomicBool::new(false)),
             always_on_config: Arc::new(Mutex::new(AlwaysOnConfig::default())),
+            audio_ducking_active: Arc::new(AtomicBool::new(false)),
+            handoff: Arc::new(Mutex::new(VoiceAgentHandoff::new())),
+            app_handle: None,
         }
     }
 
@@ -126,6 +137,9 @@ impl VoicePipeline {
             wake_word_detected: Arc::new(AtomicBool::new(false)),
             always_on_running: Arc::new(AtomicBool::new(false)),
             always_on_config: Arc::new(Mutex::new(always_on)),
+            audio_ducking_active: Arc::new(AtomicBool::new(false)),
+            handoff: Arc::new(Mutex::new(VoiceAgentHandoff::new())),
+            app_handle: None,
         }
     }
 
@@ -211,6 +225,9 @@ impl VoicePipeline {
             *state = PipelineState::Speaking;
         }
 
+        // Activate audio ducking: suppress VAD input while TTS is playing
+        self.set_ducking(true);
+
         let tts_cfg = self
             .tts_config
             .lock()
@@ -232,6 +249,9 @@ impl VoicePipeline {
             }
         }
 
+        // Deactivate audio ducking after TTS playback
+        self.set_ducking(false);
+
         if let Ok(mut state) = self.state.lock() {
             *state = PipelineState::Idle;
         }
@@ -243,6 +263,41 @@ impl VoicePipeline {
             .lock()
             .map(|s| *s)
             .map_err(|e| format!("State lock error: {e}"))
+    }
+
+    /// Set audio ducking state and optionally emit a Tauri event.
+    /// When `duck` is true, the VAD loop will actively suppress audio input.
+    pub fn set_ducking(&self, duck: bool) {
+        self.audio_ducking_active.store(duck, Ordering::SeqCst);
+        log::debug!("Audio ducking: {}", if duck { "active" } else { "inactive" });
+        if let Some(handle_arc) = &self.app_handle {
+            if let Ok(handle) = handle_arc.lock() {
+                use tauri::Emitter;
+                let _ = handle.emit(
+                    "audio-ducking-changed",
+                    serde_json::json!({ "ducked": duck }),
+                );
+            }
+        }
+    }
+
+    /// Query current ducking state.
+    pub fn get_ducking_state(&self) -> bool {
+        self.audio_ducking_active.load(Ordering::SeqCst)
+    }
+
+    /// Attach a Tauri app handle so the pipeline can emit events.
+    pub fn set_app_handle(&mut self, handle: tauri::AppHandle) {
+        self.app_handle = Some(Arc::new(Mutex::new(handle)));
+    }
+
+    /// Configure per-agent voice trigger phrases.
+    /// `triggers` maps agent_slug -> Vec<trigger_phrase>.
+    pub fn set_agent_triggers(&self, triggers: HashMap<String, Vec<String>>) {
+        if let Ok(mut h) = self.handoff.lock() {
+            h.update_triggers(&triggers);
+            log::info!("Voice agent handoff: {} agents registered", triggers.len());
+        }
     }
 
     pub fn get_audio_level(&self) -> AudioLevel {
@@ -438,6 +493,9 @@ impl VoicePipeline {
             .clone();
         let stt_cfg = self.stt_config().unwrap_or_default();
         let sample_rate = self.sample_rate;
+        let ducking = self.audio_ducking_active.clone();
+        let handoff_arc = self.handoff.clone();
+        let app_handle_arc = self.app_handle.clone();
 
         let on_transcript = std::sync::Arc::new(std::sync::Mutex::new(on_transcript));
         std::thread::spawn(move || {
@@ -451,6 +509,21 @@ impl VoicePipeline {
 
             while running.load(Ordering::SeqCst) {
                 std::thread::sleep(Duration::from_millis(50));
+
+                // B-004: When ducking (TTS playing), drain and reset all VAD state so
+                // the system does not accumulate our own TTS output as speech input.
+                if ducking.load(Ordering::SeqCst) {
+                    audio_buffer.clear();
+                    vad = VadState::Silence;
+                    speech_start = None;
+                    silence_start = None;
+                    if let Ok(mut state) = state_arc.lock() {
+                        if *state == PipelineState::Listening {
+                            *state = PipelineState::Speaking;
+                        }
+                    }
+                    continue;
+                }
 
                 let samples = {
                     if let Ok(capture) = capture_arc.lock() {
@@ -496,12 +569,14 @@ impl VoicePipeline {
                         } else if silence_start.unwrap().elapsed() >= Duration::from_millis(ao_config.silence_timeout_ms) {
                             if let Some(start) = speech_start {
                                 if start.elapsed() >= Duration::from_millis(ao_config.min_speech_ms) {
-                                    // Check if TTS is speaking — pause VAD during playback
-                                    let is_speaking = state_arc.lock().map(|s| *s == PipelineState::Speaking).unwrap_or(false);
-                                    if !is_speaking {
+                                    // Check if TTS is speaking — skip transcription if ducking
+                                    let is_ducking = ducking.load(Ordering::SeqCst);
+                                    if !is_ducking {
                                         let buffer_clone = audio_buffer.clone();
                                         let stt_cfg_clone = stt_cfg.clone();
                                         let on_tx = on_transcript.clone();
+                                        let handoff_clone = handoff_arc.clone();
+                                        let app_handle_clone = app_handle_arc.clone();
 
                                         if let Ok(rt) = tokio::runtime::Handle::try_current() {
                                             let _ = rt.spawn(async move {
@@ -509,6 +584,33 @@ impl VoicePipeline {
                                                 match result {
                                                     Ok(text) if !text.trim().is_empty() => {
                                                         log::info!("VAD auto-transcribed: {}", text);
+
+                                                        // B-006: Check for voice-agent handoff triggers
+                                                        if let Ok(hf) = handoff_clone.lock() {
+                                                            if let Some(action) = hf.analyze(&text) {
+                                                                log::info!(
+                                                                    "Voice handoff: agent={}, phrase={}",
+                                                                    action.agent_slug,
+                                                                    action.trigger_phrase
+                                                                );
+                                                                if let Some(handle_arc) = &app_handle_clone {
+                                                                    if let Ok(handle) = handle_arc.lock() {
+                                                                        use tauri::Emitter;
+                                                                        let _ = handle.emit(
+                                                                            "voice-agent-handoff",
+                                                                            serde_json::json!({
+                                                                                "agent_slug": action.agent_slug,
+                                                                                "agent_name": action.agent_name,
+                                                                                "query": action.query,
+                                                                                "trigger_phrase": action.trigger_phrase,
+                                                                            }),
+                                                                        );
+                                                                    }
+                                                                }
+                                                            }
+                                                        }
+
+                                                        // Fire transcript callback
                                                         if let Ok(cb) = on_tx.lock() {
                                                             cb(text);
                                                         }
@@ -519,7 +621,7 @@ impl VoicePipeline {
                                             });
                                         }
                                     } else {
-                                        log::debug!("VAD: silence timeout but TTS speaking, deferring transcription");
+                                        log::debug!("VAD: silence timeout but ducking active, deferring transcription");
                                     }
                                 }
                             }

@@ -1,0 +1,5 @@
+name = "clipboard-manager"
+description = "Read, write, and manage clipboard history across platforms"
+version = "1.0.0"
+permission_class = "system"
+entry_point = "clipboard-manager.js"

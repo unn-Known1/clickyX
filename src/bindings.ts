@@ -1,3 +1,7 @@
+// NOTE: This file is hand-maintained.
+// To auto-generate from Rust types, run: src-tauri/export-types.sh
+// Requires specta in [dev-dependencies] of Cargo.toml (see B-017 in PENDING_ITEMS.md)
+//
 /**
  * Typed Tauri command bindings.
  * Single source of truth for all invoke() signatures.
@@ -265,4 +269,8 @@ export const commands = {
   overlayShowRect: (x: number, y: number, w: number, h: number, label?: string) => tauriInvoke<void>("overlay_show_rect", { x, y, w, h, label }),
   overlayClear: () => tauriInvoke<void>("overlay_clear"),
   setOverlayVisible: (visible: boolean) => tauriInvoke<void>("set_overlay_visible", { visible }),
+
+  // Agent HUD
+  openAgentHud: (slug: string) => tauriInvoke<void>("open_agent_hud", { slug }),
+  agentAttachFiles: (slug: string, paths: string[]) => tauriInvoke<void>("agent_attach_files", { slug, paths }),
 };

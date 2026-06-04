@@ -1,0 +1,5 @@
+name = "todo-manager"
+description = "Manage tasks using todo.txt format or local task files"
+version = "1.0.0"
+permission_class = "filesystem"
+entry_point = "todo-manager.js"

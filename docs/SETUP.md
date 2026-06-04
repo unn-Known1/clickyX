@@ -34,8 +34,8 @@ xcode-select --install
 
 ```sh
 # Clone the repository
-git clone https://github.com/clickyx/clickyx.git
-cd clickyx
+git clone https://github.com/unn-Known1/clickyX.git
+cd clickyX
 
 # Install Node dependencies
 npm ci

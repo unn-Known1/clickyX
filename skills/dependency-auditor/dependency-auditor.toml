@@ -1,0 +1,5 @@
+name = "dependency-auditor"
+description = "Check npm, cargo, and pip dependencies for known vulnerabilities"
+version = "1.0.0"
+permission_class = "network"
+entry_point = "dependency-auditor.js"

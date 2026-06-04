@@ -1,0 +1,5 @@
+name = "audio-transcriber"
+description = "Transcribe audio files to text using OpenAI Whisper API"
+version = "1.0.0"
+permission_class = "network"
+entry_point = "audio-transcriber.js"

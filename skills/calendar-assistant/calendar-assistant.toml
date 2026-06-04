@@ -1,0 +1,5 @@
+name = "calendar-assistant"
+description = "Cross-platform calendar reading from local ical/ics files"
+version = "1.0.0"
+permission_class = "filesystem"
+entry_point = "calendar-assistant.js"

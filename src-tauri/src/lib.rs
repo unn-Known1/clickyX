@@ -21,7 +21,7 @@ mod type_mode;
 use std::path::PathBuf;
 use std::sync::Mutex;
 use std::time::Duration;
-use tauri::{AppHandle, Emitter, Manager};
+use tauri::{AppHandle, Emitter, Listener, Manager};
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
 
 use crate::screen::auto_capture::{AutoCaptureConfig, AutoCaptureEngine};
@@ -146,6 +146,7 @@ pub fn run() {
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_deep_link::init())
         .setup(|app| {
             let handle = app.handle().clone();
 
@@ -300,6 +301,27 @@ pub fn run() {
                 });
             }
 
+            // Register deep-link handler for openclicky:// URLs (B-016)
+            // tauri-plugin-deep-link emits "deep-link://new-url" with a JSON array payload.
+            {
+                let deep_link_handle = app.handle().clone();
+                app.listen("deep-link://new-url", move |event| {
+                    let payload = event.payload();
+                    log::info!("Deep link received: {}", payload);
+                    // Payload is a JSON array of URL strings: ["openclicky://..."]
+                    if let Ok(urls) = serde_json::from_str::<Vec<String>>(payload) {
+                        for url in urls {
+                            log::info!("Deep link URL: {}", url);
+                            let _ = deep_link_handle.emit("deep-link-opened", &url);
+                        }
+                    } else {
+                        // Fallback: emit raw payload
+                        let url = payload.trim_matches('"').to_string();
+                        let _ = deep_link_handle.emit("deep-link-opened", &url);
+                    }
+                });
+            }
+
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -417,6 +439,10 @@ pub fn run() {
             commands::get_focused_element,
             commands::get_accessibility_tree_snapshot,
             commands::perform_accessibility_action,
+            commands::cua_scroll,
+            commands::set_agent_voice_triggers,
+            commands::open_agent_hud,
+            commands::agent_attach_files,
         ])
         .build(tauri::generate_context!())
         .expect("error while building ClickyX")

@@ -54,6 +54,9 @@ impl Default for TtsConfig {
 }
 
 pub async fn speak(text: &str, config: &TtsConfig) -> Result<Vec<u8>, String> {
+    // NOTE (B-004/B-015): Audio ducking is managed in pipeline.rs::speak_response().
+    // pipeline.rs calls set_ducking(true) before invoking this function and
+    // set_ducking(false) after it returns. This file is stateless TTS-only.
     if config.provider.requires_api_key() && config.api_key.is_empty() {
         return Err(format!(
             "No API key for provider {}",

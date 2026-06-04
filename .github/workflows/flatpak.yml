@@ -1,0 +1,20 @@
+name: Flatpak Build
+on:
+  workflow_dispatch:
+  push:
+    tags: ["v*"]
+
+jobs:
+  flatpak:
+    runs-on: ubuntu-latest
+    container:
+      image: bilelmoussaoui/flatpak-github-actions:gnome-46
+      options: --privileged
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build Flatpak
+        uses: bilelmoussaoui/flatpak-github-actions/flatpak-builder@v6
+        with:
+          bundle: clickyx.flatpak
+          manifest-path: flatpak/com.clickyx.ClickyX.yml
+          cache-key: flatpak-builder-${{ github.sha }}

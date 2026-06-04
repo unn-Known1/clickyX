@@ -1,0 +1,5 @@
+name = "cron-helper"
+description = "Create, list, and explain cron jobs on Linux/macOS"
+version = "1.0.0"
+permission_class = "system"
+entry_point = "cron-helper.js"

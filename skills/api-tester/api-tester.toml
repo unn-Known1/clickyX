@@ -1,0 +1,5 @@
+name = "api-tester"
+description = "HTTP client for testing REST APIs with assertions and reporting"
+version = "1.0.0"
+permission_class = "network"
+entry_point = "api-tester.js"

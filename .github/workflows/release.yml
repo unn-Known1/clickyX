@@ -48,20 +48,31 @@ jobs:
         run: npm run build
 
       - name: Build Tauri app
-        run: npm run tauri build ${{ matrix.os == 'macos-latest' && '-- --bundles app' || '' }}
+        run: npm run tauri build ${{ matrix.os == 'macos-latest' && '-- --bundles dmg,app' || '' }}
 
-      - name: Sign (Windows)
-        if: matrix.os == 'windows-latest'
-        shell: pwsh
+      - name: Create macOS zip (fallback)
+        if: matrix.os == 'macos-latest'
+        run: |
+          cd src-tauri/target/release/bundle/macos 2>/dev/null || true
+          zip -r ClickyX.app.zip ClickyX.app 2>/dev/null || true
+          mv ClickyX.app.zip ../dmg/ 2>/dev/null || true
+
+      - name: Sign Windows artifacts
+        if: matrix.os == 'windows-latest' && env.SIGNING_CERT != ''
         env:
           SIGNING_CERT: ${{ secrets.WINDOWS_SIGNING_CERT }}
           SIGNING_PASSWORD: ${{ secrets.WINDOWS_SIGNING_PASSWORD }}
+        shell: pwsh
         run: |
-          if ($env:SIGNING_CERT) {
-            powershell -File scripts/sign-windows.ps1 -CertPath "$env:SIGNING_CERT" -Password "$env:SIGNING_PASSWORD"
-          } else {
-            Write-Host "No signing cert available, skipping sign"
+          # Import cert
+          $certBytes = [Convert]::FromBase64String($env:SIGNING_CERT)
+          $certPath = "$env:TEMP\signing.pfx"
+          [IO.File]::WriteAllBytes($certPath, $certBytes)
+          # Sign all .msi and .exe files
+          Get-ChildItem -Path "src-tauri/target/release/bundle" -Recurse -Include "*.msi","*.exe" | ForEach-Object {
+            & signtool sign /f $certPath /p $env:SIGNING_PASSWORD /tr http://timestamp.digicert.com /td sha256 /fd sha256 $_.FullName
           }
+          Remove-Item $certPath -Force
 
       - name: Sign (macOS)
         if: matrix.os == 'macos-latest'
@@ -127,7 +138,7 @@ jobs:
           echo "" >> release-notes.md
           echo "### Downloads" >> release-notes.md
           echo "" >> release-notes.md
-          find artifacts -type f \( -name "*.msi" -o -name "*.exe" -o -name "*.dmg" -o -name "*.AppImage" -o -name "*.deb" -o -name "*.rpm" \) | while read f; do
+          find artifacts -type f \( -name "*.msi" -o -name "*.exe" -o -name "*.dmg" -o -name "*.zip" -o -name "*.AppImage" -o -name "*.deb" -o -name "*.rpm" \) | while read f; do
             basename=$(basename "$f")
             echo "- $basename" >> release-notes.md
           done
@@ -144,6 +155,7 @@ jobs:
             artifacts/**/*.msi
             artifacts/**/*.exe
             artifacts/**/*.dmg
+            artifacts/**/*.zip
             artifacts/**/*.AppImage
             artifacts/**/*.deb
             artifacts/**/*.rpm

@@ -1,0 +1,5 @@
+name = "prompt-optimizer"
+description = "Analyze and improve AI prompts for clarity, specificity, and effectiveness"
+version = "1.0.0"
+permission_class = "network"
+entry_point = "prompt-optimizer.js"

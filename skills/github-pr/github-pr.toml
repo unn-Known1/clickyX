@@ -1,0 +1,5 @@
+name = "github-pr"
+description = "Create, review, list, and merge GitHub Pull Requests via gh CLI or API"
+version = "1.0.0"
+permission_class = "network"
+entry_point = "github-pr.js"

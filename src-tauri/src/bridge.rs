@@ -718,20 +718,258 @@ async fn notify(data: web::Data<BridgeState>, body: web::Json<NotifyRequest>) ->
     HttpResponse::Ok().json(OkResponse { ok: true })
 }
 
-async fn mcp_tools() -> HttpResponse {
-    let tools = vec![McpToolInfo {
-        server: "placeholder".into(),
-        name: "no_mcp_servers_configured".into(),
-        description: "Add MCP servers in Settings > Connections".into(),
-    }];
-    HttpResponse::Ok().json(McpToolsResponse { tools })
+/// Spawn an MCP server process, perform JSON-RPC initialize + tools/list,
+/// and return the list of tool names/descriptions.
+fn mcp_list_tools_sync(server: &crate::config::McpServerConfig) -> Vec<McpToolInfo> {
+    use std::io::{BufRead, BufReader, Write};
+    use std::process::{Command, Stdio};
+
+    let mut child = match Command::new(&server.command)
+        .args(&server.args)
+        .envs(&server.env)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .spawn()
+    {
+        Ok(c) => c,
+        Err(e) => {
+            log::warn!("MCP: failed to spawn server '{}': {}", server.name, e);
+            return Vec::new();
+        }
+    };
+
+    let mut stdin = match child.stdin.take() {
+        Some(s) => s,
+        None => return Vec::new(),
+    };
+    let stdout = match child.stdout.take() {
+        Some(s) => s,
+        None => return Vec::new(),
+    };
+
+    let mut reader = BufReader::new(stdout);
+
+    // Send initialize
+    let init_req = serde_json::json!({
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "initialize",
+        "params": {
+            "protocolVersion": "2024-11-05",
+            "capabilities": {},
+            "clientInfo": {"name": "clickyx", "version": "1.0"}
+        }
+    });
+    let init_str = format!("{}\n", serde_json::to_string(&init_req).unwrap_or_default());
+    if stdin.write_all(init_str.as_bytes()).is_err() {
+        let _ = child.kill();
+        return Vec::new();
+    }
+
+    // Read initialize response (one line of JSON-RPC)
+    let mut init_resp_line = String::new();
+    let _ = reader.read_line(&mut init_resp_line);
+
+    // Send tools/list
+    let list_req = serde_json::json!({
+        "jsonrpc": "2.0",
+        "id": 2,
+        "method": "tools/list",
+        "params": {}
+    });
+    let list_str = format!("{}\n", serde_json::to_string(&list_req).unwrap_or_default());
+    if stdin.write_all(list_str.as_bytes()).is_err() {
+        let _ = child.kill();
+        return Vec::new();
+    }
+
+    // Read tools/list response
+    let mut list_resp_line = String::new();
+    let _ = reader.read_line(&mut list_resp_line);
+    let _ = child.kill();
+
+    // Parse the tools from the JSON-RPC response
+    let tools: Vec<McpToolInfo> = match serde_json::from_str::<serde_json::Value>(&list_resp_line) {
+        Ok(resp) => {
+            let tool_array = resp
+                .get("result")
+                .and_then(|r| r.get("tools"))
+                .and_then(|t| t.as_array());
+            match tool_array {
+                Some(arr) => arr
+                    .iter()
+                    .map(|t| McpToolInfo {
+                        server: server.name.clone(),
+                        name: t
+                            .get("name")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("unknown")
+                            .to_string(),
+                        description: t
+                            .get("description")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("")
+                            .to_string(),
+                    })
+                    .collect(),
+                None => Vec::new(),
+            }
+        }
+        Err(e) => {
+            log::warn!(
+                "MCP: failed to parse tools/list response from '{}': {}",
+                server.name,
+                e
+            );
+            Vec::new()
+        }
+    };
+
+    tools
 }
 
-async fn mcp_call(body: web::Json<McpCallRequest>) -> HttpResponse {
+/// Spawn an MCP server, call a specific tool, and return the result JSON.
+fn mcp_call_tool_sync(
+    server: &crate::config::McpServerConfig,
+    tool: &str,
+    args: &serde_json::Value,
+) -> Result<serde_json::Value, String> {
+    use std::io::{BufRead, BufReader, Write};
+    use std::process::{Command, Stdio};
+
+    let mut child = Command::new(&server.command)
+        .args(&server.args)
+        .envs(&server.env)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .spawn()
+        .map_err(|e| format!("failed to spawn MCP server '{}': {}", server.name, e))?;
+
+    let mut stdin = child.stdin.take().ok_or("no stdin")?;
+    let stdout = child.stdout.take().ok_or("no stdout")?;
+    let mut reader = BufReader::new(stdout);
+
+    // Initialize
+    let init_req = serde_json::json!({
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "initialize",
+        "params": {
+            "protocolVersion": "2024-11-05",
+            "capabilities": {},
+            "clientInfo": {"name": "clickyx", "version": "1.0"}
+        }
+    });
+    let init_str = format!("{}\n", serde_json::to_string(&init_req).unwrap_or_default());
+    stdin
+        .write_all(init_str.as_bytes())
+        .map_err(|e| format!("write init: {e}"))?;
+
+    let mut init_resp = String::new();
+    let _ = reader.read_line(&mut init_resp);
+
+    // Call the tool
+    let call_req = serde_json::json!({
+        "jsonrpc": "2.0",
+        "id": 2,
+        "method": "tools/call",
+        "params": {
+            "name": tool,
+            "arguments": args
+        }
+    });
+    let call_str = format!("{}\n", serde_json::to_string(&call_req).unwrap_or_default());
+    stdin
+        .write_all(call_str.as_bytes())
+        .map_err(|e| format!("write call: {e}"))?;
+
+    let mut resp_line = String::new();
+    let _ = reader.read_line(&mut resp_line);
+    let _ = child.kill();
+
+    let resp: serde_json::Value = serde_json::from_str(&resp_line)
+        .map_err(|e| format!("invalid JSON-RPC response: {e}"))?;
+
+    if let Some(error) = resp.get("error") {
+        return Err(format!("MCP error: {}", error));
+    }
+
+    Ok(resp.get("result").cloned().unwrap_or(serde_json::json!({})))
+}
+
+async fn mcp_tools(data: web::Data<BridgeState>) -> HttpResponse {
+    let app = &data.app_handle;
+    let config = match app.try_state::<crate::config::AppConfig>() {
+        Some(c) => c.inner().clone(),
+        None => {
+            return HttpResponse::InternalServerError().json(ErrorResponse {
+                error: "internal_error".into(),
+                message: "config not available".into(),
+            });
+        }
+    };
+
+    if config.mcp_servers.is_empty() {
+        return HttpResponse::Ok().json(McpToolsResponse {
+            tools: vec![McpToolInfo {
+                server: "none".into(),
+                name: "no_mcp_servers_configured".into(),
+                description: "Add MCP servers in Settings > Connections".into(),
+            }],
+        });
+    }
+
+    let mut all_tools: Vec<McpToolInfo> = Vec::new();
+    for server in config.mcp_servers.iter().filter(|s| s.enabled) {
+        let tools = mcp_list_tools_sync(server);
+        log::info!(
+            "MCP: listed {} tools from server '{}'",
+            tools.len(),
+            server.name
+        );
+        all_tools.extend(tools);
+    }
+
+    HttpResponse::Ok().json(McpToolsResponse { tools: all_tools })
+}
+
+async fn mcp_call(data: web::Data<BridgeState>, body: web::Json<McpCallRequest>) -> HttpResponse {
+    let app = &data.app_handle;
+    let config = match app.try_state::<crate::config::AppConfig>() {
+        Some(c) => c.inner().clone(),
+        None => {
+            return HttpResponse::InternalServerError().json(ErrorResponse {
+                error: "internal_error".into(),
+                message: "config not available".into(),
+            });
+        }
+    };
+
+    let server = match config
+        .mcp_servers
+        .iter()
+        .find(|s| s.name == body.server && s.enabled)
+    {
+        Some(s) => s.clone(),
+        None => {
+            return HttpResponse::NotFound().json(ErrorResponse {
+                error: "not_found".into(),
+                message: format!("MCP server '{}' not found or not enabled", body.server),
+            });
+        }
+    };
+
     log::info!("MCP call: server={}, tool={}", body.server, body.tool);
-    HttpResponse::Ok().json(serde_json::json!({
-        "result": format!("MCP tool '{}' called on server '{}'", body.tool, body.server)
-    }))
+
+    match mcp_call_tool_sync(&server, &body.tool, &body.args) {
+        Ok(result) => HttpResponse::Ok().json(serde_json::json!({ "result": result })),
+        Err(e) => HttpResponse::InternalServerError().json(ErrorResponse {
+            error: "mcp_error".into(),
+            message: e,
+        }),
+    }
 }
 
 async fn bridge_list_agents(data: web::Data<BridgeState>) -> HttpResponse {
@@ -908,6 +1146,45 @@ async fn bridge_agent_status(
     }
 }
 
+/// B-008: Scroll endpoint for bridge
+#[derive(Deserialize)]
+struct ScrollRequest {
+    x: f64,
+    y: f64,
+    delta_x: f64,
+    delta_y: f64,
+}
+
+async fn scroll_handler(data: web::Data<BridgeState>, body: web::Json<ScrollRequest>) -> HttpResponse {
+    let _app = &data.app_handle;
+    log::info!(
+        "Scroll at ({}, {}) delta=({}, {})",
+        body.x,
+        body.y,
+        body.delta_x,
+        body.delta_y
+    );
+
+    let mut sim = crate::cua::InputSimulator::new(crate::cua::CuaBackend::Native);
+    match sim.scroll(body.x, body.y, body.delta_x, body.delta_y) {
+        Ok(()) => {
+            emit_event(
+                &data,
+                "guidance_update",
+                &format!(
+                    "{{\"action\":\"scroll\",\"x\":{},\"y\":{},\"delta_x\":{},\"delta_y\":{}}}",
+                    body.x, body.y, body.delta_x, body.delta_y
+                ),
+            );
+            HttpResponse::Ok().json(OkResponse { ok: true })
+        }
+        Err(e) => HttpResponse::InternalServerError().json(ErrorResponse {
+            error: "scroll_error".into(),
+            message: e,
+        }),
+    }
+}
+
 async fn bridge_list_skills() -> HttpResponse {
     let skills = crate::agent::skills::load_skills();
     HttpResponse::Ok().json(serde_json::json!({ "skills": skills }))
@@ -1002,6 +1279,7 @@ pub fn start_bridge(app_handle: AppHandle, bridge_token: Option<String>) {
                     .route("/notify", web::post().to(notify))
                     .route("/mcp/tools", web::get().to(mcp_tools))
                     .route("/mcp/call", web::post().to(mcp_call))
+                    .route("/scroll", web::post().to(scroll_handler))
                     .route("/agents", web::get().to(bridge_list_agents))
                     .route("/agent/create", web::post().to(bridge_create_agent))
                     .route("/agent/{slug}/run", web::post().to(bridge_run_agent))

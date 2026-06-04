@@ -1,14 +1,15 @@
 import { useState, useCallback } from "react";
+import { useQuery } from "@tanstack/react-query";
 import ChatTab from "./ChatTab";
 import { useAgents } from "../hooks/useAgents";
 import { agentStatusColor, agentStatusLabel } from "../utils/agentStatus";
 import { useAppContext } from "../context/AppContext";
 
-const suggestions = [
-  "What can you help me with?",
-  "Take a screenshot and explain it",
-  "Summarize what's on my screen",
-  "Open settings",
+const DEFAULT_SUGGESTIONS = [
+  "What's on my screen?",
+  "Summarize this document",
+  "Help me debug this code",
+  "Write a professional email",
 ];
 
 function AgentDockStrip() {
@@ -43,13 +44,52 @@ function AgentDockStrip() {
   );
 }
 
+// F-027: Empty-state CTA when no agents exist
+function EmptyAgentsCTA({ onCreateAgent }: { onCreateAgent: () => void }) {
+  return (
+    <div className="empty-agents-cta">
+      <div className="empty-icon">✦</div>
+      <h3>Create your first agent</h3>
+      <p>Agents can automate tasks, answer questions, and control your computer.</p>
+      <button className="btn-primary" onClick={onCreateAgent}>
+        Create Agent
+      </button>
+    </div>
+  );
+}
+
 function HomeTab() {
   const [showChat, setShowChat] = useState(false);
   const [initialSuggestion, setInitialSuggestion] = useState<string | null>(null);
+  const { agents, loading: agentsLoading } = useAgents();
+  const { setActiveTab } = useAppContext();
+
+  // F-026: Dynamic suggestions from recent prompts
+  const { data: suggestions = DEFAULT_SUGGESTIONS } = useQuery({
+    queryKey: ["home-suggestions"],
+    queryFn: async (): Promise<string[]> => {
+      try {
+        const recent = JSON.parse(sessionStorage.getItem("recent_prompts") || "[]") as string[];
+        return recent.length > 0 ? recent.slice(0, 4) : DEFAULT_SUGGESTIONS;
+      } catch {
+        return DEFAULT_SUGGESTIONS;
+      }
+    },
+    staleTime: 60_000,
+  });
 
   const handleSuggestion = useCallback((suggestion: string) => {
     setInitialSuggestion(suggestion);
     setShowChat(true);
+
+    // Record this prompt for future suggestions
+    try {
+      const recent = JSON.parse(sessionStorage.getItem("recent_prompts") || "[]") as string[];
+      const updated = [suggestion, ...recent.filter((s) => s !== suggestion)].slice(0, 20);
+      sessionStorage.setItem("recent_prompts", JSON.stringify(updated));
+    } catch {
+      // non-fatal
+    }
   }, []);
 
   if (showChat) {
@@ -66,6 +106,12 @@ function HomeTab() {
   return (
     <div className="home-tab">
       <AgentDockStrip />
+
+      {/* F-027: Empty agents CTA */}
+      {!agentsLoading && agents.length === 0 && (
+        <EmptyAgentsCTA onCreateAgent={() => setActiveTab("agents")} />
+      )}
+
       <div className="hero-card">
         <h1>Hi, I'm ClickyX</h1>
         <p>Your AI companion — ask me anything about your screen.</p>
@@ -73,6 +119,8 @@ function HomeTab() {
       <button className="start-chat-btn" onClick={() => setShowChat(true)}>
         Start a conversation
       </button>
+
+      {/* F-026: Dynamic suggestion chips */}
       <div className="suggestions-grid">
         {suggestions.map((s) => (
           <button key={s} className="suggestion-chip" onClick={() => handleSuggestion(s)}>

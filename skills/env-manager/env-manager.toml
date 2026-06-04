@@ -1,0 +1,5 @@
+name = "env-manager"
+description = "Read, write, and manage environment variables and .env files"
+version = "1.0.0"
+permission_class = "filesystem"
+entry_point = "env-manager.js"

@@ -1,0 +1,5 @@
+name = "concept-explainer"
+description = "Explain technical concepts clearly with examples, analogies, and levels of detail"
+version = "1.0.0"
+permission_class = "network"
+entry_point = "concept-explainer.js"

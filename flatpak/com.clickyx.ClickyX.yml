@@ -1,0 +1,23 @@
+app-id: com.clickyx.ClickyX
+runtime: org.gnome.Platform
+runtime-version: '46'
+sdk: org.gnome.Sdk
+command: clickyx
+finish-args:
+  - --share=network
+  - --share=ipc
+  - --socket=wayland
+  - --socket=fallback-x11
+  - --device=all
+  - --talk-name=org.freedesktop.portal.Desktop
+  - --talk-name=org.a11y.Bus
+  - --filesystem=home
+modules:
+  - name: clickyx
+    buildsystem: simple
+    build-commands:
+      - install -Dm755 clickyx /app/bin/clickyx
+    sources:
+      - type: file
+        path: ../src-tauri/target/release/clickyx
+        dest-filename: clickyx

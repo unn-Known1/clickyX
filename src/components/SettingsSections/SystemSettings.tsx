@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { useAppContext } from "../../context/AppContext";
 import { useTranslation } from "react-i18next";
+import { SUPPORTED_LOCALES } from "../../i18n/index";
 
 interface LogEntry {
   timestamp: string;
@@ -120,17 +121,14 @@ function SystemSettings({ onOpenAbout }: Props) {
       <div className="setting-row">
         <label>Language</label>
         <div className="lang-selector-row">
-          {[
-            { code: "en", label: "English", flag: "🇬🇧" },
-            { code: "es", label: "Español", flag: "🇪🇸" },
-          ].map(({ code, label, flag }) => (
+          {SUPPORTED_LOCALES.map(({ code, label }) => (
             <button
               key={code}
               className={`hotkey-preset-chip ${i18n.language === code ? "active" : ""}`}
               onClick={() => i18n.changeLanguage(code)}
               title={label}
             >
-              <span className="lang-flag">{flag}</span> {label}
+              {label}
             </button>
           ))}
         </div>

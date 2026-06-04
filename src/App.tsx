@@ -1,8 +1,6 @@
-import { useState, useCallback, useEffect, lazy, Suspense, Component, ReactNode } from "react";
+import { useState, useCallback, useEffect, lazy, Suspense, Component, ReactNode, useRef } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import HomeTab from "./components/HomeTab";
-import AgentsTab from "./components/AgentsTab";
-import ConnectionsTab from "./components/ConnectionsTab";
+import { listen } from "@tauri-apps/api/event";
 import OnboardingWizard from "./components/OnboardingWizard";
 import UpdateBanner from "./components/UpdateBanner";
 import AboutDialog from "./components/AboutDialog";
@@ -14,6 +12,10 @@ import type { Tab } from "./context/AppContext";
 import "./styles/theme.css";
 import "./components/OnboardingWizard.css";
 
+// ── F-009: Lazy-load tabs ──────────────────────────────────────────────────────
+const HomeTab = lazy(() => import("./components/HomeTab"));
+const AgentsTab = lazy(() => import("./components/AgentsTab"));
+const ConnectionsTab = lazy(() => import("./components/ConnectionsTab"));
 const SettingsTab = lazy(() => import("./components/SettingsTab"));
 
 // ── Error Boundary ─────────────────────────────────────────────────────────────
@@ -80,6 +82,17 @@ const TABS: { id: Tab; label: string }[] = [
   { id: "settings",   label: "Settings" },
 ];
 
+// ── F-031: Splash Screen ───────────────────────────────────────────────────────
+function SplashScreen() {
+  return (
+    <div className="splash-screen" aria-label="Loading ClickyX">
+      <div className="splash-logo">✦</div>
+      <div className="splash-name">ClickyX</div>
+      <div className="splash-spinner" />
+    </div>
+  );
+}
+
 // ── Inner app — has access to AppContext ───────────────────────────────────────
 function AppInner() {
   const { activeTab, tabTransition, setActiveTab, toasts, dismissToast, showToast } =
@@ -89,6 +102,28 @@ function AppInner() {
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [showAbout, setShowAbout] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
+  const [panelDragOver, setPanelDragOver] = useState(false);
+  // F-031: splash only on first mount while config is loading
+  const splashShownRef = useRef(false);
+  const [showSplash, setShowSplash] = useState(true);
+
+  // Hide splash after config loads or after 1.5s
+  useEffect(() => {
+    if (!configLoading && !splashShownRef.current) {
+      splashShownRef.current = true;
+      const t = setTimeout(() => setShowSplash(false), 300);
+      return () => clearTimeout(t);
+    }
+    if (!configLoading) {
+      setShowSplash(false);
+    }
+  }, [configLoading]);
+
+  // Guarantee splash hides after 1.5s max
+  useEffect(() => {
+    const t = setTimeout(() => setShowSplash(false), 1500);
+    return () => clearTimeout(t);
+  }, []);
 
   // focus animation
   useEffect(() => {
@@ -137,6 +172,39 @@ function AppInner() {
     return () => window.removeEventListener("keydown", handler);
   }, []);
 
+  // F-015: Deep-link handler for openclicky:// URLs
+  useEffect(() => {
+    const unlisten = listen("deep-link-opened", (e) => {
+      const url = e.payload as string;
+      try {
+        const parsed = new URL(url);
+        // hostname + pathname gives us "agents", "settings/voice", etc.
+        const path = parsed.hostname + parsed.pathname;
+        const parts = path.split("/").filter(Boolean);
+        if (parts[0] === "agents") {
+          setActiveTab("agents");
+          // parts[1] could be an agent slug — stored for AgentsTab to pick up
+          if (parts[1]) {
+            sessionStorage.setItem("deep_link_agent_slug", parts[1]);
+          }
+        } else if (parts[0] === "settings") {
+          setActiveTab("settings");
+          if (parts[1]) {
+            // Signal CommandPalette/SettingsTab to open a sub-section
+            (window as Record<string, unknown>).__paletteSection = parts[1];
+          }
+        } else if (parts[0] === "connections") {
+          setActiveTab("connections");
+        } else if (parts[0] === "home") {
+          setActiveTab("home");
+        }
+      } catch (err) {
+        console.warn("[deep-link] Failed to parse URL:", url, err);
+      }
+    });
+    return () => { unlisten.then(fn => fn()); };
+  }, [setActiveTab]);
+
   const finishOnboarding = useCallback(async () => {
     setShowOnboarding(false);
     try {
@@ -156,15 +224,37 @@ function AppInner() {
     }
   }, [config, updateConfig, showToast]);
 
+  // F-009: Tab skeleton loading fallback
+  const tabFallback = (
+    <div className="tab-loading">
+      <div className="tab-skeleton" />
+    </div>
+  );
+
   const renderTabContent = () => {
     const content = (() => {
       switch (activeTab) {
-        case "home":        return <HomeTab />;
-        case "agents":      return <AgentsTab />;
-        case "connections": return <ConnectionsTab />;
+        case "home":
+          return (
+            <Suspense fallback={tabFallback}>
+              <HomeTab />
+            </Suspense>
+          );
+        case "agents":
+          return (
+            <Suspense fallback={tabFallback}>
+              <AgentsTab />
+            </Suspense>
+          );
+        case "connections":
+          return (
+            <Suspense fallback={tabFallback}>
+              <ConnectionsTab />
+            </Suspense>
+          );
         case "settings":
           return (
-            <Suspense fallback={<div className="skeleton-loader" />}>
+            <Suspense fallback={tabFallback}>
               <SettingsTab onOpenAbout={() => setShowAbout(true)} />
             </Suspense>
           );
@@ -177,10 +267,37 @@ function AppInner() {
     );
   };
 
+  if (showSplash) {
+    return <SplashScreen />;
+  }
+
   return (
     <>
       <div className={`app-container${animState ? ` panel-${animState}` : ""}`}>
         <UpdateBanner />
+
+        {/* F-010: Panel drag region / titlebar */}
+        <div className="app-titlebar" data-tauri-drag-region>
+          <div className="app-title" data-tauri-drag-region>ClickyX</div>
+          <div className="window-controls">
+            <button
+              className="window-btn"
+              onClick={() => getCurrentWindow().minimize()}
+              aria-label="Minimize window"
+              title="Minimize"
+            >
+              ─
+            </button>
+            <button
+              className="window-btn window-btn-close"
+              onClick={() => getCurrentWindow().close()}
+              aria-label="Close window"
+              title="Close"
+            >
+              ✕
+            </button>
+          </div>
+        </div>
 
         <nav className="tab-bar" role="tablist" aria-label="Main navigation">
           <div className="tab-bar-tabs">
@@ -189,6 +306,7 @@ function AppInner() {
                 key={tab.id}
                 role="tab"
                 aria-selected={activeTab === tab.id}
+                aria-current={activeTab === tab.id ? "page" : undefined}
                 aria-controls={`tabpanel-${tab.id}`}
                 id={`tab-${tab.id}`}
                 className={`tab-button ${activeTab === tab.id ? "active" : ""}`}
@@ -238,7 +356,17 @@ function AppInner() {
           id={`tabpanel-${activeTab}`}
           role="tabpanel"
           aria-labelledby={`tab-${activeTab}`}
-          className="tab-content"
+          className={`tab-content${panelDragOver ? " panel-drop-active" : ""}`}
+          onDragOver={(e) => { e.preventDefault(); setPanelDragOver(true); }}
+          onDragLeave={() => setPanelDragOver(false)}
+          onDrop={(e) => {
+            e.preventDefault();
+            setPanelDragOver(false);
+            const files = Array.from(e.dataTransfer.files);
+            if (files.length > 0) {
+              showToast(`${files.length} file(s) ready to attach`, "info");
+            }
+          }}
         >
           {renderTabContent()}
         </main>

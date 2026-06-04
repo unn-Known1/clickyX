@@ -1,0 +1,5 @@
+name = "csv-analyzer"
+description = "Load, query, filter, and generate statistics from CSV data"
+version = "1.0.0"
+permission_class = "filesystem"
+entry_point = "csv-analyzer.js"

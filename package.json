@@ -9,7 +9,8 @@
     "preview": "vite preview",
     "tauri": "tauri",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
     "@tauri-apps/api": "^2",
@@ -43,6 +44,7 @@
     "@testing-library/jest-dom": "^6",
     "@testing-library/user-event": "^14",
     "jsdom": "^26",
-    "msw": "^2"
+    "msw": "^2",
+    "@playwright/test": "^1"
   }
 }

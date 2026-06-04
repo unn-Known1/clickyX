@@ -1,0 +1,5 @@
+name = "notion"
+description = "Read and write Notion pages and databases via Notion API"
+version = "1.0.0"
+permission_class = "network"
+entry_point = "notion.js"

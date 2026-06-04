@@ -1,0 +1,5 @@
+name = "image-generator"
+description = "Generate images via DALL-E or Stable Diffusion API from text prompts"
+version = "1.0.0"
+permission_class = "network"
+entry_point = "image-generator.js"

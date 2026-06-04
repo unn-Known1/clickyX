@@ -88,3 +88,130 @@ fn load_json_skill(path: &PathBuf) -> Option<Skill> {
     let content = std::fs::read_to_string(path).ok()?;
     serde_json::from_str(&content).ok()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_load_skills_returns_vec_when_dir_missing() {
+        // The skills dir won't exist in CI; should return empty vec, not panic
+        let skills = load_skills();
+        // Should be a Vec (possibly empty) — just ensure it doesn't panic
+        let _ = skills.len();
+    }
+
+    #[test]
+    fn test_discover_skills_returns_names() {
+        let names = discover_skills();
+        // Should return a Vec<String>; may be empty in CI
+        for name in &names {
+            assert!(!name.is_empty(), "skill name should not be empty");
+        }
+    }
+
+    #[test]
+    fn test_load_skill_returns_none_when_missing() {
+        let result = load_skill("nonexistent-skill-xyz-12345");
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_skill_struct_serialization() {
+        let skill = Skill {
+            name: "test-skill".into(),
+            description: "A test skill".into(),
+            version: "1.0.0".into(),
+            permission_class: "read_only".into(),
+            entry_point: "index.js".into(),
+        };
+        let json = serde_json::to_string(&skill).expect("serialize failed");
+        assert!(json.contains("\"name\""));
+        assert!(json.contains("test-skill"));
+        assert!(json.contains("\"description\""));
+        assert!(json.contains("\"version\""));
+    }
+
+    #[test]
+    fn test_skill_deserialization_from_json() {
+        let json = r#"{
+            "name": "web-search",
+            "description": "Search the web",
+            "version": "2.1.0",
+            "permission_class": "network",
+            "entry_point": "search.js"
+        }"#;
+        let skill: Skill = serde_json::from_str(json).expect("deserialize failed");
+        assert_eq!(skill.name, "web-search");
+        assert_eq!(skill.description, "Search the web");
+        assert_eq!(skill.version, "2.1.0");
+        assert_eq!(skill.permission_class, "network");
+        assert_eq!(skill.entry_point, "search.js");
+    }
+
+    #[test]
+    fn test_skill_roundtrip_serialization() {
+        let original = Skill {
+            name: "my-skill".into(),
+            description: "Does things".into(),
+            version: "0.1.0".into(),
+            permission_class: "full_access".into(),
+            entry_point: "main.ts".into(),
+        };
+        let json = serde_json::to_string(&original).expect("serialize");
+        let restored: Skill = serde_json::from_str(&json).expect("deserialize");
+        assert_eq!(original.name, restored.name);
+        assert_eq!(original.version, restored.version);
+        assert_eq!(original.entry_point, restored.entry_point);
+    }
+
+    #[test]
+    fn test_load_skill_file_returns_none_for_unknown_extension() {
+        let path = PathBuf::from("test.yaml");
+        let result = load_skill_file(&path);
+        assert!(result.is_none(), "unknown extension should return None");
+    }
+
+    #[test]
+    fn test_load_json_skill_parses_valid_file() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let path = tmp.path().join("skill.json");
+        let json = r#"{
+            "name": "temp-skill",
+            "description": "Temporary",
+            "version": "1.0.0",
+            "permission_class": "read_only",
+            "entry_point": "index.js"
+        }"#;
+        std::fs::write(&path, json).expect("write");
+        let result = load_json_skill(&path);
+        assert!(result.is_some());
+        assert_eq!(result.unwrap().name, "temp-skill");
+    }
+
+    #[test]
+    fn test_load_json_skill_returns_none_for_invalid_json() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let path = tmp.path().join("bad.json");
+        std::fs::write(&path, "not valid json").expect("write");
+        let result = load_json_skill(&path);
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_load_toml_skill_parses_valid_file() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let path = tmp.path().join("skill.toml");
+        let toml_content = r#"
+name = "toml-skill"
+description = "A TOML skill"
+version = "1.2.3"
+permission_class = "read_only"
+entry_point = "skill.js"
+"#;
+        std::fs::write(&path, toml_content).expect("write");
+        let result = load_toml_skill(&path);
+        assert!(result.is_some());
+        assert_eq!(result.unwrap().name, "toml-skill");
+    }
+}

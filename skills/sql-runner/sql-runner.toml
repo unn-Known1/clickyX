@@ -1,0 +1,5 @@
+name = "sql-runner"
+description = "Run SQL queries against SQLite, PostgreSQL, or MySQL databases"
+version = "1.0.0"
+permission_class = "filesystem"
+entry_point = "sql-runner.js"

@@ -1,0 +1,5 @@
+name = "google-sheets"
+description = "Read and write cells, create and modify Google Sheets spreadsheets"
+version = "1.0.0"
+permission_class = "network"
+entry_point = "google-sheets.js"

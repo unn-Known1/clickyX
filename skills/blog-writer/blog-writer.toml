@@ -1,0 +1,5 @@
+name = "blog-writer"
+description = "Generate blog posts with SEO optimization and structured content"
+version = "1.0.0"
+permission_class = "network"
+entry_point = "blog-writer.js"

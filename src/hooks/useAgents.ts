@@ -1,150 +1,117 @@
-import { useState, useEffect, useCallback } from "react";
-import { invoke } from "@tauri-apps/api/core";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useEffect } from "react";
 import { listen } from "@tauri-apps/api/event";
+import { commands } from "../bindings";
+import type { AgentInfo, SkillInfo } from "../bindings";
 
-export interface AgentInfo {
-  id: string;
-  name: string;
-  slug: string;
-  state: string;
-  skills: string[];
-  created_at: string;
-  updated_at: string;
-  transcript: { role: string; content: string }[];
-}
+export type { AgentInfo, SkillInfo };
 
-export interface SkillInfo {
-  name: string;
-  description: string;
-  version: string;
-  permission_class: string;
-  entry_point: string;
-}
+const AGENTS_KEY = ["agents"];
+const SKILLS_KEY = ["skills"];
 
 export function useAgents() {
-  const [agents, setAgents] = useState<AgentInfo[]>([]);
-  const [skills, setSkills] = useState<SkillInfo[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const queryClient = useQueryClient();
 
-  const fetchAgents = useCallback(async () => {
-    try {
-      const result = await invoke<AgentInfo[]>("list_agents");
-      setAgents(result);
-    } catch (e) {
-      setAgents([]);
-      setError(String(e));
-    }
-  }, []);
+  // ── Queries ──────────────────────────────────────────────────────────────────
+  const {
+    data: agents = [],
+    isLoading: agentsLoading,
+    error: agentsError,
+  } = useQuery<AgentInfo[], Error>({
+    queryKey: AGENTS_KEY,
+    queryFn: () => commands.listAgents(),
+    refetchInterval: 5000,
+    staleTime: 4000,
+    retry: 2,
+  });
 
-  const fetchSkills = useCallback(async () => {
-    try {
-      const result = await invoke<SkillInfo[]>("list_skills");
-      setSkills(result);
-    } catch (e) {
-      setError(String(e));
-    }
-  }, []);
+  const { data: skills = [], isLoading: skillsLoading } = useQuery<SkillInfo[], Error>({
+    queryKey: SKILLS_KEY,
+    queryFn: () => commands.listSkills(),
+    staleTime: 60_000,
+    retry: 2,
+  });
 
-  // Initial load
-  useEffect(() => {
-    setLoading(true);
-    Promise.all([fetchAgents(), fetchSkills()]).finally(() => setLoading(false));
-  }, [fetchAgents, fetchSkills]);
-
-  // Live-poll every 5s so running agents update without user action
-  useEffect(() => {
-    const id = setInterval(fetchAgents, 5000);
-    return () => clearInterval(id);
-  }, [fetchAgents]);
-
-  // React to agent-state-changed events emitted by Rust
+  // ── Tauri event listener: invalidate agents on state-changed events ─────────
   useEffect(() => {
     let unlisten: (() => void) | null = null;
-    listen("agent-state-changed", () => fetchAgents())
-      .then((fn) => { unlisten = fn; });
+    listen("agent-state-changed", () => {
+      queryClient.invalidateQueries({ queryKey: AGENTS_KEY });
+    }).then((fn) => { unlisten = fn; });
     return () => { if (unlisten) unlisten(); };
-  }, [fetchAgents]);
+  }, [queryClient]);
 
-  const createAgent = useCallback(
-    async (name: string, slug: string, agentSkills: string[]) => {
-      try {
-        await invoke<AgentInfo>("create_agent", { name, slug, skills: agentSkills });
-        await fetchAgents();
-      } catch (e) {
-        setError(String(e));
-        throw e;
-      }
-    },
-    [fetchAgents],
-  );
+  // ── Mutations ─────────────────────────────────────────────────────────────────
+  const createMutation = useMutation<AgentInfo, Error, { name: string; slug: string; skills: string[] }>({
+    mutationFn: ({ name, slug, skills: agentSkills }) =>
+      commands.createAgent(name, slug, agentSkills),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: AGENTS_KEY }),
+  });
 
-  const runAgent = useCallback(
-    async (slug: string, prompt: string) => {
-      try {
-        await invoke("run_agent", { slug, prompt });
-        await fetchAgents();
-      } catch (e) {
-        setError(String(e));
-        throw e;
-      }
-    },
-    [fetchAgents],
-  );
+  const runMutation = useMutation<void, Error, { slug: string; prompt: string }>({
+    mutationFn: ({ slug, prompt }) => commands.runAgent(slug, prompt),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: AGENTS_KEY }),
+  });
 
-  const stopAgent = useCallback(
-    async (slug: string) => {
-      try {
-        await invoke("stop_agent", { slug });
-        await fetchAgents();
-      } catch (e) {
-        setError(String(e));
-        throw e;
-      }
-    },
-    [fetchAgents],
-  );
+  const stopMutation = useMutation<void, Error, string>({
+    mutationFn: (slug) => commands.stopAgent(slug),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: AGENTS_KEY }),
+  });
 
-  const archiveAgent = useCallback(
-    async (slug: string) => {
-      try {
-        await invoke("archive_agent", { slug });
-        await fetchAgents();
-      } catch (e) {
-        setError(String(e));
-        throw e;
-      }
-    },
-    [fetchAgents],
-  );
+  const archiveMutation = useMutation<void, Error, string>({
+    mutationFn: (slug) => commands.archiveAgent(slug),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: AGENTS_KEY }),
+  });
 
-  const enableSkill = useCallback(
-    async (slug: string, skillName: string) => {
-      try {
-        await invoke("enable_skill", { slug, skillName });
-        await fetchAgents();
-      } catch (e) {
-        setError(String(e));
-      }
-    },
-    [fetchAgents],
-  );
+  const enableSkillMutation = useMutation<void, Error, { slug: string; skillName: string }>({
+    mutationFn: ({ slug, skillName }) => commands.enableSkill(slug, skillName),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: AGENTS_KEY }),
+  });
 
-  const disableSkill = useCallback(
-    async (slug: string, skillName: string) => {
-      try {
-        await invoke("disable_skill", { slug, skillName });
-        await fetchAgents();
-      } catch (e) {
-        setError(String(e));
-      }
-    },
-    [fetchAgents],
-  );
+  const disableSkillMutation = useMutation<void, Error, { slug: string; skillName: string }>({
+    mutationFn: ({ slug, skillName }) => commands.disableSkill(slug, skillName),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: AGENTS_KEY }),
+  });
+
+  const attachFilesMutation = useMutation<void, Error, { slug: string; paths: string[] }>({
+    mutationFn: ({ slug, paths }) => commands.agentAttachFiles(slug, paths),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: AGENTS_KEY }),
+  });
+
+  // ── Convenience wrappers ──────────────────────────────────────────────────────
+  const createAgent = (name: string, slug: string, agentSkills: string[]) =>
+    createMutation.mutateAsync({ name, slug, skills: agentSkills });
+
+  const runAgent = (slug: string, prompt: string) =>
+    runMutation.mutateAsync({ slug, prompt });
+
+  const stopAgent = (slug: string) => stopMutation.mutateAsync(slug);
+
+  const archiveAgent = (slug: string) => archiveMutation.mutateAsync(slug);
+
+  const enableSkill = (slug: string, skillName: string) =>
+    enableSkillMutation.mutateAsync({ slug, skillName });
+
+  const disableSkill = (slug: string, skillName: string) =>
+    disableSkillMutation.mutateAsync({ slug, skillName });
+
+  const attachFiles = (slug: string, paths: string[]) =>
+    attachFilesMutation.mutateAsync({ slug, paths });
+
+  const fetchAgents = () => queryClient.invalidateQueries({ queryKey: AGENTS_KEY });
 
   return {
-    agents, skills, loading, error,
-    fetchAgents, createAgent, runAgent,
-    stopAgent, archiveAgent, enableSkill, disableSkill,
+    agents,
+    skills,
+    loading: agentsLoading || skillsLoading,
+    error: agentsError?.message ?? null,
+    fetchAgents,
+    createAgent,
+    runAgent,
+    stopAgent,
+    archiveAgent,
+    enableSkill,
+    disableSkill,
+    attachFiles,
   };
 }

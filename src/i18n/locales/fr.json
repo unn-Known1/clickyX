@@ -1,0 +1,92 @@
+{
+  "nav": {
+    "home": "Accueil",
+    "agents": "Agents",
+    "connections": "Connexions",
+    "settings": "Paramètres"
+  },
+  "home": {
+    "greeting": "Bonjour, je suis ClickyX",
+    "subtitle": "Votre assistant IA — posez-moi n'importe quelle question sur votre écran.",
+    "startChat": "Démarrer une conversation",
+    "suggestions": {
+      "help": "En quoi pouvez-vous m'aider ?",
+      "screenshot": "Prenez une capture d'écran et expliquez-la",
+      "summarize": "Résumez ce qui est affiché sur mon écran",
+      "settings": "Ouvrir les paramètres"
+    }
+  },
+  "chat": {
+    "placeholder": "Posez-moi n'importe quelle question…",
+    "placeholderImage": "Posez une question sur l'image…",
+    "send": "Envoyer",
+    "stop": "Arrêter",
+    "clear": "Effacer",
+    "empty": "Posez-moi n'importe quelle question — je peux voir votre écran et vous aider.",
+    "emptyHint": "Collez ou déposez des images pour les joindre.",
+    "copy": "Copier",
+    "copied": "Copié",
+    "retry": "Réessayer",
+    "newConversation": "Nouvelle conversation",
+    "conversations": "Conversations",
+    "noConversations": "Aucune conversation pour l'instant."
+  },
+  "agents": {
+    "title": "Agents",
+    "newAgent": "Nouvel agent",
+    "cancel": "Annuler",
+    "noAgents": "Aucun agent pour l'instant. Créez-en un pour commencer.",
+    "noMatch": "Aucun agent ne correspond.",
+    "search": "Rechercher des agents…",
+    "createAgent": "Créer un agent",
+    "namePlaceholder": "Nom de l'agent",
+    "slugPlaceholder": "Identifiant (dérivé automatiquement)",
+    "skills": "Compétences :",
+    "transcript": "Transcription",
+    "noMessages": "Aucun message pour l'instant.",
+    "run": "Exécuter",
+    "stop": "Arrêter",
+    "archive": "Archiver"
+  },
+  "settings": {
+    "title": "Paramètres",
+    "sections": {
+      "general": "Général",
+      "voice": "Voix",
+      "providers": "Fournisseurs IA",
+      "computerUse": "Utilisation de l'ordinateur",
+      "permissions": "Autorisations",
+      "agents": "Agents",
+      "automations": "Automatisations",
+      "system": "Système et journaux"
+    },
+    "save": "Enregistrer",
+    "saving": "Enregistrement…",
+    "saved": "Enregistré !"
+  },
+  "connections": {
+    "title": "Connexions et intégrations",
+    "googleWorkspace": "Google Workspace",
+    "mcpServers": "Serveurs MCP",
+    "automations": "Automatisations",
+    "noMcp": "Aucun serveur MCP configuré",
+    "noAutomations": "Aucune automatisation configurée"
+  },
+  "status": {
+    "listening": "Écoute en cours",
+    "idle": "Inactif",
+    "capturing": "Capture en cours",
+    "noCapture": "Pas de capture"
+  },
+  "common": {
+    "loading": "Chargement…",
+    "error": "Erreur",
+    "ok": "OK",
+    "cancel": "Annuler",
+    "delete": "Supprimer",
+    "remove": "Retirer",
+    "add": "Ajouter",
+    "close": "Fermer",
+    "search": "Rechercher…"
+  }
+}

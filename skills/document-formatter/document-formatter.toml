@@ -1,0 +1,5 @@
+name = "document-formatter"
+description = "Format markdown documents and convert between text formats"
+version = "1.0.0"
+permission_class = "filesystem"
+entry_point = "document-formatter.js"

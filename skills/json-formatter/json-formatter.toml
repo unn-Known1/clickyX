@@ -1,0 +1,5 @@
+name = "json-formatter"
+description = "Format, validate, query (jq-style), and transform JSON data"
+version = "1.0.0"
+permission_class = "filesystem"
+entry_point = "json-formatter.js"

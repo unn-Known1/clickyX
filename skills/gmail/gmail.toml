@@ -1,0 +1,5 @@
+name = "gmail"
+description = "Compose, read, search, reply, archive, and label Gmail messages via Gmail API"
+version = "1.0.0"
+permission_class = "network"
+entry_point = "gmail.js"

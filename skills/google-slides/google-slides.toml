@@ -1,0 +1,5 @@
+name = "google-slides"
+description = "Create and read Google Slides presentations via Slides API"
+version = "1.0.0"
+permission_class = "network"
+entry_point = "google-slides.js"

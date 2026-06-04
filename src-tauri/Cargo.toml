@@ -17,6 +17,7 @@ tauri = { version = "2", features = ["tray-icon"] }
 tauri-plugin-global-shortcut = "2"
 tauri-plugin-shell = "2"
 tauri-plugin-updater = "2"
+tauri-plugin-deep-link = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 actix-web = "4"
@@ -44,6 +45,11 @@ lazy_static = "1"
 
 [dev-dependencies]
 tempfile = "3"
+specta = { version = "2", features = ["export"], optional = true }
+specta-typescript = { version = "0.0.7", optional = true }
+
+[features]
+specta-export = ["specta", "specta-typescript"]
 
 [profile.release]
 opt-level = 3

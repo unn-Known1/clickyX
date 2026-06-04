@@ -1,0 +1,5 @@
+name = "grammar-checker"
+description = "Check and fix grammar, spelling, and writing style"
+version = "1.0.0"
+permission_class = "network"
+entry_point = "grammar-checker.js"

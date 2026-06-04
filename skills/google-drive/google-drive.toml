@@ -1,0 +1,5 @@
+name = "google-drive"
+description = "Search, upload, download, and share files in Google Drive"
+version = "1.0.0"
+permission_class = "network"
+entry_point = "google-drive.js"

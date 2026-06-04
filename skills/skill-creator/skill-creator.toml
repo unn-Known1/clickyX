@@ -1,0 +1,5 @@
+name = "skill-creator"
+description = "Interactively guide the user through creating a new ClickyX skill"
+version = "1.0.0"
+permission_class = "filesystem"
+entry_point = "skill-creator.js"

@@ -23,6 +23,7 @@ export default defineConfig({
       input: {
         main: "index.html",
         overlay: "src/overlay/index.html",
+        "agent-hud": "agent-hud.html",
       },
     },
   },

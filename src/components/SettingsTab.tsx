@@ -5,6 +5,8 @@ import AiProviderSettings from "./SettingsSections/AiProviderSettings";
 import ComputerUseSettings from "./SettingsSections/ComputerUseSettings";
 import PermissionsSettings from "./SettingsSections/PermissionsSettings";
 import SystemSettings from "./SettingsSections/SystemSettings";
+import { Icon } from "./Icon";
+import type { IconName } from "./Icon";
 
 const ModelGeneratorTab = lazy(() => import("./ModelGeneratorTab"));
 
@@ -12,16 +14,34 @@ type SettingsTabId =
   | "general" | "voice" | "providers" | "computer_use"
   | "permissions" | "agents" | "automations" | "system" | "3d_models";
 
-const SETTINGS_TABS: { id: SettingsTabId; label: string }[] = [
-  { id: "general",      label: "General" },
-  { id: "voice",        label: "Voice" },
-  { id: "providers",    label: "AI Providers" },
-  { id: "computer_use", label: "Computer Use" },
-  { id: "permissions",  label: "Permissions" },
-  { id: "agents",       label: "Agents" },
-  { id: "automations",  label: "Automations" },
-  { id: "3d_models",    label: "3D Models" },
-  { id: "system",       label: "System & Logs" },
+interface NavItem {
+  id: SettingsTabId;
+  label: string;
+  icon: IconName;
+}
+
+const SETTINGS_TABS: NavItem[] = [
+  { id: "general",      label: "General",       icon: "settings" },
+  { id: "providers",    label: "AI Providers",  icon: "ai" },
+  { id: "voice",        label: "Voice & Audio", icon: "microphone" },
+  { id: "computer_use", label: "Computer Use",  icon: "cursor" },
+  { id: "permissions",  label: "Permissions",   icon: "shield" },
+  { id: "system",       label: "System",        icon: "info" },
+  { id: "3d_models",    label: "3D Models",     icon: "cube" },
+  { id: "agents",       label: "Agents",        icon: "agents" },
+  { id: "automations",  label: "Automations",   icon: "bolt" },
+];
+
+interface NavGroup {
+  label: string;
+  items: SettingsTabId[];
+}
+
+const NAV_GROUPS: NavGroup[] = [
+  { label: "Appearance",  items: ["general"] },
+  { label: "AI & Voice",  items: ["providers", "voice"] },
+  { label: "Automation",  items: ["computer_use", "agents", "automations"] },
+  { label: "System",      items: ["permissions", "system", "3d_models"] },
 ];
 
 interface Props {
@@ -59,20 +79,33 @@ function SettingsTab({ onOpenAbout }: Props) {
     }
   }, [activeSection]);
 
+  const tabById = (id: SettingsTabId) => SETTINGS_TABS.find((t) => t.id === id)!;
+
   return (
     <div className="settings-tab">
       <h2>Settings</h2>
       <nav className="settings-nav" role="tablist" aria-label="Settings sections">
-        {SETTINGS_TABS.map((tab) => (
-          <button
-            key={tab.id}
-            role="tab"
-            aria-selected={activeSection === tab.id}
-            className={`settings-nav-btn ${activeSection === tab.id ? "active" : ""}`}
-            onClick={() => handleSectionChange(tab.id)}
-          >
-            {tab.label}
-          </button>
+        {NAV_GROUPS.map((group) => (
+          <div key={group.label} className="settings-nav-group">
+            <span className="settings-nav-group-label">{group.label}</span>
+            {group.items.map((id) => {
+              const tab = tabById(id);
+              return (
+                <button
+                  key={tab.id}
+                  role="tab"
+                  aria-selected={activeSection === tab.id}
+                  className={`settings-nav-btn ${activeSection === tab.id ? "active" : ""}`}
+                  onClick={() => handleSectionChange(tab.id)}
+                >
+                  <span className="settings-nav-btn-icon">
+                    <Icon name={tab.icon} size={12} />
+                    {tab.label}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
         ))}
       </nav>
       <div className="settings-content" ref={contentRef}>

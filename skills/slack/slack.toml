@@ -1,0 +1,5 @@
+name = "slack"
+description = "Send messages, read channels, and manage Slack via Slack Web API"
+version = "1.0.0"
+permission_class = "network"
+entry_point = "slack.js"

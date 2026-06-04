@@ -1,0 +1,5 @@
+name = "file-finder"
+description = "Advanced file search with content, name, date, and size filters"
+version = "1.0.0"
+permission_class = "filesystem"
+entry_point = "file-finder.js"

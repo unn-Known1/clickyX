@@ -2,22 +2,34 @@ import { useState, useCallback } from "react";
 import { useAgents, AgentInfo, SkillInfo } from "../hooks/useAgents";
 import { agentStatusColor, agentStatusLabel } from "../utils/agentStatus";
 import { useAppContext } from "../context/AppContext";
+import { commands } from "../bindings";
+import { SkeletonList } from "./SkeletonLoader";
+import { Sounds } from "../utils/sounds";
 
 function AgentCard({
-  agent, selected, onSelect, onRun, onStop, onArchive,
+  agent, selected, onSelect, onRun, onStop, onArchive, onPopOut, dragOver,
+  onDragOver, onDragLeave, onDrop,
 }: {
   agent: AgentInfo; selected: boolean;
   onSelect: () => void; onRun: () => void; onStop: () => void; onArchive: () => void;
+  onPopOut: () => void;
+  dragOver: boolean;
+  onDragOver: (e: React.DragEvent) => void;
+  onDragLeave: () => void;
+  onDrop: (e: React.DragEvent) => void;
 }) {
   const label = agentStatusLabel(agent.state);
   return (
     <div
-      className={`agent-card ${selected ? "agent-card-selected" : ""}`}
+      className={`agent-card ${selected ? "agent-card-selected" : ""} ${dragOver ? "drag-over" : ""}`}
       onClick={onSelect}
       role="button"
       aria-pressed={selected}
       tabIndex={0}
       onKeyDown={(e) => e.key === "Enter" && onSelect()}
+      onDragOver={onDragOver}
+      onDragLeave={onDragLeave}
+      onDrop={onDrop}
     >
       <div className="agent-card-header">
         <span className="agent-status-dot" style={{ backgroundColor: agentStatusColor(agent.state) }} />
@@ -37,6 +49,16 @@ function AgentCard({
         {label !== "archived" && (
           <button className="agent-btn agent-btn-archive" onClick={(e) => { e.stopPropagation(); onArchive(); }}>Archive</button>
         )}
+        {label === "running" && (
+          <button
+            className="agent-btn agent-btn-popout"
+            onClick={(e) => { e.stopPropagation(); onPopOut(); }}
+            title="Pop out HUD"
+            aria-label="Open agent HUD in floating window"
+          >
+            ↗ HUD
+          </button>
+        )}
       </div>
     </div>
   );
@@ -51,7 +73,6 @@ function CreateAgentForm({ skills, onCreate }: {
   const [selectedSkills, setSelectedSkills] = useState<string[]>([]);
   const [skillSearch, setSkillSearch] = useState("");
 
-  // Auto-derive slug from name
   const handleNameChange = (v: string) => {
     setName(v);
     setSlug(v.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, ""));
@@ -182,7 +203,7 @@ function AgentDetail({
 function AgentsTab() {
   const {
     agents, skills, loading, error,
-    createAgent, runAgent, stopAgent, archiveAgent, enableSkill, disableSkill,
+    createAgent, runAgent, stopAgent, archiveAgent, enableSkill, disableSkill, attachFiles,
   } = useAgents();
 
   const { showToast } = useAppContext();
@@ -190,6 +211,9 @@ function AgentsTab() {
   const [showCreate, setShowCreate] = useState(false);
   const [promptInput, setPromptInput] = useState<Record<string, string>>({});
   const [agentSearch, setAgentSearch] = useState("");
+
+  // ── Drag-drop per-card state ────────────────────────────────────────────────
+  const [dragOverSlug, setDragOverSlug] = useState<string | null>(null);
 
   const selectedAgent = agents.find((a) => a.slug === selectedSlug) ?? null;
 
@@ -207,9 +231,29 @@ function AgentsTab() {
     const prompt = promptInput[slug] || "Execute your available skills and report back.";
     try {
       await runAgent(slug, prompt);
+      void Sounds.agentLaunch();
       showToast("Agent started", "success");
     } catch (e) {
       showToast(String(e), "error");
+    }
+  };
+
+  const handlePopOut = async (slug: string) => {
+    try {
+      await commands.openAgentHud(slug);
+    } catch (e) {
+      showToast(`Failed to open HUD: ${String(e)}`, "error");
+    }
+  };
+
+  const handleFileDrop = async (slug: string, files: File[]) => {
+    if (files.length === 0) return;
+    const paths = files.map((f) => (f as File & { path?: string }).path || f.name);
+    try {
+      await attachFiles(slug, paths);
+      showToast(`Attached ${files.length} file(s) to agent`, "success");
+    } catch (e) {
+      showToast(`Failed to attach files: ${String(e)}`, "error");
     }
   };
 
@@ -220,7 +264,7 @@ function AgentsTab() {
   );
 
   if (error) return <div className="agents-tab"><div className="agent-error">Error: {error}</div></div>;
-  if (loading) return <div className="agents-tab"><div className="agent-loading">Loading agents…</div></div>;
+  if (loading) return <div className="agents-tab" style={{ padding: 12 }}><SkeletonList count={3} /></div>;
 
   return (
     <div className="agents-tab">
@@ -259,6 +303,18 @@ function AgentsTab() {
                 onRun={() => { setSelectedSlug(agent.slug); handleRun(agent.slug); }}
                 onStop={() => stopAgent(agent.slug)}
                 onArchive={() => archiveAgent(agent.slug)}
+                onPopOut={() => handlePopOut(agent.slug)}
+                dragOver={dragOverSlug === agent.slug}
+                onDragOver={(e) => { e.preventDefault(); setDragOverSlug(agent.slug); }}
+                onDragLeave={() => setDragOverSlug(null)}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  setDragOverSlug(null);
+                  const files = Array.from(e.dataTransfer.files);
+                  if (files.length > 0) {
+                    handleFileDrop(agent.slug, files);
+                  }
+                }}
               />
             ))
           )}

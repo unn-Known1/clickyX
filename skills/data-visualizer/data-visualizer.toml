@@ -1,0 +1,5 @@
+name = "data-visualizer"
+description = "Generate ASCII and SVG charts from numeric data"
+version = "1.0.0"
+permission_class = "safe"
+entry_point = "data-visualizer.js"

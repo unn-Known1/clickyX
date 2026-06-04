@@ -1,0 +1,5 @@
+name = "discord"
+description = "Send messages and read channels via Discord Bot API"
+version = "1.0.0"
+permission_class = "network"
+entry_point = "discord.js"

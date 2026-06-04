@@ -3,6 +3,7 @@ pub mod anthropic;
 pub mod openai;
 pub mod streaming;
 pub mod guidance;
+pub mod app_contexts;
 
 use serde::{Deserialize, Serialize};
 

@@ -1,0 +1,5 @@
+name = "flashcard-maker"
+description = "Create Anki-compatible flashcards from text content"
+version = "1.0.0"
+permission_class = "network"
+entry_point = "flashcard-maker.js"

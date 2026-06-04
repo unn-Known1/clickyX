@@ -1,0 +1,5 @@
+name = "system-monitor"
+description = "Monitor CPU, memory, disk usage and running processes"
+version = "1.0.0"
+permission_class = "system"
+entry_point = "system-monitor.js"

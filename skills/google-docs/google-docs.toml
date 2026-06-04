@@ -1,0 +1,5 @@
+name = "google-docs"
+description = "Create, read, and edit Google Docs documents via Google Docs API"
+version = "1.0.0"
+permission_class = "network"
+entry_point = "google-docs.js"

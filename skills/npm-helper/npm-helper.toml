@@ -1,0 +1,5 @@
+name = "npm-helper"
+description = "Run npm scripts, check outdated packages, audit for vulnerabilities, and manage dependencies"
+version = "1.0.0"
+permission_class = "system"
+entry_point = "npm-helper.js"

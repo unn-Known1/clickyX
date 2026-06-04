@@ -1,0 +1,5 @@
+name = "agent-builder"
+description = "Guide users in building custom ClickyX agents with skills and configuration"
+version = "1.0.0"
+permission_class = "filesystem"
+entry_point = "agent-builder.js"

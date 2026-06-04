@@ -1,0 +1,5 @@
+name = "telegram"
+description = "Send and receive messages via Telegram Bot API"
+version = "1.0.0"
+permission_class = "network"
+entry_point = "telegram.js"

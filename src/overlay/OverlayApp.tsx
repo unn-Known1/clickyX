@@ -50,6 +50,10 @@ interface AgentDockState { items: AgentDockItem[]; position: string; }
 interface AnimatedCursor extends CursorState { currentX: number; currentY: number; }
 interface StreamingCaption extends CaptionState { revealedChars: number; done: boolean; }
 interface CalibrationState { active: boolean; x: number; y: number; w: number; h: number; }
+interface AudioLevelPayload { rms: number; peak: number; bars: number[]; }
+// P-005: HIGHLIGHT and SHAPE annotation types
+interface HighlightState { id: string; x: number; y: number; w: number; h: number; label?: string; }
+interface ShapeState { id: string; shapeType: "arrow" | "curve"; x1: number; y1: number; x2: number; y2: number; label?: string; }
 
 // ── Animation helpers ─────────────────────────────────────────────────────────
 function quadraticBezier(t: number, p0: number, p1: number, p2: number): number {
@@ -94,15 +98,64 @@ function Spinner({ accent }: { accent: string }) {
   );
 }
 
+// ── P-006: Real waveform data ─────────────────────────────────────────────────
 function Waveform({ active, accent }: { active: boolean; accent: string }) {
   const [bars, setBars] = useState<number[]>(Array(20).fill(8));
   const frameRef = useRef<number>(0);
+  const lastRealDataRef = useRef<number>(0);
+  const fallbackTimerRef = useRef<number>(0);
+
   useEffect(() => {
-    if (!active) { setBars(Array(20).fill(8)); return; }
-    function animate() { setBars(Array(20).fill(0).map(() => 4 + Math.random() * 28)); frameRef.current = requestAnimationFrame(animate); }
-    frameRef.current = requestAnimationFrame(animate);
-    return () => cancelAnimationFrame(frameRef.current);
+    if (!active) {
+      setBars(Array(20).fill(8));
+      cancelAnimationFrame(frameRef.current);
+      clearTimeout(fallbackTimerRef.current);
+      return;
+    }
+
+    // Listen for real audio level updates from Rust
+    let cancelled = false;
+    const unlistenRef: { fn: (() => void) | null } = { fn: null };
+
+    (async () => {
+      const unsub = await listen<AudioLevelPayload>("audio-level-update", (e) => {
+        if (cancelled) return;
+        const { bars: realBars } = e.payload;
+        if (realBars && realBars.length > 0) {
+          lastRealDataRef.current = Date.now();
+          // Normalize to 4..32 range
+          const maxVal = Math.max(...realBars, 1);
+          setBars(realBars.map((v) => 4 + (v / maxVal) * 28));
+        }
+      });
+      if (!cancelled) unlistenRef.fn = unsub;
+    })();
+
+    // Fallback: use random animation when no real data for 500ms
+    function checkFallback() {
+      if (!active || cancelled) return;
+      const elapsed = Date.now() - lastRealDataRef.current;
+      if (elapsed > 500) {
+        // No real data recently — animate randomly
+        setBars(Array(20).fill(0).map(() => 4 + Math.random() * 28));
+        frameRef.current = requestAnimationFrame(checkFallback);
+      } else {
+        // Real data is flowing — check again shortly
+        fallbackTimerRef.current = window.setTimeout(checkFallback, 100);
+      }
+    }
+
+    // Start fallback loop immediately (will auto-stop when real data arrives)
+    frameRef.current = requestAnimationFrame(checkFallback);
+
+    return () => {
+      cancelled = true;
+      cancelAnimationFrame(frameRef.current);
+      clearTimeout(fallbackTimerRef.current);
+      if (unlistenRef.fn) unlistenRef.fn();
+    };
   }, [active]);
+
   if (!active) return null;
   return (
     <div className="waveform-container">
@@ -161,6 +214,128 @@ function CalibrationBox({ cal, accent }: { cal: CalibrationState; accent: string
   );
 }
 
+// ── F-014: Always-Listening Indicator ─────────────────────────────────────────
+function AlwaysListeningIndicator({ accent }: { accent: string }) {
+  return (
+    <div
+      className="always-listening-indicator"
+      aria-label="Always-on voice mode active"
+      title="Always-on listening mode active"
+    >
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+        <rect x="9" y="2" width="6" height="13" rx="3" fill={accent} opacity="0.9" />
+        <path
+          d="M5 10a7 7 0 0 0 14 0"
+          stroke={accent}
+          strokeWidth="2"
+          strokeLinecap="round"
+          fill="none"
+        />
+        <line x1="12" y1="17" x2="12" y2="21" stroke={accent} strokeWidth="2" strokeLinecap="round" />
+        <line x1="9" y1="21" x2="15" y2="21" stroke={accent} strokeWidth="2" strokeLinecap="round" />
+      </svg>
+    </div>
+  );
+}
+
+// ── P-005: HighlightOverlay ───────────────────────────────────────────────────
+function HighlightOverlay({ highlights, accent }: { highlights: HighlightState[]; accent: string }) {
+  if (highlights.length === 0) return null;
+  return (
+    <>
+      {highlights.map((h) => (
+        <div
+          key={h.id}
+          className="highlight-overlay"
+          style={{
+            left: h.x,
+            top: h.y,
+            width: h.w,
+            height: h.h,
+            background: `rgba(255, 220, 0, 0.25)`,
+            borderColor: accent,
+          }}
+          aria-hidden="true"
+        >
+          {h.label && <span className="overlay-label">{h.label}</span>}
+        </div>
+      ))}
+    </>
+  );
+}
+
+// ── P-005: ShapeOverlay (arrow / curve) ───────────────────────────────────────
+function ShapeOverlay({ shapes, accent }: { shapes: ShapeState[]; accent: string }) {
+  if (shapes.length === 0) return null;
+  return (
+    <svg
+      className="shape-overlay-svg"
+      style={{ position: "fixed", top: 0, left: 0, width: "100%", height: "100%", pointerEvents: "none", overflow: "visible", zIndex: 32 }}
+      aria-hidden="true"
+    >
+      <defs>
+        <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="10" refY="3.5" orient="auto">
+          <polygon points="0 0, 10 3.5, 0 7" fill={accent} />
+        </marker>
+      </defs>
+      {shapes.map((s) => {
+        if (s.shapeType === "arrow") {
+          return (
+            <g key={s.id} className="shape-arrow">
+              <line
+                x1={s.x1} y1={s.y1} x2={s.x2} y2={s.y2}
+                stroke={accent}
+                strokeWidth="2.5"
+                strokeLinecap="round"
+                markerEnd="url(#arrowhead)"
+              />
+              {s.label && (
+                <text
+                  x={(s.x1 + s.x2) / 2 + 6}
+                  y={(s.y1 + s.y2) / 2 - 6}
+                  fill="#fff"
+                  fontSize="11"
+                  style={{ paintOrder: "stroke", stroke: "rgba(0,0,0,0.7)", strokeWidth: 3 }}
+                >
+                  {s.label}
+                </text>
+              )}
+            </g>
+          );
+        } else {
+          // Bezier curve: control point arcs up between the two endpoints
+          const cx = (s.x1 + s.x2) / 2;
+          const cy = Math.min(s.y1, s.y2) - 60;
+          return (
+            <g key={s.id} className="shape-curve">
+              <path
+                d={`M ${s.x1} ${s.y1} Q ${cx} ${cy} ${s.x2} ${s.y2}`}
+                fill="none"
+                stroke={accent}
+                strokeWidth="2.5"
+                strokeLinecap="round"
+                strokeDasharray="6 3"
+              />
+              {s.label && (
+                <text
+                  x={cx}
+                  y={cy - 8}
+                  textAnchor="middle"
+                  fill="#fff"
+                  fontSize="11"
+                  style={{ paintOrder: "stroke", stroke: "rgba(0,0,0,0.7)", strokeWidth: 3 }}
+                >
+                  {s.label}
+                </text>
+              )}
+            </g>
+          );
+        }
+      })}
+    </svg>
+  );
+}
+
 // ── Main overlay component ────────────────────────────────────────────────────
 function OverlayAppInner() {
   const { w, h } = safeWindowSize();
@@ -172,43 +347,74 @@ function OverlayAppInner() {
   const [captions, setCaptions] = useState<CaptionState[]>([]);
   const [streamingCaptions, setStreamingCaptions] = useState<StreamingCaption[]>([]);
   const [glows, setGlows] = useState<GlowState[]>([]);
+  const [highlights, setHighlights] = useState<HighlightState[]>([]);
+  const [shapes, setShapes] = useState<ShapeState[]>([]);
   const [calibration, setCalibration] = useState<CalibrationState>({ active: false, x: 0, y: 0, w: 0, h: 0 });
   const [dock, setDock] = useState<AgentDockState | null>(null);
   const [processing, setProcessing] = useState(false);
   const [waveformActive, setWaveformActive] = useState(false);
   const [accent, setAccent] = useState<string>(DEFAULT_ACCENT);
 
+  // F-014: always-on voice indicator
+  const [alwaysListening, setAlwaysListening] = useState(false);
+
   const animRefs = useRef<Record<string, () => void>>({});
   const [petPos, setPetPos] = useState({ x: w / 2, y: h / 2 });
   const petTarget = useRef({ x: w / 2, y: h / 2 });
-  const petFrame = useRef<number>(0);
+  const petRafRef = useRef<number>(0);
   const streamTimers = useRef<Record<string, number>>({});
 
-  const updatePet = useCallback(() => {
-    setPetPos(prev => ({
-      x: prev.x + (petTarget.current.x - prev.x) * 0.08,
-      y: prev.y + (petTarget.current.y - prev.y) * 0.08,
-    }));
-    petFrame.current = requestAnimationFrame(updatePet);
+  // F-019: streaming caption stale-closure fix
+  const streamingRef = useRef<StreamingCaption | null>(null);
+
+  // F-020: RAF-based pet animation with visibility pause
+  const scheduleNextPetFrame = useCallback(() => {
+    petRafRef.current = requestAnimationFrame(() => {
+      setPetPos(prev => ({
+        x: prev.x + (petTarget.current.x - prev.x) * 0.08,
+        y: prev.y + (petTarget.current.y - prev.y) * 0.08,
+      }));
+      scheduleNextPetFrame();
+    });
   }, []);
 
   useEffect(() => {
-    petFrame.current = requestAnimationFrame(updatePet);
-    return () => cancelAnimationFrame(petFrame.current);
-  }, [updatePet]);
+    scheduleNextPetFrame();
+    return () => cancelAnimationFrame(petRafRef.current);
+  }, [scheduleNextPetFrame]);
 
+  // F-020: Pause RAF when overlay is hidden
+  useEffect(() => {
+    const handleVisibility = () => {
+      if (document.hidden) {
+        cancelAnimationFrame(petRafRef.current);
+      } else {
+        scheduleNextPetFrame();
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibility);
+    return () => document.removeEventListener("visibilitychange", handleVisibility);
+  }, [scheduleNextPetFrame]);
+
+  // F-019: startStreamingCaption uses ref to avoid stale closure
   const startStreamingCaption = useCallback((cap: CaptionState) => {
     const id = `stream-${Date.now()}-${Math.random()}`;
     const entry: StreamingCaption = { ...cap, revealedChars: 0, done: false };
+    streamingRef.current = entry;
     setStreamingCaptions(prev => [...prev.slice(-10), entry]);
     let charIndex = 0;
 
     function revealNext() {
+      // Use the ref to get updated text length rather than captured cap
+      const currentCap = streamingRef.current;
+      const textLen = currentCap?.text.length ?? cap.text.length;
       setStreamingCaptions(prev =>
-        prev.map(s => s === entry ? { ...s, revealedChars: Math.min(s.revealedChars + 1, cap.text.length) } : s),
+        prev.map(s =>
+          s === entry ? { ...s, revealedChars: Math.min(s.revealedChars + 1, cap.text.length) } : s,
+        ),
       );
       charIndex++;
-      if (charIndex <= cap.text.length) {
+      if (charIndex <= textLen) {
         const isWordBoundary = cap.text[charIndex] === " " || cap.text[charIndex] === undefined;
         streamTimers.current[id] = window.setTimeout(revealNext, isWordBoundary ? 200 : 30);
       } else {
@@ -220,94 +426,185 @@ function OverlayAppInner() {
     streamTimers.current[id] = window.setTimeout(revealNext, 30);
   }, []);
 
+  // F-018: Proper async listener cleanup with cancellation flag
   useEffect(() => {
-    const unlisteners: (() => void)[] = [];
+    let cancelled = false;
+    const unlisten: (() => void)[] = [];
 
-    listen<CursorState>("show-cursor", (e) => {
-      const c = e.payload;
-      if (c.animation && c.animation !== "none" && c.fromX != null && c.fromY != null) {
-        const id = c.id;
-        if (animRefs.current[id]) animRefs.current[id]();
-        setAnimatedCursors(prev => ({ ...prev, [id]: { ...c, currentX: c.fromX!, currentY: c.fromY! } }));
-        animRefs.current[id] = animateCursorArc(
-          c,
-          (x, y) => setAnimatedCursors(prev => prev[id] ? { ...prev, [id]: { ...prev[id], currentX: x, currentY: y } } : prev),
-          () => { setAnimatedCursors(prev => { const n = { ...prev }; delete n[id]; return n; }); delete animRefs.current[id]; },
-          350,
-        );
-      } else {
-        setCursors(prev => [...prev.filter(c2 => c2.id !== c.id), c]);
-      }
-    }).then(fn => unlisteners.push(fn));
+    (async () => {
+      // show-cursor
+      const u1 = await listen<CursorState>("show-cursor", (e) => {
+        if (cancelled) return;
+        const c = e.payload;
+        if (c.animation && c.animation !== "none" && c.fromX != null && c.fromY != null) {
+          const id = c.id;
+          if (animRefs.current[id]) animRefs.current[id]();
+          setAnimatedCursors(prev => ({ ...prev, [id]: { ...c, currentX: c.fromX!, currentY: c.fromY! } }));
+          animRefs.current[id] = animateCursorArc(
+            c,
+            (x, y) => setAnimatedCursors(prev => prev[id] ? { ...prev, [id]: { ...prev[id], currentX: x, currentY: y } } : prev),
+            () => { setAnimatedCursors(prev => { const n = { ...prev }; delete n[id]; return n; }); delete animRefs.current[id]; },
+            350,
+          );
+        } else {
+          setCursors(prev => [...prev.filter(c2 => c2.id !== c.id), c]);
+        }
+      });
+      if (!cancelled) unlisten.push(u1);
 
-    listen("clear-overlays", () => {
-      setCursors([]); setAnimatedCursors({}); setRects([]); setScribbles([]);
-      setCaptions([]); setStreamingCaptions([]); setGlows([]);
-      setDock(null); setProcessing(false); setWaveformActive(false);
-      setCalibration({ active: false, x: 0, y: 0, w: 0, h: 0 });
-      Object.values(streamTimers.current).forEach(clearTimeout);
-      streamTimers.current = {};
-      Object.values(animRefs.current).forEach(cancel => cancel());
-      animRefs.current = {};
-    }).then(fn => unlisteners.push(fn));
+      // clear-overlays
+      const u2 = await listen("clear-overlays", () => {
+        if (cancelled) return;
+        setCursors([]); setAnimatedCursors({}); setRects([]); setScribbles([]);
+        setCaptions([]); setStreamingCaptions([]); setGlows([]);
+        setHighlights([]); setShapes([]);
+        setDock(null); setProcessing(false); setWaveformActive(false);
+        setCalibration({ active: false, x: 0, y: 0, w: 0, h: 0 });
+        Object.values(streamTimers.current).forEach(clearTimeout);
+        streamTimers.current = {};
+        Object.values(animRefs.current).forEach(cancel => cancel());
+        animRefs.current = {};
+      });
+      if (!cancelled) unlisten.push(u2);
 
-    listen<RectState>("show-rect", (e) => {
-      setRects(prev => [...prev.filter(r => r.id !== e.payload.id), e.payload]);
-    }).then(fn => unlisteners.push(fn));
+      // show-rect
+      const u3 = await listen<RectState>("show-rect", (e) => {
+        if (cancelled) return;
+        setRects(prev => [...prev.filter(r => r.id !== e.payload.id), e.payload]);
+      });
+      if (!cancelled) unlisten.push(u3);
 
-    listen<ScribbleState>("show-scribble", (e) => {
-      setScribbles(prev => [...prev.slice(-50), e.payload]);
-    }).then(fn => unlisteners.push(fn));
+      // show-scribble
+      const u4 = await listen<ScribbleState>("show-scribble", (e) => {
+        if (cancelled) return;
+        setScribbles(prev => [...prev.slice(-50), e.payload]);
+      });
+      if (!cancelled) unlisten.push(u4);
 
-    listen<CaptionState>("show-caption", (e) => {
-      const cap = e.payload;
-      if (cap.text && cap.text.length > 10) startStreamingCaption(cap);
-      else setCaptions(prev => [...prev.slice(-50), cap]);
-    }).then(fn => unlisteners.push(fn));
+      // show-caption
+      const u5 = await listen<CaptionState>("show-caption", (e) => {
+        if (cancelled) return;
+        const cap = e.payload;
+        if (cap.text && cap.text.length > 10) startStreamingCaption(cap);
+        else setCaptions(prev => [...prev.slice(-50), cap]);
+      });
+      if (!cancelled) unlisten.push(u5);
 
-    // Active-control glow
-    listen<GlowState>("show-glow", (e) => {
-      setGlows(prev => [...prev.filter(g => g.id !== e.payload.id), e.payload]);
-    }).then(fn => unlisteners.push(fn));
+      // show-glow
+      const u6 = await listen<GlowState>("show-glow", (e) => {
+        if (cancelled) return;
+        setGlows(prev => [...prev.filter(g => g.id !== e.payload.id), e.payload]);
+      });
+      if (!cancelled) unlisten.push(u6);
 
-    listen<{ id: string }>("hide-glow", (e) => {
-      setGlows(prev => prev.filter(g => g.id !== e.payload.id));
-    }).then(fn => unlisteners.push(fn));
+      // hide-glow
+      const u7 = await listen<{ id: string }>("hide-glow", (e) => {
+        if (cancelled) return;
+        setGlows(prev => prev.filter(g => g.id !== e.payload.id));
+      });
+      if (!cancelled) unlisten.push(u7);
 
-    // Calibration
-    listen<{ x: number; y: number; w: number; h: number }>("calibration-start", (e) => {
-      setCalibration({ active: true, ...e.payload });
-    }).then(fn => unlisteners.push(fn));
+      // calibration-start
+      const u8 = await listen<{ x: number; y: number; w: number; h: number }>("calibration-start", (e) => {
+        if (cancelled) return;
+        setCalibration({ active: true, ...e.payload });
+      });
+      if (!cancelled) unlisten.push(u8);
 
-    listen("calibration-end", () => {
-      setCalibration({ active: false, x: 0, y: 0, w: 0, h: 0 });
-    }).then(fn => unlisteners.push(fn));
+      // calibration-end
+      const u9 = await listen("calibration-end", () => {
+        if (cancelled) return;
+        setCalibration({ active: false, x: 0, y: 0, w: 0, h: 0 });
+      });
+      if (!cancelled) unlisten.push(u9);
 
-    listen<AgentDockState>("show-agent-dock", (e) => { setDock(e.payload); }).then(fn => unlisteners.push(fn));
-    listen("hide-agent-dock", () => { setDock(null); }).then(fn => unlisteners.push(fn));
+      // show-agent-dock
+      const u10 = await listen<AgentDockState>("show-agent-dock", (e) => {
+        if (cancelled) return;
+        setDock(e.payload);
+      });
+      if (!cancelled) unlisten.push(u10);
 
-    listen<string>("accent-changed", (e) => {
-      if (typeof e.payload === "string" && e.payload.startsWith("#")) setAccent(e.payload);
-    }).then(fn => unlisteners.push(fn));
+      // hide-agent-dock
+      const u11 = await listen("hide-agent-dock", () => {
+        if (cancelled) return;
+        setDock(null);
+      });
+      if (!cancelled) unlisten.push(u11);
 
-    listen("processing-start", () => setProcessing(true)).then(fn => unlisteners.push(fn));
-    listen("processing-end", () => setProcessing(false)).then(fn => unlisteners.push(fn));
-    listen("waveform-start", () => setWaveformActive(true)).then(fn => unlisteners.push(fn));
-    listen("waveform-end", () => setWaveformActive(false)).then(fn => unlisteners.push(fn));
+      // accent-changed
+      const u12 = await listen<string>("accent-changed", (e) => {
+        if (cancelled) return;
+        if (typeof e.payload === "string" && e.payload.startsWith("#")) setAccent(e.payload);
+      });
+      if (!cancelled) unlisten.push(u12);
 
-    listen("lifecycle-event", (e: { payload: { action: string; id: string; state: string } }) => {
-      const { id, state } = e.payload;
-      if (state === "completed" || state === "missed") {
-        setCursors(prev => prev.filter(c => c.id !== id));
-        setRects(prev => prev.filter(r => r.id !== id));
-        setGlows(prev => prev.filter(g => g.id !== id));
-      }
-    }).then(fn => unlisteners.push(fn));
+      // processing-start / processing-end
+      const u13 = await listen("processing-start", () => { if (!cancelled) setProcessing(true); });
+      if (!cancelled) unlisten.push(u13);
+
+      const u14 = await listen("processing-end", () => { if (!cancelled) setProcessing(false); });
+      if (!cancelled) unlisten.push(u14);
+
+      // waveform-start / waveform-end
+      const u15 = await listen("waveform-start", () => { if (!cancelled) setWaveformActive(true); });
+      if (!cancelled) unlisten.push(u15);
+
+      const u16 = await listen("waveform-end", () => { if (!cancelled) setWaveformActive(false); });
+      if (!cancelled) unlisten.push(u16);
+
+      // lifecycle-event
+      const u17 = await listen("lifecycle-event", (e: { payload: { action: string; id: string; state: string } }) => {
+        if (cancelled) return;
+        const { id, state } = e.payload;
+        if (state === "completed" || state === "missed") {
+          setCursors(prev => prev.filter(c => c.id !== id));
+          setRects(prev => prev.filter(r => r.id !== id));
+          setGlows(prev => prev.filter(g => g.id !== id));
+        }
+      });
+      if (!cancelled) unlisten.push(u17);
+
+      // F-014: always-on-state-changed
+      const u18 = await listen<{ active: boolean }>("always-on-state-changed", (e) => {
+        if (cancelled) return;
+        setAlwaysListening(e.payload.active);
+      });
+      if (!cancelled) unlisten.push(u18);
+
+      // P-005: show-highlight
+      const u19 = await listen<HighlightState>("show-highlight", (e) => {
+        if (cancelled) return;
+        setHighlights(prev => [...prev.filter(h => h.id !== e.payload.id), e.payload]);
+      });
+      if (!cancelled) unlisten.push(u19);
+
+      // P-005: hide-highlight
+      const u20 = await listen<{ id: string }>("hide-highlight", (e) => {
+        if (cancelled) return;
+        setHighlights(prev => prev.filter(h => h.id !== e.payload.id));
+      });
+      if (!cancelled) unlisten.push(u20);
+
+      // P-005: show-shape
+      const u21 = await listen<ShapeState>("show-shape", (e) => {
+        if (cancelled) return;
+        setShapes(prev => [...prev.filter(s => s.id !== e.payload.id), e.payload]);
+      });
+      if (!cancelled) unlisten.push(u21);
+
+      // P-005: hide-shape
+      const u22 = await listen<{ id: string }>("hide-shape", (e) => {
+        if (cancelled) return;
+        setShapes(prev => prev.filter(s => s.id !== e.payload.id));
+      });
+      if (!cancelled) unlisten.push(u22);
+    })();
 
     const onMouseMove = (e: MouseEvent) => { petTarget.current = { x: e.clientX, y: e.clientY }; };
     window.addEventListener("mousemove", onMouseMove);
 
-    // Update pet position base on window resize
+    // Update pet position based on window resize
     const onResize = () => {
       const { w: nw, h: nh } = safeWindowSize();
       petTarget.current = { x: nw / 2, y: nh / 2 };
@@ -315,13 +612,14 @@ function OverlayAppInner() {
     window.addEventListener("resize", onResize);
 
     return () => {
+      cancelled = true;
       Object.values(streamTimers.current).forEach(clearTimeout);
       streamTimers.current = {};
       Object.values(animRefs.current).forEach(cancel => cancel());
       animRefs.current = {};
       window.removeEventListener("mousemove", onMouseMove);
       window.removeEventListener("resize", onResize);
-      unlisteners.forEach(fn => fn());
+      unlisten.forEach(fn => fn());
     };
   }, [startStreamingCaption]);
 
@@ -330,6 +628,9 @@ function OverlayAppInner() {
       className="overlay-container"
       style={{ ["--accent" as never]: accent } as React.CSSProperties}
     >
+      {/* F-014: Always-listening indicator — top-right corner */}
+      {alwaysListening && <AlwaysListeningIndicator accent={accent} />}
+
       {/* Pet sprite — hidden during calibration */}
       {!calibration.active && (
         <div className="pet-sprite" style={{ left: petPos.x, top: petPos.y - 30 }}>
@@ -359,6 +660,12 @@ function OverlayAppInner() {
 
       {/* Active-control glow */}
       <GlowOverlay glows={glows} accent={accent} />
+
+      {/* P-005: Highlight overlays */}
+      <HighlightOverlay highlights={highlights} accent={accent} />
+
+      {/* P-005: Shape overlays (arrows / curves) */}
+      <ShapeOverlay shapes={shapes} accent={accent} />
 
       {rects.map(r => (
         <div

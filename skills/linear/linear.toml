@@ -1,0 +1,5 @@
+name = "linear"
+description = "Create and update Linear issues and projects via Linear API"
+version = "1.0.0"
+permission_class = "network"
+entry_point = "linear.js"

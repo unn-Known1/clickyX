@@ -339,3 +339,252 @@ fn cron_field_matches(field: &str, value: u32, min: u32, max: u32) -> bool {
     }
     false
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn make_automation(id: &str) -> Automation {
+        Automation {
+            id: id.into(),
+            name: format!("Test {id}"),
+            prompt: "Do something".into(),
+            schedule: Schedule::Interval { seconds: 60 },
+            agent_slug: None,
+            enabled: true,
+            last_run: None,
+        }
+    }
+
+    // ── CRUD tests ──────────────────────────────────────────────────────────────
+
+    #[test]
+    fn test_add_automation() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let mut engine = AutomationEngine::new(tmp.path().join("automations.json"));
+        engine.add(make_automation("a1"));
+        assert_eq!(engine.automations.len(), 1);
+        assert_eq!(engine.automations[0].id, "a1");
+    }
+
+    #[test]
+    fn test_remove_automation() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let mut engine = AutomationEngine::new(tmp.path().join("automations.json"));
+        engine.add(make_automation("a1"));
+        engine.add(make_automation("a2"));
+        assert_eq!(engine.automations.len(), 2);
+        engine.remove("a1");
+        assert_eq!(engine.automations.len(), 1);
+        assert_eq!(engine.automations[0].id, "a2");
+    }
+
+    #[test]
+    fn test_remove_nonexistent_is_noop() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let mut engine = AutomationEngine::new(tmp.path().join("automations.json"));
+        engine.add(make_automation("a1"));
+        engine.remove("nonexistent");
+        assert_eq!(engine.automations.len(), 1);
+    }
+
+    #[test]
+    fn test_update_automation() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let mut engine = AutomationEngine::new(tmp.path().join("automations.json"));
+        engine.add(make_automation("a1"));
+
+        let mut updated = make_automation("a1");
+        updated.name = "Updated Name".into();
+        updated.enabled = false;
+        engine.update(updated);
+
+        assert_eq!(engine.automations[0].name, "Updated Name");
+        assert!(!engine.automations[0].enabled);
+    }
+
+    #[test]
+    fn test_update_nonexistent_is_noop() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let mut engine = AutomationEngine::new(tmp.path().join("automations.json"));
+        engine.add(make_automation("a1"));
+        engine.update(make_automation("nonexistent"));
+        assert_eq!(engine.automations.len(), 1);
+    }
+
+    #[test]
+    fn test_save_and_load_roundtrip() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let path = tmp.path().join("automations.json");
+
+        let mut engine = AutomationEngine::new(path.clone());
+        engine.add(make_automation("x1"));
+        engine.add(make_automation("x2"));
+        engine.save().expect("save failed");
+
+        let loaded = AutomationEngine::load(&path).expect("load failed");
+        assert_eq!(loaded.automations.len(), 2);
+        assert_eq!(loaded.automations[0].id, "x1");
+        assert_eq!(loaded.automations[1].id, "x2");
+    }
+
+    #[test]
+    fn test_load_missing_file_returns_empty_engine() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let path = tmp.path().join("nonexistent.json");
+        let engine = AutomationEngine::load(&path).expect("load failed");
+        assert!(engine.automations.is_empty());
+    }
+
+    #[test]
+    fn test_automation_serialization_interval() {
+        let auto = make_automation("s1");
+        let json = serde_json::to_string(&auto).expect("serialize");
+        assert!(json.contains("\"id\""));
+        assert!(json.contains("\"interval\""));
+        assert!(json.contains("\"seconds\""));
+        let restored: Automation = serde_json::from_str(&json).expect("deserialize");
+        assert_eq!(restored.id, "s1");
+    }
+
+    #[test]
+    fn test_automation_serialization_cron() {
+        let auto = Automation {
+            id: "c1".into(),
+            name: "Cron Job".into(),
+            prompt: "Run at midnight".into(),
+            schedule: Schedule::Cron { expression: "0 0 * * *".into() },
+            agent_slug: Some("my-agent".into()),
+            enabled: true,
+            last_run: None,
+        };
+        let json = serde_json::to_string(&auto).expect("serialize");
+        assert!(json.contains("\"cron\""));
+        assert!(json.contains("0 0 * * *"));
+        let restored: Automation = serde_json::from_str(&json).expect("deserialize");
+        assert_eq!(restored.id, "c1");
+        match &restored.schedule {
+            Schedule::Cron { expression } => assert_eq!(expression, "0 0 * * *"),
+            _ => panic!("expected Cron schedule"),
+        }
+    }
+
+    // ── Cron expression validation tests ────────────────────────────────────────
+
+    #[test]
+    fn test_cron_wildcard_matches_any() {
+        // "* * * * *" should match any datetime
+        let dt = (2024, 6, 15, 10, 30, 0, 0);
+        assert!(matches_cron("* * * * *", dt));
+    }
+
+    #[test]
+    fn test_cron_exact_minute_matches() {
+        // "30 * * * *" — minute = 30
+        let dt_match = (2024, 6, 15, 10, 30, 0, 0);
+        let dt_no = (2024, 6, 15, 10, 29, 0, 0);
+        assert!(matches_cron("30 * * * *", dt_match));
+        assert!(!matches_cron("30 * * * *", dt_no));
+    }
+
+    #[test]
+    fn test_cron_exact_hour_matches() {
+        // "0 9 * * *" — at 09:00
+        let dt_match = (2024, 6, 15, 9, 0, 0, 0);
+        let dt_no = (2024, 6, 15, 10, 0, 0, 0);
+        assert!(matches_cron("0 9 * * *", dt_match));
+        assert!(!matches_cron("0 9 * * *", dt_no));
+    }
+
+    #[test]
+    fn test_cron_step_matches() {
+        // "*/15 * * * *" — every 15 minutes
+        let dt0 = (2024, 6, 15, 10, 0, 0, 0);
+        let dt15 = (2024, 6, 15, 10, 15, 0, 0);
+        let dt30 = (2024, 6, 15, 10, 30, 0, 0);
+        let dt7 = (2024, 6, 15, 10, 7, 0, 0);
+        assert!(matches_cron("*/15 * * * *", dt0));
+        assert!(matches_cron("*/15 * * * *", dt15));
+        assert!(matches_cron("*/15 * * * *", dt30));
+        assert!(!matches_cron("*/15 * * * *", dt7));
+    }
+
+    #[test]
+    fn test_cron_range_matches() {
+        // "0 9-17 * * *" — every hour from 9 to 17
+        let dt_in = (2024, 6, 15, 12, 0, 0, 0);
+        let dt_out = (2024, 6, 15, 18, 0, 0, 0);
+        assert!(matches_cron("0 9-17 * * *", dt_in));
+        assert!(!matches_cron("0 9-17 * * *", dt_out));
+    }
+
+    #[test]
+    fn test_cron_list_matches() {
+        // "0 8,12,18 * * *" — at 8am, noon, 6pm
+        let dt_8 = (2024, 6, 15, 8, 0, 0, 0);
+        let dt_12 = (2024, 6, 15, 12, 0, 0, 0);
+        let dt_18 = (2024, 6, 15, 18, 0, 0, 0);
+        let dt_10 = (2024, 6, 15, 10, 0, 0, 0);
+        assert!(matches_cron("0 8,12,18 * * *", dt_8));
+        assert!(matches_cron("0 8,12,18 * * *", dt_12));
+        assert!(matches_cron("0 8,12,18 * * *", dt_18));
+        assert!(!matches_cron("0 8,12,18 * * *", dt_10));
+    }
+
+    #[test]
+    fn test_cron_invalid_expression_returns_false() {
+        // Only 3 fields — invalid
+        let dt = (2024, 6, 15, 10, 30, 0, 0);
+        assert!(!matches_cron("* * *", dt));
+    }
+
+    #[test]
+    fn test_cron_field_wildcard() {
+        assert!(cron_field_matches("*", 5, 0, 59));
+        assert!(cron_field_matches("*", 0, 0, 59));
+        assert!(cron_field_matches("*", 59, 0, 59));
+    }
+
+    #[test]
+    fn test_cron_field_exact_value() {
+        assert!(cron_field_matches("30", 30, 0, 59));
+        assert!(!cron_field_matches("30", 29, 0, 59));
+    }
+
+    #[test]
+    fn test_cron_field_step_from_star() {
+        // */5 from 0..59: matches 0, 5, 10, ...
+        assert!(cron_field_matches("*/5", 0, 0, 59));
+        assert!(cron_field_matches("*/5", 5, 0, 59));
+        assert!(cron_field_matches("*/5", 10, 0, 59));
+        assert!(!cron_field_matches("*/5", 3, 0, 59));
+    }
+
+    #[test]
+    fn test_parse_rfc3339_secs_valid() {
+        let secs = parse_rfc3339_secs("2024-01-01T00:00:00Z");
+        assert!(secs.is_some());
+        assert!(secs.unwrap() > 0);
+    }
+
+    #[test]
+    fn test_parse_rfc3339_secs_invalid() {
+        assert!(parse_rfc3339_secs("not-a-date").is_none());
+        assert!(parse_rfc3339_secs("").is_none());
+        assert!(parse_rfc3339_secs("2024-13-01T00:00:00Z").is_none()); // month 13
+    }
+
+    #[test]
+    fn test_automation_disabled_skips_tick() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let mut engine = AutomationEngine::new(tmp.path().join("automations.json"));
+        let mut auto = make_automation("skip1");
+        auto.enabled = false;
+        engine.add(auto);
+        // Tick should not update last_run for disabled automations
+        // (We can't easily observe this without mocking time, but tick should not panic)
+        engine.tick();
+        // last_run should still be None since it's disabled
+        assert!(engine.automations[0].last_run.is_none());
+    }
+}

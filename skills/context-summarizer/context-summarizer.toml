@@ -1,0 +1,5 @@
+name = "context-summarizer"
+description = "Summarize long context windows for efficient AI consumption"
+version = "1.0.0"
+permission_class = "network"
+entry_point = "context-summarizer.js"

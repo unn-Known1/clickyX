@@ -1,0 +1,5 @@
+name = "skill-installer"
+description = "Install skills from URLs, GitHub repos, or local archives"
+version = "1.0.0"
+permission_class = "filesystem"
+entry_point = "skill-installer.js"

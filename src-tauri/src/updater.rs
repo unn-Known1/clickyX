@@ -1,4 +1,7 @@
+use futures_util::StreamExt;
 use serde::{Deserialize, Serialize};
+use std::io::Write;
+use tauri::{AppHandle, Emitter};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UpdateInfo {
@@ -6,6 +9,9 @@ pub struct UpdateInfo {
     pub version: Option<String>,
     pub release_notes: Option<String>,
     pub download_url: Option<String>,
+    /// Whether a delta patch is available (smaller download)
+    pub delta_available: Option<bool>,
+    pub delta_url: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -60,6 +66,8 @@ pub async fn check_for_updates(current_version: &str) -> Result<UpdateInfo, Stri
                 version: None,
                 release_notes: None,
                 download_url: None,
+                delta_available: None,
+                delta_url: None,
             });
         }
         Ok(r) => {
@@ -72,6 +80,8 @@ pub async fn check_for_updates(current_version: &str) -> Result<UpdateInfo, Stri
                 version: None,
                 release_notes: None,
                 download_url: None,
+                delta_available: None,
+                delta_url: None,
             });
         }
     };
@@ -90,6 +100,8 @@ pub async fn check_for_updates(current_version: &str) -> Result<UpdateInfo, Stri
         version: Some(data.version),
         release_notes: data.notes,
         download_url: platform_info.map(|p| p.url.clone()),
+        delta_available: None,
+        delta_url: None,
     })
 }
 
@@ -163,4 +175,170 @@ pub fn install_update(update_data: &[u8]) -> Result<(), String> {
     }
 
     Ok(())
+}
+
+/// Build the GitHub API URL for the latest release of this project.
+fn github_latest_release_url() -> &'static str {
+    "https://api.github.com/repos/unn-Known1/clickyX/releases/latest"
+}
+
+#[derive(Deserialize)]
+struct GithubRelease {
+    tag_name: String,
+    body: Option<String>,
+    assets: Vec<GithubAsset>,
+}
+
+#[derive(Deserialize)]
+struct GithubAsset {
+    name: String,
+    browser_download_url: String,
+    size: u64,
+}
+
+/// Check for an update on GitHub, preferring a `.sig`-accompanied delta patch if available.
+/// Falls back to full binary download if no delta is found.
+/// Emits `"update-download-progress"` events during download.
+pub async fn check_for_update_with_delta(
+    app: &AppHandle,
+    current_version: &str,
+) -> Result<UpdateInfo, String> {
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(15))
+        .user_agent("ClickyX-Updater/1.0")
+        .build()
+        .map_err(|e| format!("failed to build http client: {e}"))?;
+
+    let resp = client
+        .get(github_latest_release_url())
+        .send()
+        .await
+        .map_err(|e| format!("github api request failed: {e}"))?;
+
+    if resp.status() == reqwest::StatusCode::NOT_FOUND {
+        return Ok(UpdateInfo {
+            available: false,
+            version: None,
+            release_notes: None,
+            download_url: None,
+            delta_available: None,
+            delta_url: None,
+        });
+    }
+
+    if !resp.status().is_success() {
+        return Err(format!("github api returned {}", resp.status()));
+    }
+
+    let release: GithubRelease = resp
+        .json()
+        .await
+        .map_err(|e| format!("failed to parse github release: {e}"))?;
+
+    // Strip leading 'v' for comparison
+    let latest_ver = release.tag_name.trim_start_matches('v');
+    if latest_ver == current_version.trim_start_matches('v') {
+        return Ok(UpdateInfo {
+            available: false,
+            version: Some(release.tag_name),
+            release_notes: release.body,
+            download_url: None,
+            delta_available: Some(false),
+            delta_url: None,
+        });
+    }
+
+    // Determine platform keyword for asset matching
+    let platform_keyword = if cfg!(target_os = "windows") {
+        "windows"
+    } else if cfg!(target_os = "macos") {
+        "macos"
+    } else {
+        "linux"
+    };
+
+    // Look for a delta patch: asset name contains "delta" or ".patch"
+    let delta_asset = release.assets.iter().find(|a| {
+        (a.name.contains("delta") || a.name.contains(".patch"))
+            && a.name.contains(platform_keyword)
+    });
+
+    // Look for the primary full release asset
+    let full_asset = release.assets.iter().find(|a| {
+        a.name.contains(platform_keyword)
+            && !a.name.contains("delta")
+            && !a.name.contains(".sig")
+            && !a.name.contains(".patch")
+    });
+
+    let _ = app; // used for progress events in download_update_with_progress
+
+    Ok(UpdateInfo {
+        available: true,
+        version: Some(release.tag_name),
+        release_notes: release.body,
+        download_url: full_asset.map(|a| a.browser_download_url.clone()),
+        delta_available: Some(delta_asset.is_some()),
+        delta_url: delta_asset.map(|a| a.browser_download_url.clone()),
+    })
+}
+
+/// Download an update from `url`, emitting `"update-download-progress"` events on `app`.
+/// Returns the downloaded bytes.
+pub async fn download_update_with_progress(
+    app: &AppHandle,
+    url: &str,
+) -> Result<Vec<u8>, String> {
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(600))
+        .build()
+        .map_err(|e| format!("failed to build http client: {e}"))?;
+
+    let response = client
+        .get(url)
+        .send()
+        .await
+        .map_err(|e| format!("download request failed: {e}"))?;
+
+    if !response.status().is_success() {
+        return Err(format!("download returned {}", response.status()));
+    }
+
+    let total = response
+        .content_length()
+        .unwrap_or(0);
+
+    let tmp_dir = std::env::temp_dir().join("clickyx-update-tmp");
+    std::fs::create_dir_all(&tmp_dir)
+        .map_err(|e| format!("failed to create temp dir: {e}"))?;
+    let tmp_file = tmp_dir.join("download.bin");
+    let mut file = std::fs::File::create(&tmp_file)
+        .map_err(|e| format!("failed to create temp file: {e}"))?;
+
+    let mut stream = response.bytes_stream();
+    let mut downloaded = 0u64;
+
+    while let Some(chunk) = stream.next().await {
+        let chunk = chunk.map_err(|e| e.to_string())?;
+        downloaded += chunk.len() as u64;
+
+        let _ = app.emit(
+            "update-download-progress",
+            serde_json::json!({
+                "percent": if total > 0 { (downloaded as f64 / total as f64 * 100.0) as u32 } else { 0u32 },
+                "bytes_downloaded": downloaded,
+                "total_bytes": total,
+            }),
+        );
+
+        file.write_all(&chunk).map_err(|e| format!("write failed: {e}"))?;
+    }
+
+    drop(file);
+
+    let data = std::fs::read(&tmp_file)
+        .map_err(|e| format!("failed to read downloaded file: {e}"))?;
+    let _ = std::fs::remove_file(&tmp_file);
+
+    Ok(data)
 }

@@ -1,0 +1,5 @@
+name = "network-checker"
+description = "Ping hosts, DNS lookup, traceroute, and port scan utilities"
+version = "1.0.0"
+permission_class = "network"
+entry_point = "network-checker.js"

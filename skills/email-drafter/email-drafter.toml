@@ -1,0 +1,5 @@
+name = "email-drafter"
+description = "Draft professional emails from bullet points or brief descriptions"
+version = "1.0.0"
+permission_class = "network"
+entry_point = "email-drafter.js"

@@ -1,0 +1,5 @@
+name = "process-manager"
+description = "List, kill, and reprioritize system processes"
+version = "1.0.0"
+permission_class = "system"
+entry_point = "process-manager.js"

@@ -1,0 +1,5 @@
+name = "citation-finder"
+description = "Find and format citations using CrossRef, PubMed, or web search"
+version = "1.0.0"
+permission_class = "network"
+entry_point = "citation-finder.js"

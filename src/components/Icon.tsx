@@ -11,7 +11,7 @@ export type IconName =
   | "chevron-down" | "mic" | "camera" | "screen" | "settings"
   | "agents" | "connections" | "home" | "refresh" | "download"
   | "upload" | "warning" | "error" | "info" | "star" | "key"
-  | "bolt" | "eye" | "cube";
+  | "bolt" | "eye" | "cube" | "ai" | "cursor" | "shield" | "microphone";
 
 const paths: Record<IconName, string> = {
   copy:          `<rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/>`,
@@ -45,6 +45,10 @@ const paths: Record<IconName, string> = {
   bolt:          `<polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>`,
   eye:           `<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>`,
   cube:          `<path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/>`,
+  ai:            `<circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/>`,
+  cursor:        `<path d="M5 3l14 9-7 1-4 7-3-17z"/>`,
+  shield:        `<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>`,
+  microphone:    `<path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/><path d="M19 10v2a7 7 0 01-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/>`,
 };
 
 interface IconProps {

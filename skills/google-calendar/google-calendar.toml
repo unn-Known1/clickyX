@@ -1,0 +1,5 @@
+name = "google-calendar"
+description = "Create, read, update, delete Google Calendar events and check availability"
+version = "1.0.0"
+permission_class = "network"
+entry_point = "google-calendar.js"

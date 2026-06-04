@@ -1,0 +1,5 @@
+name = "github-issues"
+description = "Create, list, close, and comment on GitHub issues via gh CLI or GitHub API"
+version = "1.0.0"
+permission_class = "network"
+entry_point = "github-issues.js"

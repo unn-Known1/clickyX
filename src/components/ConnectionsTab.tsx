@@ -1,8 +1,10 @@
 import { useState, useEffect, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { useAppContext } from "../context/AppContext";
+import { SkeletonList } from "./SkeletonLoader";
 
 interface McpServer {
+  id?: string;
   name: string;
   command: string;
   args: string[];
@@ -20,9 +22,20 @@ interface Automation {
   last_run?: string;
 }
 
+interface AutomationRun {
+  id: string;
+  started_at: string;
+  finished_at?: string;
+  status: "success" | "error" | "running";
+  duration_ms?: number;
+  error?: string;
+}
+
 interface WorkspaceStatus {
   available: boolean;
   authenticated: boolean;
+  email?: string;
+  scopes?: string[];
 }
 
 import ActiveAgentsWidget from "./ActiveAgentsWidget";
@@ -57,6 +70,9 @@ function ConnectionsTab() {
   const [newEnvKey, setNewEnvKey] = useState("");
   const [newEnvVal, setNewEnvVal] = useState("");
 
+  // F-024: Args array editor state
+  const [editingArg, setEditingArg] = useState("");
+
   // New automation state
   const [newAutomation, setNewAutomation] = useState<Automation>({
     id: "", name: "", prompt: "",
@@ -65,16 +81,27 @@ function ConnectionsTab() {
   });
   const [scheduleType, setScheduleType] = useState<"interval" | "cron">("interval");
 
+  // F-023: Run history state
+  const [expandedHistory, setExpandedHistory] = useState<string | null>(null);
+  const [runHistory, setRunHistory] = useState<Record<string, AutomationRun[]>>({});
+
+  // F-012: Google Workspace OAuth state
+  const [workspaceConnecting, setWorkspaceConnecting] = useState(false);
+  const [showGoogleGuide, setShowGoogleGuide] = useState(false);
+  const [initialLoading, setInitialLoading] = useState(true);
+
   useEffect(() => {
-    invoke<WorkspaceStatus>("check_google_workspace")
-      .then(setWorkspace)
-      .catch(() => setWorkspace({ available: false, authenticated: false }));
-    invoke<McpServer[]>("get_mcp_servers")
-      .then(setMcpServers)
-      .catch((e) => { console.error(e); showToast("Failed to load MCP servers", "error"); });
-    invoke<Automation[]>("list_automations")
-      .then(setAutomations)
-      .catch((e) => { console.error(e); showToast("Failed to load automations", "error"); });
+    Promise.all([
+      invoke<WorkspaceStatus>("check_google_workspace")
+        .then(setWorkspace)
+        .catch(() => setWorkspace({ available: false, authenticated: false })),
+      invoke<McpServer[]>("get_mcp_servers")
+        .then(setMcpServers)
+        .catch((e) => { console.error(e); showToast("Failed to load MCP servers", "error"); }),
+      invoke<Automation[]>("list_automations")
+        .then(setAutomations)
+        .catch((e) => { console.error(e); showToast("Failed to load automations", "error"); }),
+    ]).finally(() => setInitialLoading(false));
   }, [showToast]);
 
   /* ── MCP ─────────────────────────────────────────────────────────────────── */
@@ -84,7 +111,7 @@ function ConnectionsTab() {
       const servers = await invoke<McpServer[]>("add_mcp_server", { config: newMcp });
       setMcpServers(servers);
       setNewMcp({ name: "", command: "", args: [], env: {}, enabled: true });
-      setNewEnvKey(""); setNewEnvVal("");
+      setNewEnvKey(""); setNewEnvVal(""); setEditingArg("");
       showToast("MCP server added", "success");
     } catch (e) {
       console.error(e); showToast("Failed to add MCP server", "error");
@@ -101,6 +128,16 @@ function ConnectionsTab() {
     }
   };
 
+  // F-011: MCP test button
+  const testMcpServer = async (server: McpServer) => {
+    try {
+      await invoke("test_mcp_server", { serverId: server.id ?? server.name });
+      showToast(`${server.name}: connected`, "success");
+    } catch (e) {
+      showToast(`Test failed: ${e}`, "error");
+    }
+  };
+
   const addEnvPair = () => {
     if (!newEnvKey.trim()) return;
     setNewMcp((prev) => ({ ...prev, env: { ...prev.env, [newEnvKey.trim()]: newEnvVal } }));
@@ -113,6 +150,18 @@ function ConnectionsTab() {
       delete env[key];
       return { ...prev, env };
     });
+  };
+
+  // F-024: Args array management
+  const addArg = () => {
+    const trimmed = editingArg.trim();
+    if (!trimmed) return;
+    setNewMcp((prev) => ({ ...prev, args: [...prev.args, trimmed] }));
+    setEditingArg("");
+  };
+
+  const removeArg = (index: number) => {
+    setNewMcp((prev) => ({ ...prev, args: prev.args.filter((_, i) => i !== index) }));
   };
 
   /* ── Automations ─────────────────────────────────────────────────────────── */
@@ -152,6 +201,49 @@ function ConnectionsTab() {
     }
   };
 
+  // F-023: Toggle and fetch run history
+  const toggleRunHistory = useCallback(async (automationId: string) => {
+    if (expandedHistory === automationId) {
+      setExpandedHistory(null);
+      return;
+    }
+    setExpandedHistory(automationId);
+    if (!runHistory[automationId]) {
+      try {
+        const runs = await invoke<AutomationRun[]>("get_automation_runs", { automationId });
+        setRunHistory((prev) => ({ ...prev, [automationId]: runs }));
+      } catch {
+        setRunHistory((prev) => ({ ...prev, [automationId]: [] }));
+      }
+    }
+  }, [expandedHistory, runHistory]);
+
+  /* ── F-012: Google Workspace auth ────────────────────────────────────────── */
+  const startGoogleAuth = async () => {
+    setWorkspaceConnecting(true);
+    try {
+      await invoke("google_workspace_auth_start");
+      // Re-check status after auth flow
+      const status = await invoke<WorkspaceStatus>("check_google_workspace");
+      setWorkspace(status);
+      showToast("Google Workspace connected", "success");
+    } catch (e) {
+      showToast(`Google auth failed: ${e}`, "error");
+    } finally {
+      setWorkspaceConnecting(false);
+    }
+  };
+
+  const disconnectGoogle = async () => {
+    try {
+      await invoke("google_workspace_auth_revoke");
+      setWorkspace({ available: true, authenticated: false });
+      showToast("Google Workspace disconnected", "success");
+    } catch (e) {
+      showToast(`Disconnect failed: ${e}`, "error");
+    }
+  };
+
   /* ── Widget data ─────────────────────────────────────────────────────────── */
   const activeAgents: ActiveAgent[] = agents.map((a) => ({
     id: a.id,
@@ -185,6 +277,12 @@ function ConnectionsTab() {
     <div className="connections-tab">
       <h2>Connections &amp; Integrations</h2>
 
+      {initialLoading && (
+        <div style={{ padding: 12 }}>
+          <SkeletonList count={2} />
+        </div>
+      )}
+
       {/* Widgets */}
       <section className="widgets-dashboard">
         <ActiveAgentsWidget agents={activeAgents} />
@@ -192,21 +290,75 @@ function ConnectionsTab() {
         <NeedsAttentionWidget items={needsAttention} />
       </section>
 
-      {/* Google Workspace */}
+      {/* F-012: Google Workspace */}
       <section className="connections-section">
         <h3>Google Workspace</h3>
         {workspace ? (
-          <div className="connection-status">
-            <span className={`status-badge ${workspace.available ? "available" : "unavailable"}`}>
-              {workspace.available ? "Available" : "Not Available"}
-            </span>
-            <span className={`status-badge ${workspace.authenticated ? "authenticated" : "unauthenticated"}`}>
-              {workspace.authenticated ? "Authenticated" : "Not Authenticated"}
-            </span>
-            {!workspace.authenticated && workspace.available && (
-              <p className="connection-hint">
-                Run <code>gogcli auth login</code> in your terminal to authenticate.
-              </p>
+          <div className="google-workspace-panel">
+            <div className="connection-status">
+              <span className={`status-badge ${workspace.available ? "available" : "unavailable"}`}>
+                {workspace.available ? "Available" : "Not Available"}
+              </span>
+              <span className={`status-badge ${workspace.authenticated ? "authenticated" : "unauthenticated"}`}>
+                {workspace.authenticated ? "Connected" : "Not Connected"}
+              </span>
+              {workspace.authenticated && workspace.email && (
+                <span className="google-email-badge">{workspace.email}</span>
+              )}
+            </div>
+
+            {workspace.authenticated ? (
+              <div className="google-connected-panel">
+                {workspace.scopes && workspace.scopes.length > 0 && (
+                  <div className="google-scopes">
+                    <span className="google-scopes-label">Scopes:</span>
+                    {workspace.scopes.map((scope) => (
+                      <span key={scope} className="google-scope-badge">{scope}</span>
+                    ))}
+                  </div>
+                )}
+                <button className="btn-small btn-danger" onClick={disconnectGoogle}>
+                  Disconnect
+                </button>
+              </div>
+            ) : (
+              <div className="google-auth-options">
+                <button
+                  className="btn-primary google-oauth-btn"
+                  onClick={startGoogleAuth}
+                  disabled={workspaceConnecting}
+                >
+                  {workspaceConnecting ? "Connecting…" : "Connect with Google"}
+                </button>
+                <span className="google-or-sep">or</span>
+                <button
+                  className="btn-small"
+                  onClick={() => setShowGoogleGuide((v) => !v)}
+                >
+                  {showGoogleGuide ? "Hide guide" : "Use gogcli"}
+                </button>
+                {showGoogleGuide && (
+                  <div className="google-guide">
+                    <ol className="google-guide-steps">
+                      <li>Install gogcli: <code>npm install -g gogcli</code></li>
+                      <li>Run: <code>gogcli auth login</code></li>
+                      <li>Follow the browser prompt to authorize</li>
+                      <li>Return here and refresh</li>
+                    </ol>
+                    <button
+                      className="btn-small"
+                      style={{ marginTop: 8 }}
+                      onClick={() => {
+                        invoke<WorkspaceStatus>("check_google_workspace")
+                          .then(setWorkspace)
+                          .catch(() => {});
+                      }}
+                    >
+                      Refresh status
+                    </button>
+                  </div>
+                )}
+              </div>
             )}
           </div>
         ) : (
@@ -244,9 +396,18 @@ function ConnectionsTab() {
                     ))}
                   </div>
                 )}
-                <button className="btn-small btn-danger" onClick={() => removeMcpServer(server.name)}>
-                  Remove
-                </button>
+                {/* F-011: Test button */}
+                <div className="mcp-item-actions">
+                  <button
+                    className="btn-secondary btn-sm"
+                    onClick={() => testMcpServer(server)}
+                  >
+                    Test
+                  </button>
+                  <button className="btn-small btn-danger" onClick={() => removeMcpServer(server.name)}>
+                    Remove
+                  </button>
+                </div>
               </div>
             ))}
           </div>
@@ -258,8 +419,36 @@ function ConnectionsTab() {
             onChange={(e) => setNewMcp({ ...newMcp, name: e.target.value })} />
           <input placeholder="Command (e.g. npx)" value={newMcp.command}
             onChange={(e) => setNewMcp({ ...newMcp, command: e.target.value })} />
-          <input placeholder="Args (comma separated)" value={newMcp.args.join(", ")}
-            onChange={(e) => setNewMcp({ ...newMcp, args: e.target.value.split(",").map((s) => s.trim()).filter(Boolean) })} />
+
+          {/* F-024: Args array editor */}
+          <div className="mcp-args-editor">
+            <label className="mcp-env-label">Arguments</label>
+            <div className="mcp-args-tags">
+              {newMcp.args.map((arg, i) => (
+                <span key={i} className="mcp-arg-tag">
+                  {arg}
+                  <button
+                    className="mcp-arg-remove"
+                    onClick={() => removeArg(i)}
+                    aria-label={`Remove arg ${arg}`}
+                  >
+                    ×
+                  </button>
+                </span>
+              ))}
+            </div>
+            <div className="form-row mcp-arg-add-row">
+              <input
+                placeholder="Add argument…"
+                value={editingArg}
+                onChange={(e) => setEditingArg(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addArg(); } }}
+                className="mcp-arg-input"
+                aria-label="New argument"
+              />
+              <button className="btn-small btn-primary" onClick={addArg} type="button">Add</button>
+            </div>
+          </div>
 
           {/* Env vars editor */}
           <div className="mcp-env-editor">
@@ -306,27 +495,66 @@ function ConnectionsTab() {
           <p className="section-empty">{automationSearch ? "No automations match." : "No automations configured"}</p>
         ) : (
           <div className="automation-list">
-            {filteredAuto.map((a) => (
-              <div key={a.id} className="automation-item">
-                <div className="automation-header">
-                  <strong>{a.name}</strong>
-                  <span className="automation-schedule">
-                    {a.schedule.type === "interval"
-                      ? `Every ${a.schedule.seconds}s`
-                      : `Cron: ${a.schedule.expression}`}
-                  </span>
+            {filteredAuto.map((a) => {
+              const historyRuns = runHistory[a.id] ?? [];
+              const isHistoryExpanded = expandedHistory === a.id;
+              return (
+                <div key={a.id} className="automation-item">
+                  <div className="automation-header">
+                    <strong>{a.name}</strong>
+                    <span className="automation-schedule">
+                      {a.schedule.type === "interval"
+                        ? `Every ${a.schedule.seconds}s`
+                        : `Cron: ${a.schedule.expression}`}
+                    </span>
+                  </div>
+                  <p className="automation-prompt">{a.prompt}</p>
+                  <div className="automation-controls">
+                    <label className="toggle-label">
+                      <input type="checkbox" checked={a.enabled}
+                        onChange={(e) => toggleAutomation(a.id, e.target.checked)} />
+                      Enabled
+                    </label>
+                    {/* F-023: Run history toggle */}
+                    <button
+                      className="btn-small automation-history-btn"
+                      onClick={() => toggleRunHistory(a.id)}
+                    >
+                      History{historyRuns.length > 0 ? ` (${historyRuns.length} runs)` : ""}
+                    </button>
+                    <button className="btn-small btn-danger" onClick={() => deleteAutomation(a.id)}>Delete</button>
+                  </div>
+
+                  {/* F-023: Collapsible run history */}
+                  {isHistoryExpanded && (
+                    <div className="automation-run-history">
+                      {historyRuns.length === 0 ? (
+                        <p className="section-empty" style={{ padding: "6px 0" }}>No runs yet.</p>
+                      ) : (
+                        historyRuns.slice(0, 10).map((run) => (
+                          <div key={run.id} className={`automation-run-item run-${run.status}`}>
+                            <span className={`run-status-badge run-status-${run.status}`}>
+                              {run.status}
+                            </span>
+                            <span className="run-timestamp">
+                              {new Date(run.started_at).toLocaleString()}
+                            </span>
+                            {run.duration_ms != null && (
+                              <span className="run-duration">{run.duration_ms}ms</span>
+                            )}
+                            {run.error && (
+                              <span className="run-error" title={run.error}>
+                                {run.error.slice(0, 60)}{run.error.length > 60 ? "…" : ""}
+                              </span>
+                            )}
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  )}
                 </div>
-                <p className="automation-prompt">{a.prompt}</p>
-                <div className="automation-controls">
-                  <label className="toggle-label">
-                    <input type="checkbox" checked={a.enabled}
-                      onChange={(e) => toggleAutomation(a.id, e.target.checked)} />
-                    Enabled
-                  </label>
-                  <button className="btn-small btn-danger" onClick={() => deleteAutomation(a.id)}>Delete</button>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
 

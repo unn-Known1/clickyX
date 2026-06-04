@@ -1,0 +1,5 @@
+name = "vercel-deploy"
+description = "Deploy projects to Vercel, check deployment status and logs via Vercel API"
+version = "1.0.0"
+permission_class = "network"
+entry_point = "vercel-deploy.js"

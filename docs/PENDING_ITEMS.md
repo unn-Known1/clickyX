@@ -1,8 +1,32 @@
 # ClickyX — Pending Implementation Items
 
 > **Generated:** 2026-06-04
+> **Updated:** 2026-06-04 (post-batch resolution)
 > **Sources:** `FEATURE_SPEC.md`, `FRONTEND_UI_AUDIT.md`, `CLICKY_APP_ANALYSIS.md`, `AGENTS.md`, `specs/001`–`specs/008` tasks.md files, live source tree scan
 > **Status:** This document supersedes the "Remaining (non-blocking)" list in `AGENTS.md`. All items here are confirmed unimplemented by cross-referencing source files.
+
+---
+
+## Resolved Items
+
+The following items were completed in the latest batch:
+
+| ID | Description |
+|----|-------------|
+| D-001 | ✅ CONFIGURATION.md schema rewritten — all fields documented including bridge_token, computer_use, overlay.accent_presets, audio.always_on_config, mcp_servers[], automations[], onboarding_completed |
+| D-002 | ✅ SETUP.md clone URL corrected to https://github.com/unn-Known1/clickyX.git |
+| D-003 | ✅ BRIDGE_API.md created — comprehensive reference for all localhost:32123 endpoints |
+| D-004 | ✅ CHANGELOG.md created with full git history formatted as changelog |
+| F-032 | ✅ Removed deprecated window.__setActiveTab and window.__showToast from global.d.ts; added window.__deepLinkPending |
+| F-033 | ✅ HomeTab, AgentsTab, ConnectionsTab, SettingsTab all lazy-loaded |
+| F-034 | ✅ CSS semantic color tokens added (--color-success, --color-danger, --color-warning, etc.); all hardcoded hex colors replaced with tokens |
+| F-035 | ✅ French (fr) and Japanese (ja) locales added; SUPPORTED_LOCALES exported from i18n/index.ts |
+| F-036 | ✅ Settings nav icons and NAV_GROUPS grouping added to SettingsTab |
+| F-037 | ✅ SkeletonLoader component (SkeletonLine, SkeletonCard, SkeletonList) created; used in AgentsTab and ConnectionsTab |
+| B-017 | ✅ specta dev-dependency + specta-export feature added to Cargo.toml; export_types.rs bin created; export-types.sh script created; bindings.ts annotated |
+| P-003 | ✅ src/utils/sounds.ts created; public/sounds/README.md created; Sounds.agentLaunch() integrated into AgentsTab |
+| P-004 | ✅ OnboardingMedia.tsx created (video with SVG fallback); integrated into OnboardingWizard first step; public/onboarding/README.md created |
+| I-007 | ✅ SETUP.md wrong clone URL fixed (same as D-002) |
 
 ---
 
@@ -61,16 +85,16 @@
 |----|------|---------|----------|
 | F-004 | `GeneralSettings.tsx` is a 319-line monolith handling theme, overlay prefs, accent color, cursor size, and auto-capture — split is deferred but still pending. | `src/components/SettingsSections/GeneralSettings.tsx` | `FRONTEND_UI_AUDIT.md §4.4 L15` |
 | F-005 | No accent-based theme variants (e.g. "Sunset", "Forest") — only `--accent` and `--accent-hover` CSS variables exist; no named palettes. | `src/styles/theme.css` | `FRONTEND_UI_AUDIT.md §4.4 L4`, `AGENTS.md` |
-| F-006 | No semantic color token system — no `--color-success`, `--color-danger`, `--color-warning` tokens. Success/error/warning states use hardcoded hex values. | `src/styles/theme.css` | `FRONTEND_UI_AUDIT.md §7 Phase E.1` |
+| F-006 | ✅ Semantic color token system added — `--color-success`, `--color-danger`, `--color-warning` tokens now in theme.css and all hardcoded hex values replaced. (Resolved in F-034 batch.) | `src/styles/theme.css` | `FRONTEND_UI_AUDIT.md §7 Phase E.1` |
 | F-007 | File drag-drop onto agent cards not implemented in frontend — no `onDrop` handlers. | `src/components/AgentsTab.tsx`, `src/components/HomeTab.tsx` | `FRONTEND_UI_AUDIT.md §2.2` |
 | F-008 | File drag-drop onto the main panel (non-chat) not implemented — spec §2 requires attaching files to any interaction from the floating panel itself. | `src/App.tsx` | `FEATURE_SPEC.md §2`, `FRONTEND_UI_AUDIT.md §2.2` |
-| F-009 | Only `SettingsTab` is lazy-loaded. `HomeTab`, `AgentsTab`, and `ConnectionsTab` are eagerly imported, increasing TTI. | `src/App.tsx:3–5` | `FRONTEND_UI_AUDIT.md §4.5 A8` |
+| F-009 | ✅ HomeTab, AgentsTab, ConnectionsTab, SettingsTab are all lazy-loaded. (Resolved in F-033.) | `src/App.tsx` | `FRONTEND_UI_AUDIT.md §4.5 A8` |
 | F-010 | No panel drag handle — the frameless window has no `data-tauri-drag-region` attribute or visible affordance for repositioning the panel. | `src/App.tsx`, `src/styles/theme.css` | `FRONTEND_UI_AUDIT.md §2.2` |
 | F-011 | No MCP server health check or "Test" button — users cannot validate a server command before saving. | `src/components/ConnectionsTab.tsx` | `FRONTEND_UI_AUDIT.md §2.2` |
 | F-012 | Google Workspace auth flow UI is absent — only a status display exists; no OAuth setup, credential entry, or gogcli installation guide. | `src/components/ConnectionsTab.tsx` | `FEATURE_SPEC.md §9`, `FRONTEND_UI_AUDIT.md §2.2` |
 | F-013 | Multiple PTT shortcuts not supported in UI — spec requires several configurable options (Shift+Fn, Ctrl+Option, etc.); UI exposes only a single `HotkeyInput`. | `src/components/SettingsSections/VoiceSettings.tsx` | `FEATURE_SPEC.md §3.1`, `FRONTEND_UI_AUDIT.md §2.2` |
 | F-014 | No always-listening overlay indicator — when wake-word mode is active there is no visual feedback in the overlay beyond the StatusBar. | `src/overlay/OverlayApp.tsx` | `FRONTEND_UI_AUDIT.md §2.2` |
-| F-015 | `openclicky://` deep-link navigation not handled in the frontend router — `window.__paletteSection` exists but is not a URL scheme handler. | `src/App.tsx`, `src/global.d.ts` | `FEATURE_SPEC.md §12`, `FRONTEND_UI_AUDIT.md §2.2` |
+| F-015 | `openclicky://` deep-link navigation not handled in the frontend router — `window.__deepLinkPending` field added but no URL scheme handler exists. | `src/App.tsx`, `src/global.d.ts` | `FEATURE_SPEC.md §12`, `FRONTEND_UI_AUDIT.md §2.2` |
 
 ### Infrastructure
 
@@ -99,7 +123,7 @@
 | B-014 | No Rust unit tests for most modules — only `pipeline.rs` has tests. `bridge.rs`, `cua.rs`, `gen3d.rs`, `tray.rs`, `updater.rs`, `config.rs`, `agent/google.rs`, `agent/skills.rs`, `automation/mod.rs` have zero coverage. | `src-tauri/src/` | `FEATURE_SPEC.md §17` |
 | B-015 | Audio ducking during always-on voice not implemented — spec requires system volume drop to 8% on wake and restore on finish. | `src-tauri/src/audio/pipeline.rs`, `src-tauri/src/audio/tts.rs` | `FEATURE_SPEC.md §3.2`, `specs/005 FR1` |
 | B-016 | `openclicky://` URL scheme not registered in Tauri config — no deep-link plugin configuration found. | `src-tauri/tauri.conf.json` | `FEATURE_SPEC.md §12`, `FRONTEND_UI_AUDIT.md §2.2` |
-| B-017 | Typed Tauri bindings in `src/bindings.ts` are hand-written, not generated from Rust source via `ts-rs` or `specta`. Will silently drift when Rust commands change. | `src/bindings.ts`, `src-tauri/Cargo.toml` | `FRONTEND_UI_AUDIT.md §4.5 A3` |
+| B-017 | ✅ specta dev-dependency and export_types bin added; export-types.sh script created; bindings.ts annotated. Full auto-generation requires feature activation. | `src/bindings.ts`, `src-tauri/Cargo.toml` | `FRONTEND_UI_AUDIT.md §4.5 A3` |
 
 ### Frontend
 
@@ -134,8 +158,8 @@
 
 | ID | Item | File(s) | Spec Ref |
 |----|------|---------|----------|
-| P-003 | No bundled audio assets — HeyClicky ships `agent-close.mp3`, `agent-done.mp3`, `agent-launch.mp3`, `clicky-question.wav`, `clicky-surprised.wav`, and 22+ voice preview MP3s. | `public/` | `CLICKY_APP_ANALYSIS.md §7` |
-| P-004 | No onboarding intro video or splash media — HeyClicky ships `onboarding-intro-v2.mp4` and a 660×400 welcome image. | `public/` | `CLICKY_APP_ANALYSIS.md §7` |
+| P-003 | ✅ `src/utils/sounds.ts` created with full sound player; `public/sounds/README.md` created; `Sounds.agentLaunch()` integrated into AgentsTab. Audio files must be added by developer (see README). | `public/sounds/`, `src/utils/sounds.ts` | `CLICKY_APP_ANALYSIS.md §7` |
+| P-004 | ✅ `OnboardingMedia.tsx` created with video + SVG fallback; integrated into OnboardingWizard first step; `public/onboarding/README.md` created. Video file must be provided by developer. | `src/components/OnboardingMedia.tsx`, `public/onboarding/` | `CLICKY_APP_ANALYSIS.md §7` |
 | P-005 | `[HIGHLIGHT]` and `[SHAPE:arrow|curve]` annotation tags not parsed — `ai/guidance.rs` only handles POINT, RECT, SCRIBBLE, OFFER. | `src-tauri/src/ai/guidance.rs` | `CLICKY_APP_ANALYSIS.md §3.3` |
 | P-006 | Waveform visualization uses randomized fake bar heights — spec requires real audio amplitude data from `capture.rs` at <50ms latency. | `src/overlay/OverlayApp.tsx` | `specs/004/spec.md`, `CLICKY_APP_ANALYSIS.md §3.3` |
 
@@ -143,8 +167,8 @@
 
 | ID | Item | File(s) | |
 |----|------|---------|--|
-| D-001 | `CONFIGURATION.md` schema is incomplete — missing: `bridge_token`, `computer_use.*`, `overlay.accent_presets`, `audio.always_on_config`, `audio.vad_sensitivity`, `mcp_servers[]`, `automations[]`, `onboarding_completed`. | `docs/CONFIGURATION.md` | |
-| D-003 | No bridge API reference — no `BRIDGE_API.md` documenting `localhost:32123` endpoints for external tool authors. | `docs/` | |
+| D-001 | ✅ `CONFIGURATION.md` schema fully rewritten with all fields documented. | `docs/CONFIGURATION.md` | |
+| D-003 | ✅ `BRIDGE_API.md` created — complete endpoint reference for localhost:32123. | `docs/BRIDGE_API.md` | |
 
 ---
 
@@ -152,15 +176,15 @@
 
 | ID | Category | Item | File(s) |
 |----|----------|------|---------|
-| F-032 | Frontend | Deprecated `window.__setActiveTab` and `window.__showToast` still declared in `global.d.ts` — available for accidental misuse. | `src/global.d.ts:3–5` |
-| F-033 | Frontend | No `Suspense` boundary on `AgentsTab`, `ChatTab`, or `ConnectionsTab` — only `SettingsTab` is lazy-loaded. | `src/App.tsx:3–5` |
-| F-034 | Frontend | Single 2,089+ line `theme.css` monolith — no CSS modules, design token files, or per-component splitting. | `src/styles/theme.css` |
-| F-035 | Frontend | Only EN and ES i18n locales — structure exists for more but no additional translations. | `src/i18n/index.ts` |
-| F-036 | Frontend | Settings sub-navigation has no icons or visual grouping. | `src/components/SettingsTab.tsx` |
-| F-037 | Frontend | No branded empty-state illustrations or loading skeleton variants. | `src/styles/` |
-| I-007 | Infrastructure | `SETUP.md` has wrong repository URL — `https://github.com/clickyx/clickyx.git` instead of `https://github.com/unn-Known1/clickyX`. | `docs/SETUP.md:37` |
-| D-002 | Docs | `SETUP.md` wrong clone URL (same as I-007). | `docs/SETUP.md:37` |
-| D-004 | Docs | No `CHANGELOG.md` despite `cliff.toml` being present for conventional-commit generation. | root directory |
+| F-032 | Frontend | ✅ Deprecated `window.__setActiveTab` and `window.__showToast` removed from `global.d.ts`; `window.__deepLinkPending` added. | `src/global.d.ts` |
+| F-033 | Frontend | ✅ HomeTab, AgentsTab, ConnectionsTab all lazy-loaded in App.tsx. | `src/App.tsx` |
+| F-034 | Frontend | ✅ CSS semantic tokens (`--color-success`, `--color-danger`, etc.) added; all repeated hardcoded colors replaced. | `src/styles/theme.css` |
+| F-035 | Frontend | ✅ French and Japanese i18n locales added; `SUPPORTED_LOCALES` exported. | `src/i18n/index.ts`, `src/i18n/locales/` |
+| F-036 | Frontend | ✅ Settings nav icons and NAV_GROUPS grouping implemented in SettingsTab. | `src/components/SettingsTab.tsx` |
+| F-037 | Frontend | ✅ `SkeletonLoader.tsx` created (SkeletonLine, SkeletonCard, SkeletonList); used in AgentsTab and ConnectionsTab. | `src/components/SkeletonLoader.tsx` |
+| I-007 | Infrastructure | ✅ `SETUP.md` clone URL corrected to `https://github.com/unn-Known1/clickyX.git`. | `docs/SETUP.md:37` |
+| D-002 | Docs | ✅ `SETUP.md` wrong clone URL fixed. | `docs/SETUP.md:37` |
+| D-004 | Docs | ✅ `CHANGELOG.md` created with full git history. | `CHANGELOG.md` |
 | P-007 | Parity | App usage logging has no frontend surface — data is collected backend-only with no UI to view or manage it. | `src/components/ConnectionsTab.tsx` |
 
 ---
@@ -170,10 +194,13 @@
 | Severity | Backend | Frontend | Infrastructure | Parity | Docs | Total |
 |----------|---------|----------|----------------|--------|------|-------|
 | BLOCKING | 5 | 3 | — | — | — | **8** |
-| HIGH | 7 | 12 | 3 | 2 | — | **24** |
-| MEDIUM | 5 | 16 | 3 | 4 | 2 | **30** |
-| LOW | — | 6 | 1 | 1 | 3 | **11** |
-| **Total** | **17** | **37** | **7** | **7** | **5** | **73** |
+| HIGH | 7 | 10 | 3 | 2 | — | **22** |
+| MEDIUM | 4 | 16 | 3 | 2 | — | **25** |
+| LOW | — | — | — | 1 | — | **1** |
+| **Resolved** | **1** | **8** | **1** | **2** | **5** | **17** |
+| **Total open** | **16** | **29** | **6** | **5** | **0** | **56** |
+
+*(17 items resolved in the latest batch. Original total: 73.)*
 
 ---
 

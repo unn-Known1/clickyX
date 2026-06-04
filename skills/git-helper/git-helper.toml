@@ -1,0 +1,5 @@
+name = "git-helper"
+description = "Git log, diff, blame, stash, cherry-pick, and branch management"
+version = "1.0.0"
+permission_class = "system"
+entry_point = "git-helper.js"
