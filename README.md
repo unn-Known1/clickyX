@@ -1,4 +1,4 @@
-# ClickyX — Cross-Platform AI Desktop Companion
+# ClickyX — Cross-Platform AI Desktop Companion [NOT COMPLETE- Work in progress] 
 
 [![CI/CD](https://github.com/unn-Known1/clickyX/actions/workflows/ci.yml/badge.svg)](https://github.com/unn-Known1/clickyX/actions/workflows/ci.yml)
 [![cargo check](https://img.shields.io/badge/cargo-check-brightgreen)](https://github.com/unn-Known1/clickyX)
