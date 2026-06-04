@@ -18,7 +18,7 @@ pub fn setup_tray<R: Runtime>(app: &AppHandle<R>) -> Result<(), Box<dyn std::err
         .item(&quit)
         .build()?;
 
-    let _tray = TrayIconBuilder::new()
+    let tray = TrayIconBuilder::new()
         .icon(app.default_window_icon().ok_or("no default window icon")?.clone())
         .tooltip("ClickyX")
         .menu(&menu)
@@ -65,6 +65,7 @@ pub fn setup_tray<R: Runtime>(app: &AppHandle<R>) -> Result<(), Box<dyn std::err
             }
         })
         .build(app)?;
+    app.manage(tray);
 
     log::info!("System tray initialized successfully");
     Ok(())

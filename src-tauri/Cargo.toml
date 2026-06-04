@@ -4,6 +4,7 @@ version = "0.1.1"
 description = "ClickyX - Cross-platform AI companion"
 authors = ["ClickyX Contributors"]
 edition = "2021"
+default-run = "clickyx"
 
 [lib]
 name = "clickyx_lib"

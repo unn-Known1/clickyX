@@ -71,10 +71,12 @@ fn init_logging() {
 }
 
 pub(crate) fn register_hotkeys(app: &AppHandle) -> Result<(), String> {
-    let _ = app
+    if let Err(e) = app
         .global_shortcut()
         .unregister_all()
-        .map_err(|e| format!("failed to unregister shortcuts: {e}"))?;
+    {
+        log::warn!("failed to unregister shortcuts: {e}");
+    }
 
     let hotkey_config = config::load_config(app)?;
 
@@ -82,7 +84,14 @@ pub(crate) fn register_hotkeys(app: &AppHandle) -> Result<(), String> {
         if binding.enabled {
             let key = binding.key.clone();
             let action = binding.action.clone();
-            app.global_shortcut()
+            if key
+                .split('+')
+                .any(|part| part.trim().eq_ignore_ascii_case("option"))
+            {
+                log::warn!("skipping unsupported shortcut on this platform: {}", key);
+                continue;
+            }
+            if let Err(e) = app.global_shortcut()
                 .on_shortcut(key.as_str(), move |handler_app, _shortcut, event| {
                     if event.state != ShortcutState::Pressed {
                         return;
@@ -131,7 +140,9 @@ pub(crate) fn register_hotkeys(app: &AppHandle) -> Result<(), String> {
                         _ => {}
                     }
                 })
-                .map_err(|e| format!("failed to register shortcut {}: {e}", binding.key))?;
+            {
+                log::warn!("failed to register shortcut {}: {e}", binding.key);
+            }
         }
     }
 
@@ -158,7 +169,9 @@ pub fn run() {
             let managed_config = config.clone();
             handle.manage(managed_config);
 
-            // Register default global hotkeys
+            // Register default global hotkeys. The Windows backend can crash the
+            // release app on invalid persisted shortcuts, so startup skips it there.
+            #[cfg(not(target_os = "windows"))]
             register_hotkeys(&handle)?;
 
             // Initialize app state
@@ -447,7 +460,13 @@ pub fn run() {
         .build(tauri::generate_context!())
         .expect("error while building ClickyX")
         .run(|app_handle, event| {
-            if let tauri::RunEvent::ExitRequested { .. } = event {
+            if let tauri::RunEvent::ExitRequested { code, api, .. } = event {
+                if code.is_none() {
+                    log::info!("Preventing implicit exit while ClickyX is running in the tray");
+                    api.prevent_exit();
+                    return;
+                }
+
                 log::info!("Exit requested, shutting down ClickyX");
                 if let Some(config) = app_handle.try_state::<config::AppConfig>() {
                     let _ = config::save_config(app_handle, &config);

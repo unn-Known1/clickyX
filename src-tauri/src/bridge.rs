@@ -1288,6 +1288,7 @@ pub fn start_bridge(app_handle: AppHandle, bridge_token: Option<String>) {
                     .route("/skills", web::get().to(bridge_list_skills))
                     .default_service(web::route().to(not_found))
             })
+            .workers(1)
             .bind("127.0.0.1:32123");
 
             match server {
