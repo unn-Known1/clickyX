@@ -10,6 +10,7 @@
 [![Local-First](https://img.shields.io/badge/local--first-yes-success)]()
 [![Cloud Telemetry](https://img.shields.io/badge/telemetry-none-success)]()
 [![HeyClicky Alternative](https://img.shields.io/badge/competitor-HeyClicky%20%2F%20Clicky-red)](https://github.com/farzaa/clicky)
+[![RepoRank](https://www.reporank.online/api/badge/unn-Known1/clickyX.svg)](https://www.reporank.online/github/unn-Known1/clickyX)
 [![Repo](https://img.shields.io/badge/repo-unn--Known1%2FclickyX-181717?logo=github)](https://github.com/unn-Known1/clickyX)
 
 > **ClickyX** is a cross-platform, open-source AI desktop companion that lives in your system tray, listens to your voice, sees your screen, drives your cursor, runs background agents, and exposes a local HTTP bridge for tool integration. It is a faithful, feature-complete reimplementation of the macOS-only **HeyClicky** (and its open-source sibling **OpenClicky**) — written from scratch in **Rust + Tauri + React/TypeScript** so it runs natively on **Windows, Linux, and macOS**.
@@ -359,9 +360,10 @@ Plus 3 parity-round additions landed on top:
 
 ## Documentation
 
+- [Contributing Guidelines](CONTRIBUTING.md)
+- [Security Policy](SECURITY.md)
 - [Setup Guide](docs/SETUP.md)
 - [Configuration Reference](docs/CONFIGURATION.md)
-- [Contributing Guidelines](docs/CONTRIBUTING.md)
 - [Feature Specification](docs/FEATURE_SPEC.md)
 - [DMG Reverse-Engineering Analysis](docs/CLICKY_APP_ANALYSIS.md)
 - [Agent Instructions](AGENTS.md)

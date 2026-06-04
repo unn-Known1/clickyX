@@ -1,0 +1,80 @@
+# Auto-detect text files and minimize diff noise
+* text=auto eol=lf
+
+# Source code
+*.rs     text eol=lf diff=rust
+*.ts     text eol=lf
+*.tsx    text eol=lf
+*.js     text eol=lf
+*.jsx    text eol=lf
+*.mjs    text eol=lf
+*.cjs    text eol=lf
+*.css    text eol=lf
+*.scss   text eol=lf
+*.html   text eol=lf
+*.json   text eol=lf
+*.jsonc  text eol=lf
+*.toml   text eol=lf
+*.yaml   text eol=lf
+*.yml    text eol=lf
+*.md     text eol=lf
+*.mdx    text eol=lf
+*.sh     text eol=lf
+*.bash   text eol=lf
+*.zsh    text eol=lf
+*.py     text eol=lf
+*.go     text eol=lf
+
+# Shell scripts must have LF even on Windows
+*.sh     text eol=lf
+*.bash   text eol=lf
+
+# Windows scripts
+*.bat    text eol=crlf
+*.cmd    text eol=crlf
+*.ps1    text eol=crlf
+
+# Binary / generated
+*.png    binary
+*.jpg    binary
+*.jpeg   binary
+*.gif    binary
+*.ico    binary
+*.icns   binary
+*.webp   binary
+*.svg    text
+*.mp3    binary
+*.wav    binary
+*.mp4    binary
+*.webm   binary
+*.pdf    binary
+*.zip    binary
+*.tar    binary
+*.gz     binary
+*.tgz    binary
+*.7z     binary
+*.dmg    binary
+*.msi    binary
+*.exe    binary
+*.deb    binary
+*.rpm    binary
+*.app    binary
+*.AppImage binary
+*.wasm   binary
+*.node   binary
+*.so     binary
+*.dll    binary
+*.dylib  binary
+*.rlib   binary
+*.pdb    binary
+
+# Lock files
+package-lock.json text eol=lf
+Cargo.lock          text eol=lf
+pnpm-lock.yaml      text eol=lf
+yarn.lock           text eol=lf
+bun.lockb           binary
+
+# Git attributes for diffing
+*.rs     diff=rust
+*.toml   diff=ini
