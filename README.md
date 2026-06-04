@@ -66,7 +66,7 @@ Artifacts land in `src-tauri/target/release/bundle/`:
 │  React 19 · Zustand · react-query · i18next           │
 ├───────────────────────────────────────────────────────┤
 │  Rust Backend (src-tauri/src/)                        │
-│  audio/   VAD · STT · TTS · wake word · handoff       │
+│  audio/   VAD · STT · TTS · wake word · handoff        │
 │  ai/      Anthropic · OpenAI · guidance tag parser    │
 │  agent/   Codex · sessions · 63 skills · dock         │
 │  screen/  xcap · auto-capture · coordinates           │
@@ -78,9 +78,9 @@ Artifacts land in `src-tauri/target/release/bundle/`:
 ├───────────────────────────────────────────────────────┤
 │  Frontend (src/)                                      │
 │  App.tsx · AppContext · appStore (Zustand)            │
-│  bindings.ts — typed invoke() wrappers               │
-│  hooks/ useConfig · useAgents (react-query)          │
-│  overlay/ OverlayApp — glow · waveform · dock        │
+│  bindings.ts — typed invoke() wrappers                │
+│  hooks/ useConfig · useAgents (react-query)            │
+│  overlay/ OverlayApp — glow · waveform · dock         │
 └───────────────────────────────────────────────────────┘
 ```
 
