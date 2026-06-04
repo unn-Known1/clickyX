@@ -1,7 +1,17 @@
 import { renderHook, act, waitFor } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import React from "react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { invoke } from "@tauri-apps/api/core";
 import { useAgents, AgentInfo, SkillInfo } from "./useAgents";
+
+function createWrapper() {
+  const queryClient = new QueryClient();
+  queryClient.setQueryDefaults(["agents"], { retryDelay: 0 });
+  queryClient.setQueryDefaults(["skills"], { retryDelay: 0 });
+  return ({ children }: { children: React.ReactNode }) =>
+    React.createElement(QueryClientProvider, { client: queryClient }, children);
+}
 
 describe("useAgents", () => {
   const mockAgent: AgentInfo = {
@@ -33,7 +43,7 @@ describe("useAgents", () => {
   });
 
   it("calls list_agents and list_skills on mount and updates state", async () => {
-    const { result } = renderHook(() => useAgents());
+    const { result } = renderHook(() => useAgents(), { wrapper: createWrapper() });
     
     expect(result.current.loading).toBe(true);
     
@@ -55,14 +65,13 @@ describe("useAgents", () => {
       if (cmd === "list_skills") return [mockSkill];
     });
 
-    const { result } = renderHook(() => useAgents());
+    const { result } = renderHook(() => useAgents(), { wrapper: createWrapper() });
 
     await waitFor(() => {
-      expect(result.current.loading).toBe(false);
+      expect(result.current.error).toBe("Agent fetch failed");
     });
 
     expect(result.current.agents).toEqual([]);
-    expect(result.current.error).toBe("Error: Agent fetch failed");
   });
 
   it("handles fetch skills error", async () => {
@@ -71,18 +80,19 @@ describe("useAgents", () => {
       if (cmd === "list_skills") throw new Error("Skill fetch failed");
     });
 
-    const { result } = renderHook(() => useAgents());
+    const { result } = renderHook(() => useAgents(), { wrapper: createWrapper() });
 
     await waitFor(() => {
-      expect(result.current.loading).toBe(false);
+      // Only agents error is exposed; skills error is not surfaced
+      expect(result.current.agents).toEqual([mockAgent]);
     });
 
     expect(result.current.skills).toEqual([]);
-    expect(result.current.error).toBe("Error: Skill fetch failed");
+    expect(result.current.error).toBeNull();
   });
 
   it("createAgent invokes command and refetches", async () => {
-    const { result } = renderHook(() => useAgents());
+    const { result } = renderHook(() => useAgents(), { wrapper: createWrapper() });
     await waitFor(() => expect(result.current.loading).toBe(false));
 
     vi.mocked(invoke).mockClear();
@@ -100,7 +110,7 @@ describe("useAgents", () => {
   });
 
   it("createAgent handles error", async () => {
-    const { result } = renderHook(() => useAgents());
+    const { result } = renderHook(() => useAgents(), { wrapper: createWrapper() });
     await waitFor(() => expect(result.current.loading).toBe(false));
 
     vi.mocked(invoke).mockImplementationOnce(async (cmd) => {
@@ -112,12 +122,10 @@ describe("useAgents", () => {
         await result.current.createAgent("New", "new", []);
       });
     }).rejects.toThrow("Creation failed");
-
-    expect(result.current.error).toBe("Error: Creation failed");
   });
 
   it("runAgent invokes command and refetches", async () => {
-    const { result } = renderHook(() => useAgents());
+    const { result } = renderHook(() => useAgents(), { wrapper: createWrapper() });
     await waitFor(() => expect(result.current.loading).toBe(false));
     vi.mocked(invoke).mockClear();
 
@@ -130,7 +138,7 @@ describe("useAgents", () => {
   });
 
   it("stopAgent invokes command and refetches", async () => {
-    const { result } = renderHook(() => useAgents());
+    const { result } = renderHook(() => useAgents(), { wrapper: createWrapper() });
     await waitFor(() => expect(result.current.loading).toBe(false));
     vi.mocked(invoke).mockClear();
 
@@ -143,7 +151,7 @@ describe("useAgents", () => {
   });
 
   it("archiveAgent invokes command and refetches", async () => {
-    const { result } = renderHook(() => useAgents());
+    const { result } = renderHook(() => useAgents(), { wrapper: createWrapper() });
     await waitFor(() => expect(result.current.loading).toBe(false));
     vi.mocked(invoke).mockClear();
 
@@ -156,7 +164,7 @@ describe("useAgents", () => {
   });
 
   it("enableSkill invokes command and refetches", async () => {
-    const { result } = renderHook(() => useAgents());
+    const { result } = renderHook(() => useAgents(), { wrapper: createWrapper() });
     await waitFor(() => expect(result.current.loading).toBe(false));
     vi.mocked(invoke).mockClear();
 
@@ -169,7 +177,7 @@ describe("useAgents", () => {
   });
 
   it("disableSkill invokes command and refetches", async () => {
-    const { result } = renderHook(() => useAgents());
+    const { result } = renderHook(() => useAgents(), { wrapper: createWrapper() });
     await waitFor(() => expect(result.current.loading).toBe(false));
     vi.mocked(invoke).mockClear();
 

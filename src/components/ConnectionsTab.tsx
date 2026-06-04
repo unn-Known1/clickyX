@@ -1,6 +1,6 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAppContext } from "../context/AppContext";
 import { SkeletonList } from "./SkeletonLoader";
 
@@ -63,7 +63,7 @@ interface AppUsageEntry {
   interaction_count: number;
 }
 
-function AppUsageLog({ showToast }: { showToast: (msg: string, type: string) => void }) {
+function AppUsageLog({ showToast }: { showToast: (msg: string, type?: import("../context/AppContext").ToastType) => void }) {
   const [expanded, setExpanded] = useState(false);
   const [clearing, setClearing] = useState(false);
 
@@ -456,7 +456,7 @@ function ConnectionsTab() {
                       style={{ marginTop: 8 }}
                       onClick={() => {
                         invoke<WorkspaceStatus>("check_google_workspace")
-                          .then(setWorkspace)
+                          .then((result) => queryClient.setQueryData(["google-workspace"], result))
                           .catch(() => {});
                       }}
                     >

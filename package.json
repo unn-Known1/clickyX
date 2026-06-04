@@ -27,7 +27,7 @@
     "highlight.js": "^11",
     "three": "^0.170",
     "@react-three/fiber": "^9",
-    "@react-three/drei": "~9.119.0",
+    "@react-three/drei": "^10",
     "i18next": "^23",
     "react-i18next": "^14",
     "@tanstack/react-query": "^5",
@@ -41,12 +41,15 @@
     "@vitejs/plugin-react": "^4",
     "typescript": "^5",
     "vite": "^6",
-    "vitest": "^3",
+    "vitest": "^4",
     "@testing-library/react": "^16",
     "@testing-library/jest-dom": "^6",
     "@testing-library/user-event": "^14",
     "jsdom": "^26",
     "msw": "^2",
     "@playwright/test": "^1"
+  },
+  "overrides": {
+    "uuid": "^11.1.1"
   }
 }

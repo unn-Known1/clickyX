@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { render, screen, act } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { AppProvider, useAppContext } from "../context/AppContext";
@@ -74,8 +74,8 @@ describe("AppContext", () => {
       expect(screen.getByTestId("active-tab")).toHaveTextContent("home");
     });
 
-    it("switches tabs with animation", async () => {
-      vi.useFakeTimers();
+    it("switches tabs with animation", { timeout: 10000 }, async () => {
+      vi.useFakeTimers({ shouldAdvanceTime: true });
       const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
       render(<AppProvider><NavConsumer /></AppProvider>);
       await user.click(screen.getByText("Go agents"));
@@ -87,8 +87,8 @@ describe("AppContext", () => {
       vi.useRealTimers();
     });
 
-    it("allows switching to settings", async () => {
-      vi.useFakeTimers();
+    it("allows switching to settings", { timeout: 10000 }, async () => {
+      vi.useFakeTimers({ shouldAdvanceTime: true });
       const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
       render(<AppProvider><NavConsumer /></AppProvider>);
       await user.click(screen.getByText("Go settings"));

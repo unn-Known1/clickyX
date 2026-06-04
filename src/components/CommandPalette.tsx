@@ -90,7 +90,7 @@ export default function CommandPalette({ onClose, onNavigate }: Props) {
                 <div className="palette-category">{cat}</div>
                 {filtered
                   .filter((i) => i.category === cat)
-                  .map((item, idx) => {
+                  .map((item, _idx) => {
                     const globalIdx = filtered.indexOf(item);
                     return (
                       <div

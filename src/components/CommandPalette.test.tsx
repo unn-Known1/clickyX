@@ -2,7 +2,6 @@ import { describe, it, expect, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import CommandPalette from "../components/CommandPalette";
-import type { Tab } from "../context/AppContext";
 
 describe("CommandPalette", () => {
   const mockClose = vi.fn();

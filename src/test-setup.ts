@@ -1,3 +1,4 @@
+import { vi, beforeAll, afterAll } from "vitest";
 import "@testing-library/jest-dom";
 
 // Mock Tauri APIs globally for all tests

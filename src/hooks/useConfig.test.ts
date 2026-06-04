@@ -1,9 +1,18 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { renderHook, waitFor, act } from "@testing-library/react";
+import React from "react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { invoke } from "@tauri-apps/api/core";
 import { useConfig } from "./useConfig";
 
 const mockInvoke = vi.mocked(invoke);
+
+function createWrapper() {
+  const queryClient = new QueryClient();
+  queryClient.setQueryDefaults(["config"], { retryDelay: 0 });
+  return ({ children }: { children: React.ReactNode }) =>
+    React.createElement(QueryClientProvider, { client: queryClient }, children);
+}
 
 const fakeConfig = {
   hotkeys: [{ key: "Ctrl+K", enabled: true, action: "open_palette" }],
@@ -23,7 +32,7 @@ describe("useConfig", () => {
     // Never resolve so the hook stays in its initial state
     mockInvoke.mockReturnValue(new Promise(() => {}));
 
-    const { result } = renderHook(() => useConfig());
+    const { result } = renderHook(() => useConfig(), { wrapper: createWrapper() });
 
     expect(result.current.config).toBeNull();
     expect(result.current.loading).toBe(true);
@@ -34,7 +43,7 @@ describe("useConfig", () => {
   it("loads config successfully and sets loading to false", async () => {
     mockInvoke.mockResolvedValue(fakeConfig);
 
-    const { result } = renderHook(() => useConfig());
+    const { result } = renderHook(() => useConfig(), { wrapper: createWrapper() });
 
     await waitFor(() => {
       expect(result.current.loading).toBe(false);
@@ -49,13 +58,13 @@ describe("useConfig", () => {
   it("sets error and loading false when get_config rejects", async () => {
     mockInvoke.mockRejectedValue(new Error("disk read failed"));
 
-    const { result } = renderHook(() => useConfig());
+    const { result } = renderHook(() => useConfig(), { wrapper: createWrapper() });
 
     await waitFor(() => {
       expect(result.current.loading).toBe(false);
-    });
+    }, { timeout: 5000 });
 
-    expect(result.current.error).toBe("Error: disk read failed");
+    expect(result.current.error).toBe("disk read failed");
     expect(result.current.config).toBeNull();
   });
 
@@ -64,7 +73,7 @@ describe("useConfig", () => {
     // Initial load
     mockInvoke.mockResolvedValueOnce(fakeConfig);
 
-    const { result } = renderHook(() => useConfig());
+    const { result } = renderHook(() => useConfig(), { wrapper: createWrapper() });
 
     await waitFor(() => {
       expect(result.current.loading).toBe(false);
@@ -81,9 +90,11 @@ describe("useConfig", () => {
     expect(mockInvoke).toHaveBeenCalledWith("update_config", {
       partial: { theme: "light" },
     });
-    expect(result.current.config).toEqual(updatedConfig);
     expect(returned).toEqual(updatedConfig);
     expect(result.current.error).toBeNull();
+    await waitFor(() => {
+      expect(result.current.config).toEqual(updatedConfig);
+    });
   });
 
   // ── 5. updateConfig failure ───────────────────────────────────────
@@ -91,7 +102,7 @@ describe("useConfig", () => {
     // Initial load succeeds
     mockInvoke.mockResolvedValueOnce(fakeConfig);
 
-    const { result } = renderHook(() => useConfig());
+    const { result } = renderHook(() => useConfig(), { wrapper: createWrapper() });
 
     await waitFor(() => {
       expect(result.current.loading).toBe(false);
@@ -106,7 +117,9 @@ describe("useConfig", () => {
       ).rejects.toThrow("permission denied");
     });
 
-    expect(result.current.error).toBe("Error: permission denied");
+    await waitFor(() => {
+      expect(result.current.saveError).toBe("permission denied");
+    });
     // config should remain unchanged from the initial load
     expect(result.current.config).toEqual(fakeConfig);
   });

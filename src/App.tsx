@@ -191,7 +191,7 @@ function AppInner() {
           setActiveTab("settings");
           if (parts[1]) {
             // Signal CommandPalette/SettingsTab to open a sub-section
-            (window as Record<string, unknown>).__paletteSection = parts[1];
+            (window as unknown as Record<string, unknown>).__paletteSection = parts[1];
           }
         } else if (parts[0] === "connections") {
           setActiveTab("connections");

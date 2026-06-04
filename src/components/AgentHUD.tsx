@@ -17,30 +17,6 @@ interface TimelineItem {
   type: "info" | "success" | "error" | "warning";
 }
 
-// ── Mini diff viewer ──────────────────────────────────────────────────────────
-function DiffView({ diff }: { diff: string }) {
-  return (
-    <pre className="hud-diff">
-      {diff.split("\n").map((line, i) => (
-        <span
-          key={i}
-          className={
-            line.startsWith("+")
-              ? "diff-add"
-              : line.startsWith("-")
-              ? "diff-del"
-              : line.startsWith("@@")
-              ? "diff-hunk"
-              : "diff-ctx"
-          }
-        >
-          {line + "\n"}
-        </span>
-      ))}
-    </pre>
-  );
-}
-
 // ── Activity Timeline ─────────────────────────────────────────────────────────
 function Timeline({ items }: { items: TimelineItem[] }) {
   return (
