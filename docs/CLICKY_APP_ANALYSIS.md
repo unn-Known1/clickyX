@@ -1,10 +1,15 @@
-# HeyClicky / Clicky macOS App — Complete Feature Analysis (for clickyX Cross-Platform Port)
+# HeyClicky (and OpenClicky) macOS App — Complete Feature Analysis (for clickyX Cross-Platform Port)
 
 > **Analysis date**: 2026-06-04
 > **Source**: DMG binary (`Clicky.dmg`, 254 MB compressed, 567 MB HFS+ volume)
-> **App version**: HeyClicky 1.0.22 (build 30)
+> **App version**: HeyClicky 1.0.22 (build 30) — the **commercial** product, main competitor
 > **Bundle ID**: `com.humansongs.clicky`
 > **Min OS**: macOS 14.2
+>
+> **Ecosystem hierarchy**:
+> - **HeyClicky** (Farza Majeed, YC W26) — the main commercial AI desktop companion, **macOS only**, cloud-managed, subscription-based. **This is ClickyX's primary reference target.**
+> - **OpenClicky** (Jason Kneen) — an open-source fork of HeyClicky, **macOS only**, ships only a **basic** subset of features (no auto-capture, no orbit voice picker, no onboarding wizard, no voice-agent handoff, etc.).
+> - **ClickyX** (this project) — cross-platform Tauri port with **full HeyClicky feature parity**, plus everything that's missing from OpenClicky.
 >
 > **Purpose**: This document reverse-engineers the macOS-only HeyClicky binary to guide the
 > **clickyX cross-platform port** (Tauri/Rust + web frontend). Each feature is annotated with
@@ -15,15 +20,16 @@
 
 ## 1. App Identity & Ecosystem
 
-There are **three versions** of this software:
+There are **three versions** of this software in the Clicky family — HeyClicky is the **main commercial product**, and OpenClicky is a **basic open-source fork** of it. ClickyX ports the **full HeyClicky feature set** (including the parts OpenClicky omits) to Windows, Linux, and macOS.
 
-| Version | Creator | Repo | Status |
-|---------|---------|------|--------|
-| **Clicky (original)** | Farza Majeed (`farzaa`) | `github.com/farzaa/clicky` | Open-source (MIT), public archive |
-| **HeyClicky (commercial)** | Farza Majeed (YC W26) | Private | Y Combinator-backed, cloud-managed |
-| **OpenClicky (fork)** | Jason Kneen (`jasonkneen`) | `github.com/jasonkneen/openclicky` | Active open-source fork with extra features |
+| Version | Creator | Repo | Status | Role |
+|---------|---------|------|--------|------|
+| **HeyClicky (commercial)** | Farza Majeed (YC W26) | `github.com/farzaa/clicky` (private) | Active, Y Combinator–backed, cloud-managed | **Main reference target — primary competitor** |
+| **OpenClicky (fork)** | Jason Kneen (`jasonkneen`) | `github.com/jasonkneen/openclicky` | Open-source fork, **macOS only**, ships a **basic** subset of HeyClicky features | Secondary reference (basic feature set) |
+| **Clicky (original)** | Farza Majeed (`farzaa`) | `github.com/farzaa/clicky` | Open-source (MIT), public archive | Historical original (pre-HeyClicky) |
+| **ClickyX (this project)** | `unn-Known1` | `github.com/unn-Known1/clickyX` | Cross-platform (Win/Linux/macOS) Tauri port with **full HeyClicky feature parity** | **The product** |
 
-The **DMG analyzed is HeyClicky 1.0.22** (commercial version), built with Xcode 26.5 on macOS 26.5 SDK.
+The **DMG analyzed is HeyClicky 1.0.22** (commercial version), built with Xcode 26.5 on macOS 26.5 SDK. This is the spec ClickyX targets for feature parity; OpenClicky is treated only as a partial-feature reference for the parts it happens to expose.
 
 ---
 

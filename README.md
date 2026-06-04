@@ -9,9 +9,10 @@
 [![Rust](https://img.shields.io/badge/rust-stable-blueviolet)](https://www.rust-lang.org)
 [![Local-First](https://img.shields.io/badge/local--first-yes-success)]()
 [![Cloud Telemetry](https://img.shields.io/badge/telemetry-none-success)]()
+[![HeyClicky Alternative](https://img.shields.io/badge/competitor-HeyClicky%20%2F%20Clicky-red)](https://github.com/farzaa/clicky)
 [![Repo](https://img.shields.io/badge/repo-unn--Known1%2FclickyX-181717?logo=github)](https://github.com/unn-Known1/clickyX)
 
-> **ClickyX** is a cross-platform, open-source AI desktop companion that lives in your system tray, listens to your voice, sees your screen, drives your cursor, runs background agents, and exposes a local HTTP bridge for tool integration. It is a faithful, feature-complete reimplementation of the macOS-only **OpenClicky** (and the original **Clicky / HeyClicky**) — written from scratch in **Rust + Tauri + React/TypeScript** so it runs natively on **Windows, Linux, and macOS**.
+> **ClickyX** is a cross-platform, open-source AI desktop companion that lives in your system tray, listens to your voice, sees your screen, drives your cursor, runs background agents, and exposes a local HTTP bridge for tool integration. It is a faithful, feature-complete reimplementation of the macOS-only **HeyClicky** (and its open-source sibling **OpenClicky**) — written from scratch in **Rust + Tauri + React/TypeScript** so it runs natively on **Windows, Linux, and macOS**.
 
 ---
 
@@ -21,7 +22,13 @@ ClickyX turns any desktop into an AI-augmented workspace. Hold a hotkey to talk,
 
 ClickyX is **not** a chatbot. It is a **runtime** — with a system-tray UI, a transparent overlay layer on every monitor, an external HTTP bridge on `localhost:32123`, a Codex-based agent runtime, a computer-use engine, an automation scheduler, and a fully open skill system.
 
-**Inspired by / ported from**: [OpenClicky](https://github.com/jasonkneen/openclicky) (Jason Kneen) · [HeyClicky](https://github.com/farzaa/clicky) (Farza Majeed) · original [Clicky](https://github.com/farzaa/clicky) (Farza Majeed, MIT).
+**Why ClickyX exists**: **HeyClicky** (Farza Majeed, YC W26) is the leading commercial AI desktop companion, but it is **macOS-only, cloud-locked, and requires a subscription**. Its open-source fork **OpenClicky** is also **macOS-only** and ships with only the most basic features. **ClickyX ports the full HeyClicky feature set — including the parts OpenClicky omits — to Windows, Linux, and macOS**, with zero cloud dependency and zero telemetry.
+
+**Project lineage**:
+- **[HeyClicky](https://github.com/farzaa/clicky)** — the commercial, Y Combinator–backed AI companion (macOS only, cloud-managed). _Main reference target for ClickyX._
+- **[OpenClicky](https://github.com/jasonkneen/openclicky)** — Jason Kneen's open-source fork of HeyClicky. macOS only, ships a **basic** subset of features. _Secondary reference._
+- **[Clicky](https://github.com/farzaa/clicky)** — the original MIT-licensed Clicky (Farza Majeed). Archive only.
+- **ClickyX** (this project) — cross-platform Tauri port with **full HeyClicky feature parity**, **OpenClicky-compatible bridge API**, and **everything that's missing from OpenClicky**.
 
 ---
 
@@ -43,22 +50,14 @@ ClickyX is **not** a chatbot. It is a **runtime** — with a system-tray UI, a t
 
 ---
 
-## Topics & Labels
-
-`clicky` · `openclicky` · `clickyx` · `heyclicky` · `ai-companion` · `ai-desktop` · `desktop-ai` · `ai-assistant` · `system-tray` · `tray-app` · `menu-bar-app` · `voice-assistant` · `voice-agent` · `push-to-talk` · `wake-word` · `always-on-voice` · `speech-to-text` · `text-to-speech` · `stt` · `tts` · `screen-capture` · `screen-reader` · `screenshot-ai` · `cursor-overlay` · `visual-guidance` · `on-screen-overlay` · `multi-monitor` · `agent-mode` · `codex-agent` · `codex-runtime` · `background-agent` · `agent-dock` · `computer-use` · `cua` · `click-automation` · `input-simulation` · `automation` · `cron-jobs` · `scheduled-tasks` · `tauri` · `tauri-v2` · `rust` · `react` · `typescript` · `vite` · `cross-platform` · `windows` · `linux` · `macos` · `anthropic` · `claude` · `openai` · `gpt` · `gemini` · `openrouter` · `nvidia` · `elevenlabs` · `cartesia` · `deepgram` · `whisper` · `assemblyai` · `edge-tts` · `mcp` · `model-context-protocol` · `http-bridge` · `localhost-api` · `sse-events` · `local-first` · `privacy` · `no-telemetry` · `open-source` · `mit-license` · `electron-alternative` · `flutter-alternative` · `appindicator` · `wayland` · `xcap` · `enigo` · `cpal` · `scrap` · `global-hotkey` · `screen-recording` · `accessibility` · `voice-discovery` · `orbit-picker` · `accent-color` · `auto-capture` · `onboarding` · `permission-wizard`
-
----
-
 ## Table of Contents
 
 1. [What is ClickyX?](#what-is-clickyx)
 2. [Repository](#repository)
-3. [Topics & Labels](#topics--labels)
-4. [Highlights](#highlights)
-5. [Feature Parity: OpenClicky (macOS) vs ClickyX](#feature-parity-openclicky-macos-vs-clickyx)
+3. [Highlights](#highlights)
+5. [Feature Parity: HeyClicky (macOS) vs ClickyX](#feature-parity-heyclicky-macos-vs-clickyx)
 6. [Features](#features)
-7. [Screens & Demos](#screens--demos)
-8. [Quick Start](#quick-start)
+7. [Quick Start](#quick-start)
 9. [Architecture](#architecture)
 10. [Using AI Providers](#using-ai-providers)
 11. [Build](#build)
@@ -92,9 +91,9 @@ ClickyX is **not** a chatbot. It is a **runtime** — with a system-tray UI, a t
 
 ---
 
-## Feature Parity: OpenClicky (macOS) vs ClickyX
+## Feature Parity: HeyClicky (macOS) vs ClickyX
 
-| Category | OpenClicky (macOS) | ClickyX | Status |
+| Category | HeyClicky (macOS) | ClickyX | Status |
 |----------|-------------------|---------|--------|
 | **Voice Pipeline** | | | |
 | Push-to-talk | `Ctrl+Option` hold | `Ctrl+Shift+V` (configurable) | ✅ |
@@ -186,12 +185,6 @@ ClickyX is **not** a chatbot. It is a **runtime** — with a system-tray UI, a t
 | **3D Generation** | Tripo3D API with polling |
 | **Logs** | Built-in log viewer with 5MB rotation |
 | **Config** | JSON export/import/reset |
-
----
-
-## Screens & Demos
-
-_(Screenshots and screen recordings to be added — see [Releases](https://github.com/unn-Known1/clickyX/releases) for binaries.)_
 
 ---
 
@@ -404,8 +397,8 @@ Pull requests, bug reports, and feature requests are welcome. See [CONTRIBUTING.
 
 ## Acknowledgments
 
-- **Jason Kneen** — for the original [OpenClicky](https://github.com/jasonkneen/openclicky) macOS app, which is the spiritual and feature parent of ClickyX.
-- **Farza Majeed** — for the original [Clicky](https://github.com/farzaa/clicky) (MIT) and the commercial HeyClicky, which inspired the design language, voice pipeline, and visual overlay.
+- **Farza Majeed** — for the original [Clicky](https://github.com/farzaa/clicky) (MIT) and the commercial **HeyClicky** (YC W26), which is the design and feature reference for ClickyX. HeyClicky's voice pipeline, visual overlay, Codex agent integration, and bridge API spec are what ClickyX re-implements cross-platform.
+- **Jason Kneen** — for [OpenClicky](https://github.com/jasonkneen/openclicky), the open-source fork of HeyClicky, which provided the bridge API contract (`localhost:32123`) and several agent-mode features that ClickyX preserves verbatim.
 - **OpenAI Codex team** — for the cross-platform Node.js agent runtime that powers ClickyX's agent mode.
 - **Tauri team** — for making cross-platform native desktop apps in Rust actually pleasant.
 
