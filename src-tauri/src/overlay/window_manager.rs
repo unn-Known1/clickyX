@@ -54,11 +54,8 @@ impl<R: Runtime> OverlayWindowManager<R> {
                 .always_on_top(true)
                 .skip_taskbar(true)
                 .resizable(false)
-                .fullscreen(false);
-            #[cfg(not(target_os = "macos"))]
-            {
-                builder = builder.transparent(true);
-            }
+                .fullscreen(false)
+                .transparent(true); // B-012: transparent on all platforms; macOS requires macos-private-api in tauri.conf.json
             let window = builder.build()
                 .map_err(|e| format!("create overlay window {label}: {e}"))?;
             let _ = window.set_ignore_cursor_events(true);
@@ -120,11 +117,8 @@ impl<R: Runtime> OverlayWindowManager<R> {
                     .decorations(false)
                     .always_on_top(true)
                     .skip_taskbar(true)
-                    .resizable(false);
-                #[cfg(not(target_os = "macos"))]
-                {
-                    builder = builder.transparent(true);
-                }
+                    .resizable(false)
+                    .transparent(true); // B-012: transparent on all platforms
                 let window = builder.build()
                     .map_err(|e| format!("refresh create {label}: {e}"))?;
                 let _ = window.set_ignore_cursor_events(true);

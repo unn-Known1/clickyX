@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAppContext } from "../context/AppContext";
 import { SkeletonList } from "./SkeletonLoader";
 
@@ -54,11 +55,133 @@ interface NeedsAttentionItem {
   message: string;
 }
 
+// P-007: App Usage Logging component
+interface AppUsageEntry {
+  app: string;
+  duration_secs: number;
+  last_seen: string;
+  interaction_count: number;
+}
+
+function AppUsageLog({ showToast }: { showToast: (msg: string, type: string) => void }) {
+  const [expanded, setExpanded] = useState(false);
+  const [clearing, setClearing] = useState(false);
+
+  const { data: usageLog = [], refetch } = useQuery<AppUsageEntry[]>({
+    queryKey: ["app-usage-log"],
+    queryFn: () => invoke<AppUsageEntry[]>("get_app_usage_log").catch(() => []),
+    enabled: expanded,
+    staleTime: 10_000,
+  });
+
+  const clearLog = async () => {
+    setClearing(true);
+    try {
+      await invoke("clear_app_usage_log");
+      refetch();
+      showToast("Usage log cleared", "success");
+    } catch {
+      showToast("Failed to clear log", "error");
+    } finally {
+      setClearing(false);
+    }
+  };
+
+  return (
+    <section className="connections-section">
+      <div
+        className="section-header"
+        style={{ cursor: "pointer", display: "flex", alignItems: "center", gap: 8 }}
+        onClick={() => setExpanded((v) => !v)}
+        role="button"
+        aria-expanded={expanded}
+      >
+        <span style={{ fontSize: 12, opacity: 0.5 }}>{expanded ? "▾" : "▸"}</span>
+        <h3 style={{ margin: 0 }}>App Usage Log</h3>
+        {usageLog.length > 0 && (
+          <span className="agent-skill-badge" style={{ marginLeft: "auto" }}>
+            {usageLog.length} apps
+          </span>
+        )}
+      </div>
+
+      {expanded && (
+        <div style={{ marginTop: 8 }}>
+          {usageLog.length === 0 ? (
+            <p className="empty-state-text">No app usage data collected yet. Usage is tracked when ClickyX detects active applications.</p>
+          ) : (
+            <>
+              <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 8 }}>
+                <button
+                  className="btn-secondary btn-sm"
+                  onClick={clearLog}
+                  disabled={clearing}
+                >
+                  {clearing ? "Clearing…" : "Clear Log"}
+                </button>
+              </div>
+              <table style={{ width: "100%", fontSize: 12, borderCollapse: "collapse" }}>
+                <thead>
+                  <tr style={{ opacity: 0.6, textAlign: "left" }}>
+                    <th style={{ padding: "4px 8px" }}>App</th>
+                    <th style={{ padding: "4px 8px" }}>Time</th>
+                    <th style={{ padding: "4px 8px" }}>Interactions</th>
+                    <th style={{ padding: "4px 8px" }}>Last seen</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {usageLog.map((entry) => (
+                    <tr key={entry.app} style={{ borderTop: "1px solid var(--border)" }}>
+                      <td style={{ padding: "4px 8px", fontWeight: 500 }}>{entry.app}</td>
+                      <td style={{ padding: "4px 8px" }}>
+                        {entry.duration_secs >= 3600
+                          ? `${(entry.duration_secs / 3600).toFixed(1)}h`
+                          : entry.duration_secs >= 60
+                          ? `${Math.round(entry.duration_secs / 60)}m`
+                          : `${entry.duration_secs}s`}
+                      </td>
+                      <td style={{ padding: "4px 8px" }}>{entry.interaction_count}</td>
+                      <td style={{ padding: "4px 8px", opacity: 0.6 }}>
+                        {new Date(entry.last_seen).toLocaleString()}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </>
+          )}
+        </div>
+      )}
+    </section>
+  );
+}
+
 function ConnectionsTab() {
   const { showToast } = useAppContext();
-  const [workspace, setWorkspace] = useState<WorkspaceStatus | null>(null);
-  const [mcpServers, setMcpServers] = useState<McpServer[]>([]);
-  const [automations, setAutomations] = useState<Automation[]>([]);
+  const queryClient = useQueryClient();
+
+  // F-030: use react-query for server-fetched state — no useState+useEffect raw fetchers
+  const { data: mcpServers = [], isLoading: mcpLoading } = useQuery<McpServer[]>({
+    queryKey: ["mcp-servers"],
+    queryFn: () => invoke<McpServer[]>("get_mcp_servers"),
+    staleTime: 30_000,
+  });
+
+  const { data: automations = [], isLoading: automationsLoading } = useQuery<Automation[]>({
+    queryKey: ["automations"],
+    queryFn: () => invoke<Automation[]>("list_automations"),
+    staleTime: 30_000,
+  });
+
+  const { data: workspace } = useQuery<WorkspaceStatus>({
+    queryKey: ["google-workspace"],
+    queryFn: () => invoke<WorkspaceStatus>("check_google_workspace")
+      .catch(() => ({ available: false, authenticated: false })),
+    staleTime: 60_000,
+  });
+
+  const initialLoading = mcpLoading || automationsLoading;
+
   const [mcpSearch, setMcpSearch] = useState("");
   const [automationSearch, setAutomationSearch] = useState("");
   const { agents } = useAgents();
@@ -88,28 +211,13 @@ function ConnectionsTab() {
   // F-012: Google Workspace OAuth state
   const [workspaceConnecting, setWorkspaceConnecting] = useState(false);
   const [showGoogleGuide, setShowGoogleGuide] = useState(false);
-  const [initialLoading, setInitialLoading] = useState(true);
-
-  useEffect(() => {
-    Promise.all([
-      invoke<WorkspaceStatus>("check_google_workspace")
-        .then(setWorkspace)
-        .catch(() => setWorkspace({ available: false, authenticated: false })),
-      invoke<McpServer[]>("get_mcp_servers")
-        .then(setMcpServers)
-        .catch((e) => { console.error(e); showToast("Failed to load MCP servers", "error"); }),
-      invoke<Automation[]>("list_automations")
-        .then(setAutomations)
-        .catch((e) => { console.error(e); showToast("Failed to load automations", "error"); }),
-    ]).finally(() => setInitialLoading(false));
-  }, [showToast]);
 
   /* ── MCP ─────────────────────────────────────────────────────────────────── */
   const addMcpServer = async () => {
     if (!newMcp.name || !newMcp.command) return;
     try {
-      const servers = await invoke<McpServer[]>("add_mcp_server", { config: newMcp });
-      setMcpServers(servers);
+      await invoke<McpServer[]>("add_mcp_server", { config: newMcp });
+      queryClient.invalidateQueries({ queryKey: ["mcp-servers"] });
       setNewMcp({ name: "", command: "", args: [], env: {}, enabled: true });
       setNewEnvKey(""); setNewEnvVal(""); setEditingArg("");
       showToast("MCP server added", "success");
@@ -120,8 +228,8 @@ function ConnectionsTab() {
 
   const removeMcpServer = async (name: string) => {
     try {
-      const servers = await invoke<McpServer[]>("remove_mcp_server", { name });
-      setMcpServers(servers);
+      await invoke<McpServer[]>("remove_mcp_server", { name });
+      queryClient.invalidateQueries({ queryKey: ["mcp-servers"] });
       showToast("MCP server removed", "success");
     } catch (e) {
       console.error(e); showToast("Failed to remove MCP server", "error");
@@ -171,10 +279,10 @@ function ConnectionsTab() {
       ? { type: "cron", expression: newAutomation.schedule.expression || "0 * * * *" }
       : { type: "interval", seconds: newAutomation.schedule.seconds || 3600 };
     try {
-      const created = await invoke<Automation>("create_automation", {
+      await invoke<Automation>("create_automation", {
         automation: { ...newAutomation, schedule, id: "" },
       });
-      setAutomations((prev) => [...prev, created]);
+      queryClient.invalidateQueries({ queryKey: ["automations"] });
       setNewAutomation({ id: "", name: "", prompt: "", schedule: { type: "interval", seconds: 3600 }, agent_slug: "", enabled: true });
       showToast("Automation created", "success");
     } catch (e) {
@@ -184,8 +292,8 @@ function ConnectionsTab() {
 
   const toggleAutomation = async (id: string, enabled: boolean) => {
     try {
-      const updated = await invoke<Automation>("toggle_automation", { id, enabled });
-      setAutomations((prev) => prev.map((a) => (a.id === id ? updated : a)));
+      await invoke<Automation>("toggle_automation", { id, enabled });
+      queryClient.invalidateQueries({ queryKey: ["automations"] });
     } catch (e) {
       console.error(e); showToast("Failed to toggle automation", "error");
     }
@@ -194,7 +302,7 @@ function ConnectionsTab() {
   const deleteAutomation = async (id: string) => {
     try {
       await invoke<boolean>("delete_automation", { id });
-      setAutomations((prev) => prev.filter((a) => a.id !== id));
+      queryClient.invalidateQueries({ queryKey: ["automations"] });
       showToast("Automation deleted", "success");
     } catch (e) {
       console.error(e); showToast("Failed to delete automation", "error");
@@ -223,9 +331,7 @@ function ConnectionsTab() {
     setWorkspaceConnecting(true);
     try {
       await invoke("google_workspace_auth_start");
-      // Re-check status after auth flow
-      const status = await invoke<WorkspaceStatus>("check_google_workspace");
-      setWorkspace(status);
+      queryClient.invalidateQueries({ queryKey: ["google-workspace"] });
       showToast("Google Workspace connected", "success");
     } catch (e) {
       showToast(`Google auth failed: ${e}`, "error");
@@ -237,7 +343,7 @@ function ConnectionsTab() {
   const disconnectGoogle = async () => {
     try {
       await invoke("google_workspace_auth_revoke");
-      setWorkspace({ available: true, authenticated: false });
+      queryClient.invalidateQueries({ queryKey: ["google-workspace"] });
       showToast("Google Workspace disconnected", "success");
     } catch (e) {
       showToast(`Disconnect failed: ${e}`, "error");
@@ -600,6 +706,9 @@ function ConnectionsTab() {
           <button className="btn-primary" onClick={createAutomation}>Create Automation</button>
         </div>
       </section>
+
+      {/* P-007: App Usage Logging surface */}
+      <AppUsageLog showToast={showToast} />
     </div>
   );
 }

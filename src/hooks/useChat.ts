@@ -2,6 +2,11 @@ import { useState, useCallback, useRef, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen, UnlistenFn } from "@tauri-apps/api/event";
 
+/** Generate a small random session ID to scope stream events per useChat instance */
+function newSessionId(): string {
+  return Math.random().toString(36).slice(2, 10);
+}
+
 export interface ChatMessage {
   role: string;
   content: string;
@@ -13,6 +18,7 @@ interface StreamEvent {
   type: "TextDelta" | "TextDone" | "Error" | "Done";
   text?: string;
   message?: string;
+  session_id?: string;
 }
 
 export function useChat() {
@@ -22,6 +28,8 @@ export function useChat() {
   const [error, setError] = useState<string | null>(null);
   const unlistenRef = useRef<UnlistenFn | null>(null);
   const cancelledRef = useRef(false);
+  // F-029: stable session ID so multiple useChat instances don't cross-contaminate
+  const sessionIdRef = useRef<string>(newSessionId());
 
   useEffect(() => {
     return () => {
@@ -61,8 +69,11 @@ export function useChat() {
       let accumulated = "";
 
       try {
+        const sessionId = sessionIdRef.current;
         const unlisten = await listen<StreamEvent>("stream-event", (event) => {
           if (cancelledRef.current) return;
+          // F-029: ignore events that belong to a different session
+          if (event.payload.session_id && event.payload.session_id !== sessionId) return;
           const p = event.payload;
           if (p.type === "TextDelta" && p.text) {
             accumulated += p.text;
@@ -88,7 +99,7 @@ export function useChat() {
         });
 
         unlistenRef.current = unlisten;
-        await invoke("send_chat_message_stream", { message: content, model: model ?? null });
+        await invoke("send_chat_message_stream", { message: content, model: model ?? null, sessionId });
       } catch (e) {
         if (!cancelledRef.current) {
           setError(String(e));
@@ -126,8 +137,11 @@ export function useChat() {
       let accumulated = "";
 
       try {
+        const sessionId = sessionIdRef.current;
         const unlisten = await listen<StreamEvent>("stream-event", (event) => {
           if (cancelledRef.current) return;
+          // F-029: filter by session ID
+          if (event.payload.session_id && event.payload.session_id !== sessionId) return;
           const p = event.payload;
           if (p.type === "TextDelta" && p.text) {
             accumulated += p.text;
@@ -161,6 +175,7 @@ export function useChat() {
             message: content,
             images: imageDataUrls,
             model: model ?? null,
+            sessionId,
           });
         } catch {
           // Fallback: blocking vision call, manually push result

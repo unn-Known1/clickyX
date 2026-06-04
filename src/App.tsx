@@ -97,7 +97,7 @@ function SplashScreen() {
 function AppInner() {
   const { activeTab, tabTransition, setActiveTab, toasts, dismissToast, showToast } =
     useAppContext();
-  const { config, updateConfig } = useConfig();
+  const { config, updateConfig, isLoading: configLoading } = useConfig();
   const [animState, setAnimState] = useState<"enter" | "exit" | "">("");
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [showAbout, setShowAbout] = useState(false);

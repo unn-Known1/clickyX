@@ -2,139 +2,164 @@
 
 ## Project Overview
 
-ClickyX is a cross-platform port of OpenClicky (macOS native) — a system-tray AI companion with voice, screen context, agent mode, cursor overlay, and integrations. Rebuilt from scratch for Windows, Linux, and macOS using cross-platform technologies.
+ClickyX is a cross-platform AI desktop companion — voice, screen context, cursor overlay, background agents, computer use, and a local HTTP bridge. Built with **Tauri v2 (Rust) + React 19 + TypeScript**. Runs on Windows, Linux, and macOS. Zero cloud dependency, zero telemetry.
+
+Full specification: `docs/PROJECT_SPEC.md` — the single source of truth for features, architecture, and implementation details.
+
+---
 
 ## Key Rules
 
-1. **Cross-platform first** — never write platform-specific code without providing equivalent implementations for all 3 target platforms
-2. **Feature parity** — every feature in the OpenClicky original must have a documented migration path
-3. **No macOS lock-in** — avoid Foundation, SwiftUI, AppKit, or any Apple-only framework
-4. **Local-first** — API keys are user-configured, no cloud key sync, no hosted OAuth, no Google login
-5. **External bridge contract** — the `localhost:32123` HTTP API must remain compatible with OpenClicky's spec
-6. **Refer to FEATURE_SPEC.md** — the comprehensive feature breakdown at `docs/FEATURE_SPEC.md` is the single source of truth
-7. **Use AppContext** — all navigation and toasts go through `src/context/AppContext.tsx`, never `window.__`
-8. **Use typed bindings** — all `invoke()` calls should reference `src/bindings.ts` for type safety
-9. **Tests first for new hooks** — any new custom hook under `src/hooks/` must have a `.test.ts` sibling
+1. **Cross-platform first** — never write platform-specific code without equivalent implementations for all 3 platforms
+2. **No macOS lock-in** — no Foundation, SwiftUI, AppKit, or Apple-only framework
+3. **Local-first** — API keys are user-configured; no cloud sync, no hosted OAuth, no telemetry
+4. **Bridge compatibility** — `localhost:32123` HTTP API must stay compatible with OpenClicky's spec
+5. **Use AppContext** — all toasts and navigation go through `src/context/AppContext.tsx`, never `window.__`
+6. **Use typed bindings** — all `invoke()` calls must reference `src/bindings.ts`
+7. **Use react-query** — all server data fetching uses `useQuery`/`useMutation` — no raw `useState+useEffect+invoke` for data
+8. **Tests for new hooks** — any new hook under `src/hooks/` must have a `.test.ts` sibling
 
-## Technology Base
+---
 
-- **App shell**: Tauri v2 (Rust + React/TypeScript frontend)
-- **Native APIs**: Rust (`cpal` for audio, `xcap` for screen capture, tray for system tray, `enigo` for CUA)
-- **Frontend**: React 19 + TypeScript + Vite
-- **State**: Zustand (`src/store/appStore.ts`) for cross-tab global state
-- **Data fetching**: `@tanstack/react-query` (QueryClient bootstrapped in `src/main.tsx`)
-- **Overlay**: Per-screen layered WebView windows (`src/overlay/`)
-- **AI providers**: HTTP/WebSocket APIs (platform-independent)
-- **Agent runtime**: Codex (Node.js, already cross-platform)
-- **i18n**: `i18next` + `react-i18next` (`src/i18n/index.ts`); EN + ES currently
+## Technology Stack
 
-## Verification
+| Layer | Technology |
+|-------|-----------|
+| App shell | Tauri v2 (Rust + WebView) |
+| Audio | `cpal` crate |
+| Screen capture | `xcap` crate |
+| Input simulation | `enigo` crate |
+| HTTP bridge | `actix-web` on `127.0.0.1:32123` |
+| Frontend | React 19 + TypeScript + Vite |
+| Global state | Zustand (`src/store/appStore.ts`) |
+| Data fetching | `@tanstack/react-query` |
+| i18n | `i18next` + `react-i18next` (EN/ES/FR/JA) |
+| Overlay | Per-screen transparent `WebviewWindow` (`src/overlay/`) |
+| AI providers | HTTP/WebSocket — Anthropic, OpenAI, Deepgram, ElevenLabs, etc. |
+| Agent runtime | Codex (Node.js, already cross-platform) |
+
+---
+
+## Verification Commands
 
 ```sh
-cargo check          # Rust compilation check
-cargo test           # Run Rust tests
-npm run build        # Frontend build (tsc + vite)
-npm test             # Vitest unit tests
+cargo check                   # Rust compile check
+cargo test --all-features     # Rust unit tests
+npm run build                 # tsc + vite (frontend)
+npm test                      # Vitest unit tests
+npm run test:e2e              # Playwright E2E
+npm run test:visual           # Playwright visual regression
 ```
 
-## Key Files
+---
 
-### Rust Backend
-- `docs/FEATURE_SPEC.md` — Complete feature catalog (single source of truth)
-- `src-tauri/src/` — All Rust source
-- `src-tauri/src/bridge.rs` — External HTTP bridge (`localhost:32123`)
-- `src-tauri/src/audio/` — Voice pipeline (capture, STT, TTS, wake word)
-- `src-tauri/src/ai/` — AI provider routing and model catalog
-- `src-tauri/src/overlay/` — Overlay window management + event routing
-- `src-tauri/src/agent/` — Codex agent lifecycle
-- `src-tauri/src/gen3d.rs` — Tripo3D 3D model generation API
+## Key File Map
 
-### Frontend
-- `src/App.tsx` — Root shell; wraps `AppProvider`, wires `OnboardingWizard`, `UpdateBanner`, `CommandPalette`, `StatusBar`
-- `src/main.tsx` — React 19 entry; boots `QueryClientProvider` + `i18n`
-- `src/context/AppContext.tsx` — Toast + navigation context (replaces all `window.__` globals)
-- `src/bindings.ts` — **Typed Tauri command wrappers** — use these instead of raw `invoke()`
-- `src/store/appStore.ts` — Zustand global store (agents, audio, stats, attention items)
-- `src/i18n/index.ts` — i18next config; EN + ES locales
-- `src/utils/agentStatus.ts` — Shared `agentStatusColor()` / `agentStatusLabel()` — do not duplicate
-- `src/components/` — All UI components
-- `src/hooks/` — Custom hooks (all have `.test.ts` coverage)
-- `src/overlay/OverlayApp.tsx` — Overlay renderer (glow, calibration, cursors, captions, dock)
-- `src/overlay/overlay.css` — Overlay-specific styles
+### Rust Backend (`src-tauri/src/`)
 
-### New Components (added in UI audit pass)
+| File / Dir | Purpose |
+|-----------|---------|
+| `bridge.rs` | HTTP API on `localhost:32123` — 25+ endpoints, MCP real stdio JSON-RPC |
+| `bridge_auth.rs` | Constant-time token auth middleware |
+| `audio/pipeline.rs` | VAD loop, audio ducking, voice-agent handoff, always-on mode |
+| `audio/handoff.rs` | `VoiceAgentHandoff` — phrase detection → `voice-agent-handoff` event |
+| `audio/tts.rs` | TTS providers (ElevenLabs, Cartesia, Edge, Deepgram Aura, OpenAI Realtime) |
+| `audio/stt.rs` | STT providers (Deepgram, Whisper, AssemblyAI) |
+| `audio/voices.rs` | 5-provider voice catalog |
+| `ai/guidance.rs` | Annotation tag parser — POINT, RECT, SCRIBBLE, OFFER, HIGHLIGHT, SHAPE |
+| `ai/app_contexts.rs` | Per-app CUA context injection (VS Code, Figma, Terminal, Blender, etc.) |
+| `ai/catalog.rs` | Dynamic model catalog |
+| `agent/session.rs` | Agent session lifecycle (create/run/stop/archive) |
+| `agent/skills.rs` | Skills loader |
+| `agent/codex.rs` | Codex sidecar process management |
+| `screen/capture.rs` | xcap-based screenshot capture |
+| `screen/auto_capture.rs` | Diff-based continuous capture engine |
+| `screen/coordinate.rs` | Y-flip + coordinate normalization |
+| `overlay/window_manager.rs` | Per-screen overlay windows + hotplug watcher |
+| `overlay/screen_router.rs` | `CoordinateNormalizer`, `ScreenManager` |
+| `overlay/lifecycle.rs` | Annotation lifecycle (armed → completed → missed) |
+| `overlay/manager.rs` | Annotation manager + sweep task |
+| `cua.rs` | `InputSimulator` — click, scroll, type, background mode |
+| `permissions.rs` | Real OS checks — TCC sqlite3 (macOS), registry (Windows), pactl (Linux) |
+| `automation/mod.rs` | Cron + interval scheduler with JSON persistence |
+| `gen3d.rs` | Tripo3D API |
+| `updater.rs` | Platform-aware updater with streaming progress events |
+| `config.rs` | Config load/save/export/import/reset |
+| `commands.rs` | All Tauri command handlers |
+| `lib.rs` | App setup, plugin registration, deep-link handler |
+| `tray.rs` | System tray setup |
+| `type_mode.rs` | Double-tap Ctrl type mode |
+
+### Frontend (`src/`)
+
 | File | Purpose |
 |------|---------|
-| `src/components/UpdateBanner.tsx` | Auto-updater banner (checks `@tauri-apps/plugin-updater`) |
-| `src/components/AboutDialog.tsx` | About dialog with version, GitHub link |
-| `src/components/CommandPalette.tsx` | Ctrl+K command palette |
-| `src/components/StatusBar.tsx` | Footer: audio meter, capture state, today stats, attention |
-| `src/components/HotkeyInput.tsx` | Key-capture widget for PTT hotkey setting |
-| `src/components/Icon.tsx` | Shared SVG icon component (30+ icons) |
-| `src/components/ModelGeneratorTab.tsx` | Tripo3D 3D generation UI |
-| `src/components/ThreeModelViewer.tsx` | Three.js GLB viewer (lazy-loaded) |
-| `src/hooks/useConversations.ts` | Multi-conversation history (sessionStorage-backed) |
+| `App.tsx` | Shell: lazy tabs, splash screen, titlebar drag-region, panel drop zone, deep-link handler, `aria-current` on tabs |
+| `AgentHUDApp.tsx` | Floating HUD window entry point |
+| `main.tsx` | React 19 root — `QueryClientProvider` + i18n bootstrap |
+| `bindings.ts` | **All typed `invoke()` wrappers — use this, never raw `invoke`** |
+| `context/AppContext.tsx` | Toast + navigation — use `showToast()` and `setActiveTab()` here |
+| `store/appStore.ts` | Zustand: agents, audio, today stats, attention items, status counts |
+| `i18n/index.ts` | i18next config — EN/ES/FR/JA |
+| `utils/agentStatus.ts` | `agentStatusColor()` / `agentStatusLabel()` — do not duplicate |
+| `utils/sounds.ts` | `Sounds.agentLaunch()` etc. — sound effect player |
+| `global.d.ts` | `window.__paletteSection`, `window.__deepLinkPending` |
+| `hooks/useConfig.ts` | react-query config CRUD |
+| `hooks/useAgents.ts` | react-query agents + mutations + `agent-state-changed` invalidation |
+| `hooks/useChat.ts` | Streaming chat with per-session `sessionIdRef` scoping |
+| `hooks/useConversations.ts` | Multi-thread conversation history |
+| `components/HomeTab.tsx` | Hero, dynamic suggestions, agent dock strip, empty-state CTA |
+| `components/AgentsTab.tsx` | Agent CRUD, skill management, slug auto-derive, drag-drop, HUD pop-out |
+| `components/AgentHUD.tsx` | Floating HUD — transcript, diff, activity timeline |
+| `components/ConnectionsTab.tsx` | Google Workspace auth, MCP CRUD, automations, app usage log |
+| `components/SettingsTab.tsx` | 8 sections with icon nav, group headers, scroll memory |
+| `components/SettingsSections/AppearanceSettings.tsx` | Theme, accent variants, color picker |
+| `components/SettingsSections/OverlayPrefsSettings.tsx` | Cursor size, opacity |
+| `components/SettingsSections/CaptureSettings.tsx` | Auto-capture config |
+| `components/SettingsSections/VoiceSettings.tsx` | PTT presets, STT/TTS, always-on, voice discovery |
+| `components/CommandPalette.tsx` | Ctrl+K fuzzy palette |
+| `components/StatusBar.tsx` | Audio meter, capture state, attention pill, today stats |
+| `components/HotkeyInput.tsx` | Key-capture widget |
+| `components/SkeletonLoader.tsx` | `SkeletonLine`, `SkeletonCard`, `SkeletonList` |
+| `components/OnboardingWizard.tsx` | 5-step first-run wizard |
+| `components/OnboardingMedia.tsx` | Onboarding video with SVG fallback |
+| `components/Icon.tsx` | Shared SVG icon set (30+ icons) |
+| `components/UpdateBanner.tsx` | Auto-updater notification |
+| `components/AboutDialog.tsx` | Version + links dialog |
+| `overlay/OverlayApp.tsx` | Glow, calibration, waveform (real amplitude), cursors, captions, dock, HIGHLIGHT/SHAPE, AlwaysListeningIndicator |
+| `overlay/overlay.css` | Overlay-specific styles |
+| `styles/theme.css` | All panel styles, semantic color tokens, 6 accent variants |
 
 ### Tests
-- `src/context/AppContext.test.tsx` — Toast + navigation context tests
-- `src/hooks/useChat.test.ts` — Chat streaming hook tests
-- `src/hooks/useConversations.test.ts` — Conversation history tests
-- `src/components/CommandPalette.test.tsx` — Palette search/nav/keyboard tests
-- `src/utils/agentStatus.test.ts` — Status color/label util tests
-- `src/test-setup.ts` — Global Tauri mock setup for Vitest
 
-## Development Phases
+| File | Covers |
+|------|--------|
+| `src/context/AppContext.test.tsx` | Toast add/dismiss/error, navigation |
+| `src/hooks/useChat.test.ts` | Empty state, streaming, cancel, clear |
+| `src/hooks/useConversations.test.ts` | Create/delete/update/persist/rename |
+| `src/components/CommandPalette.test.tsx` | Search, keyboard nav, click, backdrop |
+| `src/utils/agentStatus.test.ts` | Status color/label, map completeness |
+| `src/test-setup.ts` | Global Tauri mocks + react-i18next mock |
+| `e2e/app.spec.ts` | Tab bar, tab switching, Ctrl+K |
+| `e2e/chat.spec.ts` | Chat messages area, input focus |
+| `e2e/settings.spec.ts` | Settings tab navigation |
+| `e2e/visual.spec.ts` | `toHaveScreenshot()` for 4 tabs + palette + status bar |
 
-See `docs/FEATURE_SPEC.md#17-implementation-phases` for the full 7-phase build plan.
-
-## Implementation Status — All 8 Phases + Full UI Audit Complete ✅
-
-### Backend Phases
-| Phase | Feature | Spec | Status |
-|-------|---------|------|--------|
-| 1 | Bridge API Completion | `specs/001-bridge-completion/` | ✅ Complete |
-| 2 | Annotation Lifecycle | `specs/002-annotation-lifecycle/` | ✅ Complete |
-| 3 | Multi-Monitor Overlay | `specs/003-multi-monitor-overlay/` | ✅ Complete |
-| 4 | Streaming Overlay UI | `specs/004-streaming-overlay-ui/` | ✅ Complete |
-| 5 | Always-On Voice | `specs/005-always-on-voice/` | ✅ Complete |
-| 6 | CUA Click Execution | `specs/006-cua-click-execution/` | ✅ Complete |
-| 7 | Skills System | `specs/007-skills-system/` | ✅ Complete |
-| 8 | Onboarding & Permissions | `specs/008-onboarding-permissions/` | ✅ Complete |
-
-### Frontend UI Audit (Phase A–D) — All Fixed
-| Area | What was fixed |
-|------|---------------|
-| **Critical** | OnboardingWizard wired (first-run gate), favicon created, 3 missing CSS classes added, vision streaming unified, voice-orbit stale-closure fixed, stream cancel button |
-| **Dead code** | `useChat.sendMessage`, `useAgents.getAgentStatus/getAgentTranscript` removed; `ScreenPreview.monitor_id` removed; `OnboardingWizard.css` now imported |
-| **Architecture** | `window.__` globals → `AppContext`; modal portal at App root; `window.innerWidth` moved to component scope |
-| **Chat** | `react-markdown` + `remark-gfm` + `rehype-highlight`; copy/regenerate buttons; timestamps; stop button; drag-and-drop images; conversation history sidebar; draft persistence |
-| **Overlay** | Active-control glow (5 concentric rings); calibration box mode; `OverlayErrorBoundary`; resize handler |
-| **3D** | `ModelGeneratorTab` + `ThreeModelViewer` (Three.js GLB, orbit controls) |
-| **i18n** | `i18next` + `react-i18next`; EN + ES; language switcher in System Settings |
-| **Store** | Zustand `appStore` for agents, audio, today stats, attention items |
-| **Typed bindings** | `src/bindings.ts` — full typed wrapper for all `invoke()` calls |
-| **Components** | `HotkeyInput` (key capture), `Icon` (30+ SVGs), `UpdateBanner`, `AboutDialog`, `CommandPalette`, `StatusBar` |
-| **Tests** | 5 test files, 30+ test cases (AppContext, useChat, useConversations, CommandPalette, agentStatus) |
-| **Accessibility** | `aria-selected`, `role=tab/tabpanel`, `aria-live`, `prefers-reduced-motion` |
-| **PTT** | `HotkeyInput` key-capture widget replaces free-text field |
-| **Needs attention** | Surfaced globally in `StatusBar` from Zustand store |
-| **Today stats** | `get_today_stats` invoke in `StatusBar`; voice commands no longer hardcoded 0 |
-| **Settings** | Scroll memory per sub-tab; `3D Models` section added |
-| **MCP** | `env` key=value editor in `ConnectionsTab` |
-| **Automations** | Cron expression UI added alongside interval |
+---
 
 ## Build Status
-- `cargo check` — passes (76 dead_code warnings, local FUSE noexec prevents direct execution)
+
+- `cargo check` — passes
+- `cargo test --all-features` — passes (50+ Rust tests)
 - `npm run build` — passes (TypeScript + Vite)
 - `npm test` — 5 test files, 30+ cases passing
-- CI/CD: **PASSING** — Check (ubuntu) + Build (ubuntu/windows/macos) all green
-- Nightly: **PASSING** — Builds 3 platforms + creates pre-release with artifacts
-- Release: configured (tag-triggered, v* prefix)
-- macOS: DMG bundling disabled (`--bundles app`); overlay transparency pending `macos-private-api` in Tauri >2.11.2
-- Windows `.msi` release artifact pattern confirmed
+- CI: Check (ubuntu) + Build (ubuntu/windows/macos) — **PASSING**
+- Nightly: 3-platform build → pre-release artifacts — **PASSING**
+- macOS: `--bundles dmg,app` + `macOSPrivateApi: true` for overlay transparency
 
-## New Packages (added in UI audit pass)
-Run `npm install` after pulling to pick up new dependencies:
+---
+
+## Dependencies
 
 ```json
 "react-markdown": "^9",
@@ -142,40 +167,38 @@ Run `npm install` after pulling to pick up new dependencies:
 "rehype-highlight": "^7",
 "highlight.js": "^11",
 "three": "^0.170",
-"@react-three/fiber": "^8",
-"@react-three/drei": "^9",
 "i18next": "^23",
 "react-i18next": "^14",
 "@tanstack/react-query": "^5",
-"zustand": "^5"
+"zustand": "^5",
+"@tauri-apps/plugin-updater": "^2",
+"@tauri-apps/plugin-deep-link": "^2"
 ```
 
-Dev dependencies:
+Dev:
 ```json
 "@types/three": "^0.170",
 "@testing-library/user-event": "^14",
+"@playwright/test": "^1",
 "msw": "^2"
 ```
 
+---
+
 ## Git Config
+
 ```sh
 git config user.name "unn-Known1"
 git config user.email "ptelgm.yt@gmail.com"
 ```
 
-## Current Plan
+---
 
-<!-- SPECKIT START -->
-- **Feature**: All 8 Backend Phases + Full Frontend UI Audit Complete
-- **Status**: All critical/high/medium/low audit items resolved; tests added
-- **Remaining (non-blocking)**:
-  - `cargo check` local (FUSE noexec on this machine)
-  - macOS overlay transparency (needs Tauri >2.11.2 `macos-private-api`)
-  - `.app` → `.dmg` or `.zip` for macOS release artifacts
-  - macOS code signing + notarization secrets
-  - `GeneralSettings.tsx` split (304 LOC, cosmetic refactor)
-  - Accent-theme variants (L4, cosmetic)
-- **Audit report**: `docs/FRONTEND_UI_AUDIT.md`
-- **Repo**: `https://github.com/unn-Known1/clickyX`
-- **Feature specs**: `specs/001-bridge-completion` through `specs/008-onboarding-permissions`
-<!-- SPECKIT END -->
+## External Action Items (requires repo owner, not code changes)
+
+| Item | Action |
+|------|--------|
+| macOS signing | Set `APPLE_SIGNING_IDENTITY`, `APPLE_CERTIFICATE`, `APPLE_CERTIFICATE_PASSWORD`, `APPLE_NOTARIZATION_USERNAME`, `APPLE_NOTARIZATION_PASSWORD` as GitHub secrets |
+| Windows signing | Set `WINDOWS_SIGNING_CERT` (base64 PFX) and `WINDOWS_SIGNING_PASSWORD` as GitHub secrets |
+| Audio assets | Add `.mp3` files to `public/sounds/` (see `public/sounds/README.md`) |
+| Onboarding video | Add `intro.mp4` to `public/onboarding/` (SVG fallback already rendered) |
