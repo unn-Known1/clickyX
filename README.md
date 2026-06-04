@@ -9,7 +9,6 @@
 [![Rust](https://img.shields.io/badge/rust-stable-blueviolet)](https://www.rust-lang.org)
 [![Local-First](https://img.shields.io/badge/local--first-yes-success)]()
 [![Cloud Telemetry](https://img.shields.io/badge/telemetry-none-success)]()
-[![HeyClicky Alternative](https://img.shields.io/badge/competitor-HeyClicky%20%2F%20Clicky-red)](https://github.com/farzaa/clicky)
 [![RepoRank](https://www.reporank.online/api/badge/unn-Known1/clickyX.svg)](https://www.reporank.online/github/unn-Known1/clickyX)
 [![Repo](https://img.shields.io/badge/repo-unn--Known1%2FclickyX-181717?logo=github)](https://github.com/unn-Known1/clickyX)
 
