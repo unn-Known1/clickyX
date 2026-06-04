@@ -1589,9 +1589,8 @@ pub fn agent_attach_files(
     paths: Vec<String>,
     store: State<'_, Mutex<AgentStore>>,
 ) -> Result<(), String> {
-    let store = store.lock().map_err(|e| format!("lock: {e}"))?;
-    if let Some(session) = store.sessions.get(&slug) {
-        let mut session = session.lock().map_err(|e| format!("session lock: {e}"))?;
+    let mut store = store.lock().map_err(|e| format!("lock: {e}"))?;
+    if let Some(session) = store.sessions.get_mut(&slug) {
         // Store attached file paths in the session context
         for path in &paths {
             session.transcript.push(ChatMessage {
