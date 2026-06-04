@@ -222,7 +222,7 @@ The build artifact lands in `src-tauri/target/release/bundle/`:
 │  UI Layer: Tray Icon + Floating Panel + Overlay (per-screen)│
 ├─────────────────────────────────────────────────────────────┤
 │  Rust Backend:                                              │
-│    ├─ audio/      Capture, STT, TTS, Pipeline, Handoff,    │
+│    ├─ audio/      Capture, STT, TTS, Pipeline, Handoff,     │
 │    │              Voices (5-provider catalog), Wake Word    │
 │    ├─ ai/         Anthropic, OpenAI, Catalog, Vision        │
 │    ├─ agent/      Codex, Sessions, Skills, Dock             │
@@ -230,18 +230,18 @@ The build artifact lands in `src-tauri/target/release/bundle/`:
 │    ├─ overlay/    Cursor/Rect/Scribble, Lifecycle, Screen   │
 │    │              Router, Window Manager, Annotation Mgr    │
 │    ├─ cua.rs      Click simulation (enigo)                  │
-│    ├─ bridge.rs   HTTP API (127.0.0.1:32123)               │
-│    ├─ bridge_auth Token auth (constant-time)               │
+│    ├─ bridge.rs   HTTP API (127.0.0.1:32123)                │
+│    ├─ bridge_auth Token auth (constant-time)                │
 │    ├─ permissions Per-OS check/request stubs                │
 │    ├─ automation/ Cron/interval scheduling                  │
 │    ├─ gen3d.rs    Tripo3D API                               │
 │    └─ updater.rs  MSI/DMG/AppImage updater                  │
 ├─────────────────────────────────────────────────────────────┤
-│  Frontend (React + TypeScript):                              │
-│    ├─ Home        Chat, Screen Preview, Quick Ask          │
-│    ├─ Agents      Session Management, Skills, HUD          │
-│    ├─ Connections Integrations, Automations, MCP           │
-│    └─ Settings    General, Voice (orbit picker), AI, CUA,  │
+│  Frontend (React + TypeScript):                             │
+│    ├─ Home        Chat, Screen Preview, Quick Ask           │
+│    ├─ Agents      Session Management, Skills, HUD           │
+│    ├─ Connections Integrations, Automations, MCP            │
+│    └─ Settings    General, Voice (orbit picker), AI, CUA,   │
 │                  Permissions, Logs                          │
 │    └─ overlay/    CursorOverlay (per-screen windows)        │
 └─────────────────────────────────────────────────────────────┘
