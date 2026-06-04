@@ -47,7 +47,7 @@ impl<R: Runtime> OverlayWindowManager<R> {
             if self.windows.contains_key(&label) {
                 continue;
             }
-            let mut builder = WebviewWindowBuilder::new(app, &label, tauri::WebviewUrl::App(url.into()))
+            let builder = WebviewWindowBuilder::new(app, &label, tauri::WebviewUrl::App(url.into()))
                 .position(monitor.x as f64, monitor.y as f64)
                 .inner_size(monitor.width as f64, monitor.height as f64)
                 .decorations(false)
@@ -111,7 +111,7 @@ impl<R: Runtime> OverlayWindowManager<R> {
                 let _ = window.set_position(tauri::PhysicalPosition::new(monitor.x, monitor.y));
                 let _ = window.set_size(tauri::Size::Physical(tauri::PhysicalSize::new(monitor.width, monitor.height)));
             } else {
-                let mut builder = WebviewWindowBuilder::new(app, &label, tauri::WebviewUrl::App(url.into()))
+                let builder = WebviewWindowBuilder::new(app, &label, tauri::WebviewUrl::App(url.into()))
                     .position(monitor.x as f64, monitor.y as f64)
                     .inner_size(monitor.width as f64, monitor.height as f64)
                     .decorations(false)
