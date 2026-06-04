@@ -140,15 +140,13 @@ fn check_tcc_permission(service: &str) -> bool {
     );
     let system_db = "/Library/Application Support/com.apple.TCC/TCC.db";
 
-    for db in &[user_db.as_str(), system_db] {
+    for db in [user_db.as_str(), system_db] {
+        let query = format!(
+            "SELECT auth_value FROM access WHERE service='{}' AND auth_value=2 LIMIT 1;",
+            service
+        );
         let out = Command::new("sqlite3")
-            .args([
-                db,
-                &format!(
-                    "SELECT auth_value FROM access WHERE service='{}' AND auth_value=2 LIMIT 1;",
-                    service
-                ),
-            ])
+            .args([db, query.as_str()])
             .output();
         if let Ok(o) = out {
             let stdout = String::from_utf8_lossy(&o.stdout);
