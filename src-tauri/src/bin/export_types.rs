@@ -7,8 +7,9 @@
 fn main() {
     #[cfg(feature = "specta-export")]
     {
-        use specta::export::ts;
-        ts("../src/bindings.generated.ts").expect("failed to export types");
+        specta_typescript::Typescript::default()
+            .export_to("../src/bindings.generated.ts", &specta::export())
+            .expect("failed to export types");
         println!("Types exported to src/bindings.generated.ts");
     }
     #[cfg(not(feature = "specta-export"))]
