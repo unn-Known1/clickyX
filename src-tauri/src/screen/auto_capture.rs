@@ -43,6 +43,7 @@ pub struct AutoCaptureEngine {
     last_capture: Arc<Mutex<Option<Instant>>>,
     running: Arc<AtomicBool>,
     config: Arc<Mutex<AutoCaptureConfig>>,
+    on_capture: Arc<Mutex<Option<Box<dyn Fn(CapturedFrame) + Send + 'static>>>>,
 }
 
 impl AutoCaptureEngine {
@@ -54,6 +55,16 @@ impl AutoCaptureEngine {
             last_capture: Arc::new(Mutex::new(None)),
             running: Arc::new(AtomicBool::new(false)),
             config: Arc::new(Mutex::new(config)),
+            on_capture: Arc::new(Mutex::new(None)),
+        }
+    }
+
+    pub fn set_on_capture<F>(&self, callback: F)
+    where
+        F: Fn(CapturedFrame) + Send + 'static,
+    {
+        if let Ok(mut cb) = self.on_capture.lock() {
+            *cb = Some(Box::new(callback));
         }
     }
 
@@ -68,6 +79,7 @@ impl AutoCaptureEngine {
         let captures = self.captures.clone();
         let prev_frame = self.previous_frame.clone();
         let last_time = self.last_capture.clone();
+        let on_capture = self.on_capture.clone();
 
         std::thread::spawn(move || {
             while running.load(Ordering::SeqCst) {
@@ -121,13 +133,19 @@ impl AutoCaptureEngine {
                             width,
                             height,
                         };
-                        caps.push(frame);
+                        caps.push(frame.clone());
                         while caps.len() > max_cache {
                             caps.remove(0);
                         }
                         drop(caps);
                         *prev_frame.lock().unwrap() = Some(jpeg_bytes);
                         *last_time.lock().unwrap() = Some(Instant::now());
+
+                        if let Ok(cb_lock) = on_capture.lock() {
+                            if let Some(cb) = cb_lock.as_ref() {
+                                cb(frame);
+                            }
+                        }
                     }
                 }
 
@@ -146,6 +164,22 @@ impl AutoCaptureEngine {
     pub fn get_latest(&self) -> Option<CapturedFrame> {
         let caps = self.captures.lock().ok()?;
         caps.last().cloned()
+    }
+
+    pub fn get_latest_data_url(&self) -> Option<String> {
+        let frame = self.get_latest()?;
+        use base64::Engine;
+        let b64 = base64::engine::general_purpose::STANDARD.encode(&frame.data);
+        Some(format!("data:image/jpeg;base64,{}", b64))
+    }
+
+    pub fn clear_cache(&self) {
+        if let Ok(mut caps) = self.captures.lock() {
+            caps.clear();
+        }
+        if let Ok(mut prev) = self.previous_frame.lock() {
+            *prev = None;
+        }
     }
 
     pub fn get_history(&self, n: usize) -> Vec<CapturedFrame> {

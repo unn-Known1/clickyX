@@ -43,6 +43,7 @@ pub struct AudioConfig {
     pub sample_rate: u32,
     pub buffer_size: u32,
     pub volume: f32,
+    pub selected_voice_id: String,
 }
 
 impl Default for AudioConfig {
@@ -56,6 +57,7 @@ impl Default for AudioConfig {
             sample_rate: 16000,
             buffer_size: 1024,
             volume: 1.0,
+            selected_voice_id: "21m00Tcm4TlvDq8ikWAM".into(),
         }
     }
 }
@@ -168,6 +170,7 @@ pub struct OverlayPrefs {
     pub show_cursor: bool,
     pub tutor_mode: bool,
     pub agent_dock_position: String,
+    pub accent_presets: Vec<String>,
 }
 
 impl Default for OverlayPrefs {
@@ -178,6 +181,12 @@ impl Default for OverlayPrefs {
             show_cursor: true,
             tutor_mode: false,
             agent_dock_position: "bottom".into(),
+            accent_presets: vec![
+                "#4fc3f7".into(),
+                "#ab47bc".into(),
+                "#66bb6a".into(),
+                "#ffa726".into(),
+            ],
         }
     }
 }

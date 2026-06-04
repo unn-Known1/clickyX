@@ -113,6 +113,7 @@ Derived from OpenClicky (macOS native) — a comprehensive AI companion with voi
 | Filler phrases ("one moment...") | Pre-rendered PCM cached on disk | Same — pre-fetch and cache |
 | Playback volume control | AVAudioEngine mixer volume | Platform audio output |
 | Response captions (on-screen) | OpenClickyResponseCaptionFont (13 fonts) | Same — overlay text rendering |
+| Voice discovery (orbit picker) | Drag-to-rotate orbit of voice nodes, click-to-select | `VoiceDiscovery` component + `voices.rs` with per-provider voice lists, per-voice accent color auto-applies to overlay |
 
 ---
 
@@ -128,6 +129,7 @@ Derived from OpenClicky (macOS native) — a comprehensive AI companion with voi
 | Pre-warm shareable content cache | Cached 3s, proactive warmup | Same — cache scan results |
 | Coordinate system: AppKit -> Core Graphics | Y-flip conversion | Windows: top-left origin, Y-down (native) |
 | Application usage logging | Track encountered apps | Same — helpful for context |
+| Auto-capture mode | Continuous context gathering with diff-based change detection | `AutoCaptureEngine` with interval/mode config, `set_on_capture` callback emits `auto-capture-frame` event |
 
 ---
 
@@ -183,7 +185,8 @@ Derived from OpenClicky (macOS native) — a comprehensive AI companion with voi
 | Per-screen overlay window | NSWindow per screen, level screenSaver | Layered window per monitor (Windows) / compositor overlay |
 | Click-through overlay | ignoresMouseEvents = true | WS_EX_TRANSPARENT / input region pass-through |
 | Bezier arc flight animation | Quadratic bezier, 60fps Timer | Same animation math |
-| Triangle cursor avatar | Equilateral triangle, configurable accent | SVG/Canvas rendering |
+| Triangle cursor avatar | Equitable triangle, configurable accent | SVG/Canvas rendering |
+| 4 accent color presets | 4 swatches (blue, purple, green, orange) + custom picker | `OverlayPrefs::accent_presets`; `accent-changed` event applies to all overlay elements |
 | Pet sprite animation | Running left/right, idle, waving states | Sprite sheet animation |
 | Speech bubble with streaming text | Character-by-character timer, random delays | Same text streaming |
 | Active control glow | 5 concentric rounded rects, pulsing blur | Similar glow shader |

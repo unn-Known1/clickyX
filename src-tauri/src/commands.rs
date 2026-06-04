@@ -418,6 +418,23 @@ pub fn set_auto_capture_config(
 }
 
 #[tauri::command]
+pub fn get_latest_auto_capture(
+    engine: State<'_, Mutex<AutoCaptureEngine>>,
+) -> Result<Option<String>, String> {
+    let engine = engine.lock().map_err(|e| format!("lock error: {e}"))?;
+    Ok(engine.get_latest_data_url())
+}
+
+#[tauri::command]
+pub fn clear_auto_capture_cache(
+    engine: State<'_, Mutex<AutoCaptureEngine>>,
+) -> Result<(), String> {
+    let engine = engine.lock().map_err(|e| format!("lock error: {e}"))?;
+    engine.clear_cache();
+    Ok(())
+}
+
+#[tauri::command]
 pub fn overlay_show_cursor(app: AppHandle, x: f64, y: f64, label: Option<String>) -> Result<(), String> {
     crate::overlay::show_cursor(&app, x, y, label)
 }
@@ -744,6 +761,9 @@ pub fn update_audio_config(
         }
         if let Some(vol) = obj.get("volume").and_then(|v| v.as_f64()) {
             config.audio.volume = vol as f32;
+        }
+        if let Some(vid) = obj.get("selected_voice_id").and_then(|v| v.as_str()) {
+            config.audio.selected_voice_id = vid.to_string();
         }
     }
     config::save_config(&app, &config)?;
@@ -1164,6 +1184,86 @@ pub fn set_cursor_accent(app: AppHandle, color: String) -> Result<(), String> {
     config::save_config(&app, &config)?;
     app.manage(config);
     Ok(())
+}
+
+// --- Voice Discovery Commands ---
+
+#[tauri::command]
+pub fn get_voices(provider: String) -> Vec<crate::audio::VoiceInfo> {
+    crate::audio::get_voices_for_provider(&provider)
+}
+
+#[tauri::command]
+pub fn get_voice(voice_id: String) -> Option<crate::audio::VoiceInfo> {
+    crate::audio::get_voice_by_id(&voice_id)
+}
+
+#[tauri::command]
+pub fn select_voice(
+    app: AppHandle,
+    voice_id: String,
+    accent_color: Option<String>,
+) -> Result<(), String> {
+    let mut config = config::load_config(&app)?;
+    config.audio.selected_voice_id = voice_id.clone();
+    if let Some(ac) = accent_color.clone() {
+        config.overlay.cursor_accent = ac;
+    }
+    config::save_config(&app, &config)?;
+    app.manage(config);
+    if let Some(ac) = accent_color {
+        let _ = app.emit("accent-changed", ac);
+    }
+    let _ = app.emit("voice-selected", voice_id);
+    Ok(())
+}
+
+#[tauri::command]
+pub fn get_voice_providers() -> Vec<serde_json::Value> {
+    vec![
+        serde_json::json!({ "id": "elevenlabs", "name": "ElevenLabs", "tier": "premium", "requires_key": true }),
+        serde_json::json!({ "id": "cartesia", "name": "Cartesia", "tier": "premium", "requires_key": true }),
+        serde_json::json!({ "id": "aura", "name": "Deepgram Aura", "tier": "premium", "requires_key": true }),
+        serde_json::json!({ "id": "openai_realtime", "name": "OpenAI Realtime", "tier": "premium", "requires_key": true }),
+        serde_json::json!({ "id": "edge", "name": "Microsoft Edge", "tier": "free", "requires_key": false }),
+    ]
+}
+
+// --- Accent Color Commands ---
+
+#[tauri::command]
+pub fn set_accent_preset(
+    app: AppHandle,
+    color: String,
+) -> Result<String, String> {
+    let mut config = config::load_config(&app)?;
+    config.overlay.cursor_accent = color.clone();
+    config::save_config(&app, &config)?;
+    app.manage(config);
+    let _ = app.emit("accent-changed", color.clone());
+    Ok(color)
+}
+
+#[tauri::command]
+pub fn get_accent_presets(app: AppHandle) -> Result<Vec<String>, String> {
+    let config = config::load_config(&app)?;
+    Ok(config.overlay.accent_presets)
+}
+
+#[tauri::command]
+pub fn push_accent_preset(
+    app: AppHandle,
+    color: String,
+) -> Result<Vec<String>, String> {
+    let mut config = config::load_config(&app)?;
+    if !config.overlay.accent_presets.contains(&color) {
+        config.overlay.accent_presets.push(color.clone());
+    }
+    config.overlay.cursor_accent = color;
+    config::save_config(&app, &config)?;
+    app.manage(config.clone());
+    let _ = app.emit("accent-changed", config.overlay.cursor_accent.clone());
+    Ok(config.overlay.accent_presets)
 }
 
 pub type AgentState = AgentStore;

@@ -2,6 +2,16 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import { listen } from "@tauri-apps/api/event";
 import "./overlay.css";
 
+const DEFAULT_ACCENT = "#4fc3f7";
+
+function withAlpha(hex: string, alpha: number): string {
+  if (!hex || !hex.startsWith("#") || hex.length !== 7) return hex;
+  const a = Math.round(Math.max(0, Math.min(1, alpha)) * 255)
+    .toString(16)
+    .padStart(2, "0");
+  return hex + a;
+}
+
 interface CursorState {
   id: string;
   x: number;
@@ -101,12 +111,12 @@ function animateCursorArc(
   return () => { running = false; };
 }
 
-function Spinner() {
+function Spinner({ accent }: { accent: string }) {
   return (
     <div className="processing-spinner">
       <svg width="28" height="28" viewBox="0 0 28 28">
-        <circle cx="14" cy="14" r="10" fill="none" stroke="rgba(79,195,247,0.2)" strokeWidth="3" />
-        <path d="M14 4 A10 10 0 0 1 24 14" fill="none" stroke="#4fc3f7" strokeWidth="3" strokeLinecap="round">
+        <circle cx="14" cy="14" r="10" fill="none" stroke={withAlpha(accent, 0.2)} strokeWidth="3" />
+        <path d="M14 4 A10 10 0 0 1 24 14" fill="none" stroke={accent} strokeWidth="3" strokeLinecap="round">
           <animateTransform attributeName="transform" type="rotate" from="0 14 14" to="360 14 14" dur="0.8s" repeatCount="indefinite" />
         </path>
       </svg>
@@ -126,7 +136,7 @@ function WaveformBar({ height, color }: { height: number; color: string }) {
   );
 }
 
-function Waveform({ active }: { active: boolean }) {
+function Waveform({ active, accent }: { active: boolean; accent: string }) {
   const [bars, setBars] = useState<number[]>(Array(20).fill(8));
   const frameRef = useRef<number>(0);
 
@@ -148,7 +158,7 @@ function Waveform({ active }: { active: boolean }) {
   return (
     <div className="waveform-container">
       {bars.map((h, i) => (
-        <WaveformBar key={i} height={h} color="#4fc3f7" />
+        <WaveformBar key={i} height={h} color={accent} />
       ))}
     </div>
   );
@@ -164,6 +174,7 @@ function OverlayApp() {
   const [dock, setDock] = useState<AgentDockState | null>(null);
   const [processing, setProcessing] = useState(false);
   const [waveformActive, setWaveformActive] = useState(false);
+  const [accent, setAccent] = useState<string>(DEFAULT_ACCENT);
   const animRefs = useRef<Record<string, () => void>>({});
   const [petPos, setPetPos] = useState({ x: window.innerWidth / 2, y: window.innerHeight / 2 });
   const petTarget = useRef({ x: window.innerWidth / 2, y: window.innerHeight / 2 });
@@ -294,6 +305,12 @@ function OverlayApp() {
       setDock(e.payload);
     }).then(fn => unlisteners.push(fn));
 
+    listen<string>("accent-changed", (e) => {
+      if (typeof e.payload === "string" && e.payload.startsWith("#")) {
+        setAccent(e.payload);
+      }
+    }).then(fn => unlisteners.push(fn));
+
     listen("hide-agent-dock", () => {
       setDock(null);
     }).then(fn => unlisteners.push(fn));
@@ -338,44 +355,44 @@ function OverlayApp() {
   }, [startStreamingCaption]);
 
   return (
-    <div className="overlay-container">
+    <div className="overlay-container" style={{ ["--accent" as never]: accent } as React.CSSProperties}>
       <div className="pet-sprite" style={{ left: petPos.x, top: petPos.y - 30 }}>
         <svg width="32" height="32" viewBox="0 0 32 32">
-          <circle cx="16" cy="16" r="14" fill="rgba(79,195,247,0.35)" stroke="#4fc3f7" strokeWidth="1.5" />
+          <circle cx="16" cy="16" r="14" fill={withAlpha(accent, 0.35)} stroke={accent} strokeWidth="1.5" />
           <circle cx="12" cy="13" r="2" fill="#fff" />
           <circle cx="20" cy="13" r="2" fill="#fff" />
-          <path d="M12 20 Q16 24 20 20" fill="none" stroke="#4fc3f7" strokeWidth="1.5" strokeLinecap="round" />
+          <path d="M12 20 Q16 24 20 20" fill="none" stroke={accent} strokeWidth="1.5" strokeLinecap="round" />
         </svg>
       </div>
 
       {processing && (
         <div className="processing-indicator" style={{ left: petPos.x + 20, top: petPos.y - 20 }}>
-          <Spinner />
+          <Spinner accent={accent} />
         </div>
       )}
 
       {waveformActive && (
         <div className="waveform-wrapper" style={{ left: petPos.x - 80, top: petPos.y + 20 }}>
-          <Waveform active={waveformActive} />
+          <Waveform active={waveformActive} accent={accent} />
         </div>
       )}
 
       {rects.map(r => (
         <div key={r.id} className={`overlay-rect ${r.state === 'missed' ? 'overlay-rect-missed' : ''} ${r.state === 'completed' ? 'overlay-rect-completed' : ''}`}
-             style={{ left: r.x, top: r.y, width: r.w, height: r.h }}>
+             style={{ left: r.x, top: r.y, width: r.w, height: r.h, borderColor: accent, background: withAlpha(accent, 0.08) }}>
           {r.label && <span className="overlay-label">{r.label}</span>}
         </div>
       ))}
       {scribbles.map((s, i) => (
         <svg key={i} className="overlay-scribble" style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', pointerEvents: 'none', overflow: 'visible' }}>
-          <path d={`M ${s.points.map((p, j) => `${j === 0 ? "" : "L"} ${p[0]} ${p[1]}`).join(" ")}`} />
-          {s.label && <text>{s.label}</text>}
+          <path d={`M ${s.points.map((p, j) => `${j === 0 ? "" : "L"} ${p[0]} ${p[1]}`).join(" ")}`} stroke={accent} />
+          {s.label && <text fill={accent}>{s.label}</text>}
         </svg>
       ))}
       {Object.values(animatedCursors).map(c => (
         <div key={c.id} className="overlay-cursor animated-cursor" style={{ left: c.currentX, top: c.currentY }}>
           <svg width="24" height="24" viewBox="0 0 24 24">
-            <polygon points="2,2 20,12 12,14 10,22" fill={c.accent || "#4fc3f7"} opacity="0.9" />
+            <polygon points="2,2 20,12 12,14 10,22" fill={c.accent || accent} opacity="0.9" />
           </svg>
           {c.label && <span className="cursor-label">{c.label}</span>}
         </div>
@@ -383,7 +400,7 @@ function OverlayApp() {
       {cursors.map(c => (
         <div key={c.id} className="overlay-cursor" style={{ left: c.x, top: c.y }}>
           <svg width="24" height="24" viewBox="0 0 24 24">
-            <polygon points="2,2 20,12 12,14 10,22" fill={c.accent || "#4fc3f7"} opacity="0.8" />
+            <polygon points="2,2 20,12 12,14 10,22" fill={c.accent || accent} opacity="0.8" />
           </svg>
           {c.label && <span className="cursor-label">{c.label}</span>}
         </div>
@@ -404,17 +421,17 @@ function OverlayApp() {
         </div>
       ))}
       {dock && (
-        <div className={`agent-dock agent-dock-${dock.position}`}>
+        <div className={`agent-dock agent-dock-${dock.position}`} style={{ borderColor: withAlpha(accent, 0.2) }}>
           <div className="agent-dock-inner">
             {dock.items.map(item => (
               <div key={item.slug} className={`agent-dock-item agent-dock-item-${item.status}`}>
                 <div className="agent-dock-avatar">
                   <svg width="28" height="28" viewBox="0 0 28 28">
-                    <circle cx="14" cy="10" r="6" fill="rgba(79,195,247,0.3)" stroke="#4fc3f7" strokeWidth="1.2" />
-                    <circle cx="14" cy="24" r="8" fill="rgba(79,195,247,0.15)" stroke="#4fc3f7" strokeWidth="1" opacity="0.6" />
+                    <circle cx="14" cy="10" r="6" fill={withAlpha(accent, 0.3)} stroke={accent} strokeWidth="1.2" />
+                    <circle cx="14" cy="24" r="8" fill={withAlpha(accent, 0.15)} stroke={accent} strokeWidth="1" opacity="0.6" />
                     <circle cx="11" cy="9" r="1.2" fill="#fff" />
                     <circle cx="17" cy="9" r="1.2" fill="#fff" />
-                    <path d="M11 14 Q14 17 17 14" fill="none" stroke="#4fc3f7" strokeWidth="1" strokeLinecap="round" />
+                    <path d="M11 14 Q14 17 17 14" fill="none" stroke={accent} strokeWidth="1" strokeLinecap="round" />
                   </svg>
                   <span className={`status-dot status-dot-${item.status}`} />
                 </div>

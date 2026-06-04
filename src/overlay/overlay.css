@@ -7,11 +7,12 @@
   pointer-events: none;
   overflow: hidden;
   background: transparent;
+  --accent: #4fc3f7;
 }
 
 .overlay-rect {
   position: absolute;
-  border: 2px dashed #4fc3f7;
+  border: 2px dashed var(--accent, #4fc3f7);
   border-radius: 4px;
   animation: rect-draw-in 0.3s ease-out;
   background: rgba(79, 195, 247, 0.08);
@@ -79,7 +80,7 @@
 
 .overlay-scribble path {
   fill: none;
-  stroke: #4fc3f7;
+  stroke: var(--accent, #4fc3f7);
   stroke-width: 3;
   stroke-linecap: round;
   stroke-dasharray: 2000;
@@ -139,7 +140,7 @@
 }
 
 .animated-cursor svg {
-  filter: drop-shadow(0 0 6px rgba(79, 195, 247, 0.5));
+  filter: drop-shadow(0 0 6px var(--accent, #4fc3f7));
 }
 
 .animated-cursor .cursor-label {

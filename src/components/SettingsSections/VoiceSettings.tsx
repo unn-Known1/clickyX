@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import VoiceDiscovery from "../VoiceDiscovery";
 
 interface AudioConfig {
   ptt_hotkey: string;
@@ -8,6 +9,7 @@ interface AudioConfig {
   activation_mode: string;
   auto_submit: boolean;
   volume: number;
+  selected_voice_id: string;
 }
 
 function VoiceSettings() {
@@ -124,6 +126,18 @@ function VoiceSettings() {
           onChange={(e) => updateAudio("auto_submit", e.target.checked)}
         />
       </div>
+
+      <h3 className="settings-subhead">Voice Discovery</h3>
+      <p className="settings-hint">
+        Drag the orbit to preview voices. Each voice has a unique accent color that
+        will be applied to the overlay when selected.
+      </p>
+      <VoiceDiscovery
+        audioConfig={audioConfig}
+        onSelected={() => {
+          invoke<AudioConfig>("get_audio_config").then(setAudioConfig).catch(() => {});
+        }}
+      />
     </section>
   );
 }

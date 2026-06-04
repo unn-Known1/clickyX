@@ -21,15 +21,15 @@ Built with **Tauri v2** (Rust backend + React/TypeScript frontend).
 | TTS providers | ElevenLabs, AVSpeechSynthesizer, Cartesia | ElevenLabs, Cartesia, Edge, Deepgram Aura | ✅ (4 of 3) |
 | Realtime voice | GPT Realtime | GPT-4o Realtime | ✅ |
 | Audio VU meter | Yes | RMS + peak | ✅ |
-| Voice discovery | Drag-to-discover UI | — | ❌ |
+| Voice discovery | Drag-to-discover UI | Orbit picker with per-voice accent colors | ✅ |
 | **Screen & Vision** | | | |
 | Screen capture | ScreenCaptureKit | `xcap` crate (all platforms) | ✅ |
 | Multi-monitor | Yes | Per-screen overlay windows | ✅ |
 | Window capture | Full screen or active | Full, cursor, focused | ✅ |
-| Auto-capture mode | Continuous context | — | ❌ |
+| Auto-capture mode | Continuous context | Diff-based capture with interval + mode config | ✅ |
 | **Cursor Overlay** | | | |
 | Blue companion cursor | Yes | Yes, animated | ✅ |
-| Color options | 4 accent colors | Configurable | ✅ |
+| Color options | 4 accent colors | 4 preset swatches + custom color picker | ✅ |
 | Bezier arc animation | Yes | Yes | ✅ |
 | Annotations | POINT, TARGET, HOVER, RECT, SCRIBBLE, HIGHLIGHT, SHAPE | POINT, RECT, SCRIBBLE, CAPTION | ✅ |
 | Annotation lifecycle | Armed → Completed → Missed | Full state machine | ✅ |
@@ -69,7 +69,7 @@ Built with **Tauri v2** (Rust backend + React/TypeScript frontend).
 | Onboarding | Pre-sign-in flow | 4-step permission wizard | ✅ |
 | Permissions guide | Drag-to-accept | OS-specific step hints | ✅ |
 | Widget dashboard | Place/Stock/Image | Active Agents/Today/Needs Attention | ✅ |
-| Voice picker | Orbit discovery map | — | ❌ |
+| Voice picker | Orbit discovery map | Drag-to-rotate orbit with per-voice accent | ✅ |
 | **Backend** | | | |
 | AI providers | Anthropic, OpenAI | Anthropic, OpenAI, OpenRouter, Gemini, NVIDIA | ✅ |
 | Model catalog | Hardcoded | Dynamic remote fetch | ✅ |
@@ -93,7 +93,9 @@ Built with **Tauri v2** (Rust backend + React/TypeScript frontend).
 | **CUA Input** | Cross-platform click, double-click, type text, key press, cursor move via `enigo` — rate-limited, bounds-safe |
 | **Automations** | Interval/cron scheduling, agent binding, system app discovery |
 | **Onboarding** | 4-step permission wizard (mic, screen recording, accessibility, notifications) with OS-specific guidance |
-| **Theming** | System/Light/Dark, glass backdrop, configurable accent colors |
+| **Auto-Capture** | Continuous screen context with diff detection, interval/mode config, live status pill, last-frame cache |
+| **Voice Discovery** | Drag-to-rotate orbit picker, 5 provider voice lists (ElevenLabs, Cartesia, Deepgram Aura, OpenAI Realtime, Edge), click-to-select with auto-applied accent color |
+| **Theming** | System/Light/Dark, glass backdrop, 4 accent color presets + custom color picker |
 
 ## Prerequisites
 

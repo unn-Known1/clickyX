@@ -251,6 +251,17 @@ pub fn run() {
 
             // Initialize auto-capture engine
             let auto_capture_engine = AutoCaptureEngine::new(AutoCaptureConfig::default());
+            let ac_handle = handle.clone();
+            auto_capture_engine.set_on_capture(move |frame| {
+                let payload = serde_json::json!({
+                    "timestamp": frame.timestamp,
+                    "region": frame.region,
+                    "width": frame.width,
+                    "height": frame.height,
+                    "size": frame.data.len(),
+                });
+                let _ = ac_handle.emit("auto-capture-frame", payload);
+            });
             handle.manage(Mutex::new(auto_capture_engine));
 
             // Initialize agent state
@@ -393,6 +404,15 @@ pub fn run() {
             commands::stop_auto_capture,
             commands::get_auto_capture_status,
             commands::set_auto_capture_config,
+            commands::get_latest_auto_capture,
+            commands::clear_auto_capture_cache,
+            commands::get_voices,
+            commands::get_voice,
+            commands::select_voice,
+            commands::get_voice_providers,
+            commands::set_accent_preset,
+            commands::get_accent_presets,
+            commands::push_accent_preset,
             commands::get_element_at_point,
             commands::get_focused_element,
             commands::get_accessibility_tree_snapshot,

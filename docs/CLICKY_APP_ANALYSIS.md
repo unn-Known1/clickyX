@@ -105,7 +105,7 @@ ElevenLabs (TTS) → Overlay [POINT] tags rendered
 - **Realtime voice**: GPT Realtime v2 speech-to-speech pipeline
   - **clickyX**: ✅ OpenAI Realtime API WebSocket support
 - **Voice discovery UI**: "Drag to discover voices" with visual orbit picker
-  - **clickyX**: ❌ Not implemented (lower priority)
+  - **clickyX**: ✅ Orbit picker with per-voice accent colors, drag-to-rotate selection, voice preview (`src/components/VoiceDiscovery.tsx` + `src-tauri/src/audio/voices.rs`)
 - **Audio level metering**: VU meter with RMS power
   - **clickyX**: ✅ RMS + peak + clipping detection via ring buffer (`capture.rs`)
 
@@ -119,13 +119,13 @@ ElevenLabs (TTS) → Overlay [POINT] tags rendered
 - **Window capture policy**: Configurable (full screen vs. active window)
   - **clickyX**: ✅ Configurable via screen capture settings
 - **Auto-capture mode**: Continuous context gathering
-  - **clickyX**: ❌ Not implemented
+  - **clickyX**: ✅ `AutoCaptureEngine` with diff-based change detection, configurable interval (1s/3s/5s/10s/30s), mode (full/cursor/focused/all), `set_on_capture` callback emits `auto-capture-frame` Tauri event, last frame cache (`src-tauri/src/screen/auto_capture.rs`); full status UI in `GeneralSettings.tsx`
 
 ### 3.3 Cursor Overlay System
 - **Blue companion cursor**: Floats next to real cursor at all times
   - **clickyX**: ✅ Blue circle with smooth interpolation (`OverlayApp.tsx`)
 - **4 color options**: User-selectable (onboarding + settings)
-  - **clickyX**: ⚠️ Config exists, accent color support partial
+  - **clickyX**: ✅ `accent_presets: Vec<String>` in `OverlayPrefs` with 4 defaults (`#4fc3f7` blue, `#ab47bc` purple, `#66bb6a` green, `#ffa726` orange) plus custom color picker, `set_accent_preset` / `push_accent_preset` commands emit `accent-changed` event; `OverlayApp.tsx` listens and applies accent to cursor, rect, scribble, caption, dock, pet, spinner, waveform via `withAlpha()` helper
 - **Bezier-arc animation**: Smooth curved path to target
   - **clickyX**: ✅ Quadratic bezier arc with control point computation (`overlay.rs`, `OverlayApp.tsx`)
 - **Annotation tags** parsed from AI responses:
@@ -247,7 +247,7 @@ The clickyX port adds these features (not in HeyClicky DMG):
 - **Agent HUD**: Floating dashboard, agent chips, activity timeline
   - **clickyX**: ⚠️ AgentsTab with inline chat + status, no separate floating HUD window
 - **Voice picker**: Waveform picker, voice discovery map, orbit node picker
-  - **clickyX**: ❌ Not implemented
+  - **clickyX**: ✅ `VoiceDiscovery` orbit picker with 5 provider voice lists (ElevenLabs, Cartesia, Deepgram Aura, OpenAI Realtime, Edge), drag-to-rotate interaction, click-to-select with auto-applied accent color
 - **Permissions guide**: Drag-to-accept permission setup, step progress strip
   - **clickyX**: ⚠️ Basic permission check/request stubs exist, no guide UI
 - **Widgets**: Place, Stock, Image, Response cards (macOS)
@@ -451,7 +451,7 @@ Since clickyX is a **Tauri-based cross-platform port**, here is the actual parit
 | **P6** | Bundled skills | 28+ (macOS) / 63 (spec) | 4 skills + JS entry points + template | ⚠️ |
 | **P6** | Voice-agent handoff | Seamless switch | Independent systems | ❌ |
 | **P6** | Google Workspace | gogcli CLI | Not integrated | ❌ |
-| **P6** | Voice discovery UI | Orbit picker | Not implemented | ❌ |
+| **P6** | Voice discovery UI | Orbit picker | `VoiceDiscovery` component with 5 provider voice lists, drag-to-rotate | ✅ |
 | **P6** | Onboarding wizard | Permission guide | Not implemented | ❌ |
 | **P6** | Accessibility tree / Element location | Beta tools | Not implemented | ❌ |
 
@@ -494,3 +494,6 @@ Since clickyX is a **Tauri-based cross-platform port**, here is the actual parit
 | AVSpeechSynthesizer | Microsoft Edge TTS (no-key fallback) |
 | Apple Notes/Reminders/iMessage | **Not portable** — no direct equivalent |
 | 28+ macOS skills | `skills/` — 4 skills with JS entry points + template + validator |
+| Auto-capture (continuous context) | `src-tauri/src/screen/auto_capture.rs` — `AutoCaptureEngine` with diff threshold + interval + `set_on_capture` callback emitting `auto-capture-frame` event |
+| 4 accent color options | `OverlayPrefs::accent_presets` — 4 defaults + custom picker; `set_accent_preset` / `push_accent_preset` commands; `accent-changed` event propagates to overlay |
+| Voice discovery (orbit picker) | `src/components/VoiceDiscovery.tsx` + `src-tauri/src/audio/voices.rs` — drag-to-rotate orbit of per-provider voice nodes, click-to-select with auto-applied accent |
