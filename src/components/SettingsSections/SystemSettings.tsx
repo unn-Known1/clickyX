@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { invoke } from "@tauri-apps/api/core";
+import { invoke } from "../../bindings";
 import { useAppContext } from "../../context/AppContext";
 import { useTranslation } from "react-i18next";
 import { SUPPORTED_LOCALES } from "../../i18n/index";

@@ -1,5 +1,5 @@
 import { useState, useCallback } from "react";
-import { invoke } from "@tauri-apps/api/core";
+import { invoke } from "../bindings";
 import type { ChatMessage } from "./useChat";
 
 export interface Conversation {

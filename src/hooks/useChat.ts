@@ -1,6 +1,5 @@
 import { useState, useCallback, useRef, useEffect } from "react";
-import { invoke } from "@tauri-apps/api/core";
-import { listen, UnlistenFn } from "@tauri-apps/api/event";
+import { invoke, listen, type UnlistenFn } from "../bindings";
 
 /** Generate a small random session ID to scope stream events per useChat instance */
 function newSessionId(): string {

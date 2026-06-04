@@ -1,5 +1,5 @@
 import { useState, useCallback } from "react";
-import { invoke } from "@tauri-apps/api/core";
+import { invoke } from "../bindings";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAppContext } from "../context/AppContext";
 import { SkeletonList } from "./SkeletonLoader";

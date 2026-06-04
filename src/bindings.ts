@@ -7,7 +7,147 @@
  * Single source of truth for all invoke() signatures.
  * When ts-rs or specta is available on Rust side, regenerate this file.
  */
-import { invoke as tauriInvoke } from "@tauri-apps/api/core";
+import { invoke as rawInvoke } from "@tauri-apps/api/core";
+import { listen as tauriListen, type UnlistenFn, type Event } from "@tauri-apps/api/event";
+import { getCurrentWindow as tauriGetCurrentWindow } from "@tauri-apps/api/window";
+
+export type { UnlistenFn, Event };
+
+export const isTauri =
+  (typeof window !== "undefined" && "__TAURI_INTERNALS__" in window) ||
+  (typeof process !== "undefined" && process.env.NODE_ENV === "test");
+
+export function invoke<T>(cmd: string, args?: any): Promise<T> {
+  if (!isTauri) {
+    console.warn(`[Tauri Mock] invoke("${cmd}") called in browser.`);
+    // Provide safe defaults for critical commands to avoid UI breakage
+    if (cmd === "get_config") {
+      return Promise.resolve({
+        hotkeys: [],
+        theme: "system",
+        api_keys: [],
+        window: { pin: false, width: 800, height: 600 },
+        version: "0.1.0",
+        onboarding_completed: true,
+        overlay: {
+          cursor_accent: "#ff0000",
+          cursor_size: 16,
+          show_cursor: true,
+          tutor_mode: false,
+          agent_dock_position: "bottom",
+          accent_presets: [],
+        },
+        computer_use: {
+          pointing_model: "",
+          cua_backend: "",
+          native_cua: false,
+        }
+      } as any);
+    }
+    if (cmd === "get_audio_config") {
+      return Promise.resolve({
+        ptt_hotkey: "ctrl+space",
+        stt_provider: "deepgram",
+        tts_provider: "elevenlabs",
+        activation_mode: "ptt",
+        auto_submit: true,
+        volume: 0.8,
+        selected_voice_id: "default",
+      }) as any;
+    }
+    if (cmd === "get_ai_config") {
+      return Promise.resolve({
+        anthropic_api_key: null,
+        anthropic_model: "claude-3-5-sonnet",
+        openai_api_key: null,
+        openai_model: "gpt-4o",
+        openai_base_url: "https://api.openai.com/v1",
+        default_provider: "anthropic",
+        system_prompt: "",
+      }) as any;
+    }
+    if (cmd === "get_models") {
+      return Promise.resolve([
+        { id: "claude-3-5-sonnet", provider: "anthropic", name: "Claude 3.5 Sonnet", capabilities: ["chat"] },
+        { id: "gpt-4o", provider: "openai", name: "GPT-4o", capabilities: ["chat"] }
+      ]) as any;
+    }
+    if (cmd === "get_voice_providers") {
+      return Promise.resolve([
+        { id: "elevenlabs", name: "ElevenLabs", tier: "paid", requires_key: true },
+        { id: "cartesia", name: "Cartesia", tier: "paid", requires_key: true },
+        { id: "openai", name: "OpenAI TTS", tier: "paid", requires_key: true }
+      ]) as any;
+    }
+    if (cmd === "get_voices") {
+      return Promise.resolve([
+        { id: "voice-1", provider: "elevenlabs", name: "Rachel", description: "Rachel voice", accent_color: "#4fc3f7", gender: "female", style: "conversational", language: "en", tier: "free" },
+        { id: "voice-2", provider: "elevenlabs", name: "Domi", description: "Domi voice", accent_color: "#e91e63", gender: "female", style: "expressive", language: "en", tier: "free" }
+      ]) as any;
+    }
+    if (cmd === "check_permission") {
+      const permission = args?.permission || "";
+      return Promise.resolve({
+        permission,
+        granted: true,
+        description: `Mocked ${permission} permission`,
+      }) as any;
+    }
+    if (cmd === "request_permission") {
+      return Promise.resolve(true) as any;
+    }
+    if (cmd === "get_audio_status") {
+      return Promise.resolve({ listening: false, mode: "" }) as any;
+    }
+    if (cmd === "get_audio_level") {
+      return Promise.resolve(0) as any;
+    }
+    if (cmd === "get_today_stats") {
+      return Promise.resolve({ agents_run: 0, voice_commands: 0, items_for_review: 0 }) as any;
+    }
+    if (cmd === "get_auto_capture_status") {
+      return Promise.resolve({
+        running: false,
+        last_capture: null,
+        config: {
+          enabled: false,
+          interval_ms: 5000,
+          capture_mode: "full",
+          diff_threshold: 0.1,
+          max_cache: 10,
+          auto_attach: false,
+        }
+      }) as any;
+    }
+    if (cmd.startsWith("list_") || cmd.startsWith("get_mcp_servers") || cmd === "get_app_usage_log" || cmd === "get_automation_runs" || cmd === "get_logs") {
+      return Promise.resolve([]) as any;
+    }
+    return Promise.resolve(undefined as any);
+  }
+  if (args === undefined) {
+    return rawInvoke<T>(cmd);
+  }
+  return rawInvoke<T>(cmd, args);
+}
+
+export function listen<T>(event: string, handler: (e: Event<T>) => void): Promise<UnlistenFn> {
+  if (!isTauri) {
+    return Promise.resolve(() => {});
+  }
+  return tauriListen<T>(event, handler);
+}
+
+export function getCurrentWindow(): ReturnType<typeof tauriGetCurrentWindow> {
+  if (!isTauri) {
+    return {
+      onFocusChanged: (_handler: any) => Promise.resolve(() => {}),
+      minimize: () => Promise.resolve(),
+      close: () => Promise.resolve(),
+    } as any;
+  }
+  return tauriGetCurrentWindow();
+}
+
 
 // ── Config ────────────────────────────────────────────────────────────────────
 export interface AppConfig {
@@ -187,90 +327,90 @@ export interface AudioStatus {
 // ── Typed invoke wrappers ─────────────────────────────────────────────────────
 export const commands = {
   // Config
-  getConfig: () => tauriInvoke<AppConfig>("get_config"),
-  updateConfig: (partial: Partial<AppConfig>) => tauriInvoke<AppConfig>("update_config", { partial }),
-  exportConfig: () => tauriInvoke<string>("export_config"),
-  importConfig: (json: string) => tauriInvoke<void>("import_config", { json }),
-  resetConfig: () => tauriInvoke<void>("reset_config"),
+  getConfig: () => invoke<AppConfig>("get_config"),
+  updateConfig: (partial: Partial<AppConfig>) => invoke<AppConfig>("update_config", { partial }),
+  exportConfig: () => invoke<string>("export_config"),
+  importConfig: (json: string) => invoke<void>("import_config", { json }),
+  resetConfig: () => invoke<void>("reset_config"),
 
   // AI
-  getAiConfig: () => tauriInvoke<AiConfig>("get_ai_config"),
-  updateAiConfig: (partial: Partial<AiConfig>) => tauriInvoke<AiConfig>("update_ai_config", { partial }),
-  getModels: () => tauriInvoke<ModelInfo[]>("get_models"),
+  getAiConfig: () => invoke<AiConfig>("get_ai_config"),
+  updateAiConfig: (partial: Partial<AiConfig>) => invoke<AiConfig>("update_ai_config", { partial }),
+  getModels: () => invoke<ModelInfo[]>("get_models"),
 
   // Audio
-  getAudioConfig: () => tauriInvoke<AudioConfig>("get_audio_config"),
-  updateAudioConfig: (partial: Partial<AudioConfig>) => tauriInvoke<AudioConfig>("update_audio_config", { partial }),
-  getAudioStatus: () => tauriInvoke<AudioStatus>("get_audio_status"),
-  getAudioLevel: () => tauriInvoke<number>("get_audio_level"),
+  getAudioConfig: () => invoke<AudioConfig>("get_audio_config"),
+  updateAudioConfig: (partial: Partial<AudioConfig>) => invoke<AudioConfig>("update_audio_config", { partial }),
+  getAudioStatus: () => invoke<AudioStatus>("get_audio_status"),
+  getAudioLevel: () => invoke<number>("get_audio_level"),
 
   // Agents
-  listAgents: () => tauriInvoke<AgentInfo[]>("list_agents"),
-  createAgent: (name: string, slug: string, skills: string[]) => tauriInvoke<AgentInfo>("create_agent", { name, slug, skills }),
-  runAgent: (slug: string, prompt: string) => tauriInvoke<void>("run_agent", { slug, prompt }),
-  stopAgent: (slug: string) => tauriInvoke<void>("stop_agent", { slug }),
-  archiveAgent: (slug: string) => tauriInvoke<void>("archive_agent", { slug }),
-  enableSkill: (slug: string, skillName: string) => tauriInvoke<void>("enable_skill", { slug, skillName }),
-  disableSkill: (slug: string, skillName: string) => tauriInvoke<void>("disable_skill", { slug, skillName }),
-  listSkills: () => tauriInvoke<SkillInfo[]>("list_skills"),
+  listAgents: () => invoke<AgentInfo[]>("list_agents"),
+  createAgent: (name: string, slug: string, skills: string[]) => invoke<AgentInfo>("create_agent", { name, slug, skills }),
+  runAgent: (slug: string, prompt: string) => invoke<void>("run_agent", { slug, prompt }),
+  stopAgent: (slug: string) => invoke<void>("stop_agent", { slug }),
+  archiveAgent: (slug: string) => invoke<void>("archive_agent", { slug }),
+  enableSkill: (slug: string, skillName: string) => invoke<void>("enable_skill", { slug, skillName }),
+  disableSkill: (slug: string, skillName: string) => invoke<void>("disable_skill", { slug, skillName }),
+  listSkills: () => invoke<SkillInfo[]>("list_skills"),
 
   // Screen
-  captureScreens: () => tauriInvoke<ScreenImage[]>("capture_screens"),
-  captureCursorScreen: () => tauriInvoke<ScreenImage>("capture_cursor_screen"),
-  captureFocusedWindow: () => tauriInvoke<ScreenImage | null>("capture_focused_window"),
-  getAutoCaptureStatus: () => tauriInvoke<AutoCaptureStatus>("get_auto_capture_status"),
-  startAutoCapture: (captureMode?: string, intervalMs?: number) => tauriInvoke<void>("start_auto_capture", { captureMode, intervalMs }),
-  stopAutoCapture: () => tauriInvoke<void>("stop_auto_capture"),
-  clearAutoCaptureCache: () => tauriInvoke<void>("clear_auto_capture_cache"),
+  captureScreens: () => invoke<ScreenImage[]>("capture_screens"),
+  captureCursorScreen: () => invoke<ScreenImage>("capture_cursor_screen"),
+  captureFocusedWindow: () => invoke<ScreenImage | null>("capture_focused_window"),
+  getAutoCaptureStatus: () => invoke<AutoCaptureStatus>("get_auto_capture_status"),
+  startAutoCapture: (captureMode?: string, intervalMs?: number) => invoke<void>("start_auto_capture", { captureMode, intervalMs }),
+  stopAutoCapture: () => invoke<void>("stop_auto_capture"),
+  clearAutoCaptureCache: () => invoke<void>("clear_auto_capture_cache"),
 
   // Chat
-  sendChatMessageStream: (message: string, model: string | null) => tauriInvoke<void>("send_chat_message_stream", { message, model }),
-  sendChatMessageStreamVision: (message: string, images: string[], model: string | null) => tauriInvoke<void>("send_chat_message_stream_vision", { message, images, model }),
-  chatWithVision: (message: string, images: string[], model: string | null) => tauriInvoke<string>("chat_with_vision", { message, images, model }),
-  saveConversation: (conversation: unknown) => tauriInvoke<void>("save_conversation", { conversation }),
+  sendChatMessageStream: (message: string, model: string | null) => invoke<void>("send_chat_message_stream", { message, model }),
+  sendChatMessageStreamVision: (message: string, images: string[], model: string | null) => invoke<void>("send_chat_message_stream_vision", { message, images, model }),
+  chatWithVision: (message: string, images: string[], model: string | null) => invoke<string>("chat_with_vision", { message, images, model }),
+  saveConversation: (conversation: unknown) => invoke<void>("save_conversation", { conversation }),
 
   // Voice
-  getVoiceProviders: () => tauriInvoke<VoiceProvider[]>("get_voice_providers"),
-  getVoices: (provider: string) => tauriInvoke<VoiceInfo[]>("get_voices", { provider }),
-  selectVoice: (voiceId: string, accentColor: string) => tauriInvoke<void>("select_voice", { voiceId, accentColor }),
-  setAccentPreset: (color: string) => tauriInvoke<string>("set_accent_preset", { color }),
-  toggleTutorMode: () => tauriInvoke<boolean>("toggle_tutor_mode"),
+  getVoiceProviders: () => invoke<VoiceProvider[]>("get_voice_providers"),
+  getVoices: (provider: string) => invoke<VoiceInfo[]>("get_voices", { provider }),
+  selectVoice: (voiceId: string, accentColor: string) => invoke<void>("select_voice", { voiceId, accentColor }),
+  setAccentPreset: (color: string) => invoke<string>("set_accent_preset", { color }),
+  toggleTutorMode: () => invoke<boolean>("toggle_tutor_mode"),
 
   // MCP
-  getMcpServers: () => tauriInvoke<McpServer[]>("get_mcp_servers"),
-  addMcpServer: (config: McpServer) => tauriInvoke<McpServer[]>("add_mcp_server", { config }),
-  removeMcpServer: (name: string) => tauriInvoke<McpServer[]>("remove_mcp_server", { name }),
+  getMcpServers: () => invoke<McpServer[]>("get_mcp_servers"),
+  addMcpServer: (config: McpServer) => invoke<McpServer[]>("add_mcp_server", { config }),
+  removeMcpServer: (name: string) => invoke<McpServer[]>("remove_mcp_server", { name }),
 
   // Automations
-  listAutomations: () => tauriInvoke<Automation[]>("list_automations"),
-  createAutomation: (automation: Partial<Automation>) => tauriInvoke<Automation>("create_automation", { automation }),
-  toggleAutomation: (id: string, enabled: boolean) => tauriInvoke<Automation>("toggle_automation", { id, enabled }),
-  deleteAutomation: (id: string) => tauriInvoke<boolean>("delete_automation", { id }),
+  listAutomations: () => invoke<Automation[]>("list_automations"),
+  createAutomation: (automation: Partial<Automation>) => invoke<Automation>("create_automation", { automation }),
+  toggleAutomation: (id: string, enabled: boolean) => invoke<Automation>("toggle_automation", { id, enabled }),
+  deleteAutomation: (id: string) => invoke<boolean>("delete_automation", { id }),
 
   // 3D
-  generate3dModel: (prompt: string, style: string) => tauriInvoke<Model3DTask>("generate_3d_model", { prompt, style }),
-  get3dModelTask: (taskId: string) => tauriInvoke<Model3DTask>("get_3d_model_task", { taskId }),
+  generate3dModel: (prompt: string, style: string) => invoke<Model3DTask>("generate_3d_model", { prompt, style }),
+  get3dModelTask: (taskId: string) => invoke<Model3DTask>("get_3d_model_task", { taskId }),
 
   // Stats
-  getTodayStats: () => tauriInvoke<TodayStats>("get_today_stats"),
+  getTodayStats: () => invoke<TodayStats>("get_today_stats"),
 
   // Permissions
-  checkPermission: (permission: string) => tauriInvoke<PermissionStatus>("check_permission", { permission }),
-  requestPermission: (permission: string) => tauriInvoke<boolean>("request_permission", { permission }),
+  checkPermission: (permission: string) => invoke<PermissionStatus>("check_permission", { permission }),
+  requestPermission: (permission: string) => invoke<boolean>("request_permission", { permission }),
 
   // System
-  getAppVersion: () => tauriInvoke<string>("get_app_version"),
-  getLogs: (count: number) => tauriInvoke<LogEntry[]>("get_logs", { count }),
-  clearLogs: () => tauriInvoke<void>("clear_logs"),
-  checkGoogleWorkspace: () => tauriInvoke<WorkspaceStatus>("check_google_workspace"),
+  getAppVersion: () => invoke<string>("get_app_version"),
+  getLogs: (count: number) => invoke<LogEntry[]>("get_logs", { count }),
+  clearLogs: () => invoke<void>("clear_logs"),
+  checkGoogleWorkspace: () => invoke<WorkspaceStatus>("check_google_workspace"),
 
   // Overlay
-  overlayShowCursor: (x: number, y: number, label?: string) => tauriInvoke<void>("overlay_show_cursor", { x, y, label }),
-  overlayShowRect: (x: number, y: number, w: number, h: number, label?: string) => tauriInvoke<void>("overlay_show_rect", { x, y, w, h, label }),
-  overlayClear: () => tauriInvoke<void>("overlay_clear"),
-  setOverlayVisible: (visible: boolean) => tauriInvoke<void>("set_overlay_visible", { visible }),
+  overlayShowCursor: (x: number, y: number, label?: string) => invoke<void>("overlay_show_cursor", { x, y, label }),
+  overlayShowRect: (x: number, y: number, w: number, h: number, label?: string) => invoke<void>("overlay_show_rect", { x, y, w, h, label }),
+  overlayClear: () => invoke<void>("overlay_clear"),
+  setOverlayVisible: (visible: boolean) => invoke<void>("set_overlay_visible", { visible }),
 
   // Agent HUD
-  openAgentHud: (slug: string) => tauriInvoke<void>("open_agent_hud", { slug }),
-  agentAttachFiles: (slug: string, paths: string[]) => tauriInvoke<void>("agent_attach_files", { slug, paths }),
+  openAgentHud: (slug: string) => invoke<void>("open_agent_hud", { slug }),
+  agentAttachFiles: (slug: string, paths: string[]) => invoke<void>("agent_attach_files", { slug, paths }),
 };

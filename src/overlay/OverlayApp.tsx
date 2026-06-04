@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useCallback, Component, ReactNode } from "react";
-import { listen } from "@tauri-apps/api/event";
+import { listen } from "../bindings";
 import "./overlay.css";
 
 const DEFAULT_ACCENT = "#4fc3f7";

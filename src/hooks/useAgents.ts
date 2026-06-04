@@ -1,7 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useEffect } from "react";
-import { listen } from "@tauri-apps/api/event";
-import { commands } from "../bindings";
+import { commands, listen } from "../bindings";
 import type { AgentInfo, SkillInfo } from "../bindings";
 
 export type { AgentInfo, SkillInfo };

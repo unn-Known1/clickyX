@@ -1,6 +1,5 @@
 import { useState, useCallback, useEffect, lazy, Suspense, Component, ReactNode, useRef } from "react";
-import { getCurrentWindow } from "@tauri-apps/api/window";
-import { listen } from "@tauri-apps/api/event";
+import { getCurrentWindow, listen } from "./bindings";
 import OnboardingWizard from "./components/OnboardingWizard";
 import UpdateBanner from "./components/UpdateBanner";
 import AboutDialog from "./components/AboutDialog";

@@ -1,5 +1,5 @@
 import { useCallback } from "react";
-import { invoke } from "@tauri-apps/api/core";
+import { invoke } from "../bindings";
 
 export function useOverlay() {
   const showCursor = useCallback(async (x: number, y: number, label?: string) => {
