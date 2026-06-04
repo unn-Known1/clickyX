@@ -1,6 +1,4 @@
 use image::codecs::jpeg::JpegEncoder;
-use image::GenericImage;
-use image::GenericImageView;
 use serde::{Deserialize, Serialize};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};

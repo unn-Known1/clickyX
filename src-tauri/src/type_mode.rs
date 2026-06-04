@@ -1,7 +1,6 @@
 use enigo::{Direction, Enigo, Key, Keyboard, Settings};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Mutex;
-use std::time::Instant;
 use serde::{Deserialize, Serialize};
 
 use crate::config::TypeModeConfig;
