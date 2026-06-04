@@ -1,6 +1,6 @@
 [package]
 name = "clickyx"
-version = "0.1.0"
+version = "0.1.1"
 description = "ClickyX - Cross-platform AI companion"
 authors = ["ClickyX Contributors"]
 edition = "2021"

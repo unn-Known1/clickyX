@@ -106,7 +106,7 @@ struct ClickRequest {
 async fn health() -> HttpResponse {
     HttpResponse::Ok().json(HealthResponse {
         status: "ok".into(),
-        version: "0.1.0".into(),
+        version: "0.1.1".into(),
     })
 }
 
@@ -1232,15 +1232,15 @@ mod tests {
 
     #[test]
     fn test_health_response_struct() {
-        let h = HealthResponse { status: "ok".into(), version: "0.1.0".into() };
+        let h = HealthResponse { status: "ok".into(), version: "0.1.1".into() };
         let json = serde_json::to_string(&h).unwrap();
-        assert!(json.contains("0.1.0"));
+        assert!(json.contains("0.1.1"));
     }
 
     #[test]
     fn test_bridge_state_new() {
         // Just verify the struct exists and builds
-        let _ = HealthResponse { status: "ok".into(), version: "0.1.0".into() };
+        let _ = HealthResponse { status: "ok".into(), version: "0.1.1".into() };
     }
 }
 

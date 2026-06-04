@@ -154,7 +154,7 @@ mod tests {
         let original = Skill {
             name: "my-skill".into(),
             description: "Does things".into(),
-            version: "0.1.0".into(),
+            version: "0.1.1".into(),
             permission_class: "full_access".into(),
             entry_point: "main.ts".into(),
         };

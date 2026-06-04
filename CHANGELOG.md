@@ -19,7 +19,7 @@ All notable changes to ClickyX are documented here.
 
 ---
 
-## [1.0.0] - 2026-06-04
+## [0.1.1] - 2026-06-04
 
 ### Added — Frontend UI Audit (Phase A–D)
 
@@ -53,6 +53,7 @@ All notable changes to ClickyX are documented here.
 
 ### Fixed — Frontend
 
+- Safe environment-aware mock Tauri v2 API fallbacks in browser environments to prevent UI crashes during development and testing
 - `window.__` globals replaced with `AppContext` throughout
 - Modal portal mounted at App root
 - `window.innerWidth` moved to component scope (no SSR hazard)
@@ -140,6 +141,6 @@ All notable changes to ClickyX are documented here.
 - NVIDIA NIM API support via configurable `openai_base_url`
 - Cross-platform CI/CD (Linux, Windows, macOS)
 
-[Unreleased]: https://github.com/unn-Known1/clickyX/compare/v1.0.0...HEAD
-[1.0.0]: https://github.com/unn-Known1/clickyX/compare/v0.1.0...v1.0.0
+[Unreleased]: https://github.com/unn-Known1/clickyX/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/unn-Known1/clickyX/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/unn-Known1/clickyX/releases/tag/v0.1.0

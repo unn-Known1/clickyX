@@ -27,7 +27,7 @@ export function invoke<T>(cmd: string, args?: any): Promise<T> {
         theme: "system",
         api_keys: [],
         window: { pin: false, width: 800, height: 600 },
-        version: "0.1.0",
+        version: "0.1.1",
         onboarding_completed: true,
         overlay: {
           cursor_accent: "#ff0000",
