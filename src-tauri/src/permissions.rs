@@ -218,7 +218,7 @@ fn macos_version() -> (u32, u32) {
 /// macOS 13+ (Ventura) uses the new Settings app with different pane IDs.
 #[cfg(target_os = "macos")]
 fn permission_settings_url(perm: &Permission) -> String {
-    let (major, minor) = macos_version();
+    let (major, _minor) = macos_version();
     // macOS 13.0 = Ventura = first major Settings rewrite
     let is_ventura_or_newer = major >= 13;
 

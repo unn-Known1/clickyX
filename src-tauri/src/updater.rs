@@ -161,6 +161,11 @@ fn detect_linux_package_format() -> &'static str {
     "appimage"
 }
 
+#[cfg(not(target_os = "linux"))]
+fn detect_linux_package_format() -> &'static str {
+    "appimage"
+}
+
 pub fn install_update(update_data: &[u8]) -> Result<(), String> {
     let tmp_dir = std::env::temp_dir().join("clickyx-update");
     std::fs::create_dir_all(&tmp_dir)

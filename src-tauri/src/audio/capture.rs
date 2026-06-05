@@ -64,16 +64,11 @@ impl StreamWrapper {
                     return;
                 }
             }
-            // Defer the drop to the stream's thread via a one-shot channel
-            let (tx, rx) = std::sync::mpsc::channel::<cpal::Stream>();
-            if tx.send(stream).is_ok() {
-                // Wait for the drop to complete on the creating thread
-                if let Some(thread) = std::thread::spawn(move || {
-                    drop(rx.recv().ok());
-                }).join() {
-                    let _ = thread;
-                }
-            }
+            // cpal::Stream is not Send on Windows, so we cannot transport it
+            // to another thread. Leak intentionally to avoid UB from dropping
+            // a COM-bound object on the wrong thread. The OS cleans up on exit.
+            log::warn!("leaking cpal::Stream (not on creation thread)");
+            std::mem::forget(stream);
         }
     }
 }
