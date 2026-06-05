@@ -4,18 +4,23 @@ All notable changes to ClickyX are documented here.
 
 ## [Unreleased]
 
-- D-001: CONFIGURATION.md schema completed with all fields
-- D-002/I-007: SETUP.md clone URL corrected
-- D-003: BRIDGE_API.md created — full endpoint reference for localhost:32123
-- D-004: This CHANGELOG.md created
-- F-032: Removed deprecated window.__setActiveTab and window.__showToast from global.d.ts
-- F-033: Lazy-loading verified for HomeTab, AgentsTab, ConnectionsTab, SettingsTab
-- F-034: CSS design tokens consolidated; semantic color tokens added to theme.css
-- F-035: French (fr) and Japanese (ja) i18n locales added
-- F-036: Settings nav icons and group headers added
-- F-037: SkeletonLoader component added; used in AgentsTab and ConnectionsTab
-- B-017: specta/ts-rs typed binding generation scaffolding added
-- P-003/P-004: Sound utilities, audio asset placeholders, and OnboardingMedia component added
+---
+
+## [0.1.2] - 2026-06-05
+
+### Fixed — Cross-Platform Compilation
+
+- **Linux**: Resolved all 17 Linux build/runtime bugs — missing dependencies, packaging, and system integration
+- **macOS**: Resolved all 17 macOS build/runtime/signing bugs — privacy descriptions via `Info.plist`, code signing compatibility, NSIS config cleanup
+- **Windows**: Fixed `embed_resource` VERSION duplication causing LNK1123; fixed `MessageBoxA` type mismatch (`c_char` vs `u8`); removed invalid `webviewInstallMode` from NSIS config
+- **VoicePipeline**: Made `Send+Sync` by moving `AudioCapture` (with non-Send `cpal::Stream`) to a dedicated capture thread — eliminates deadlock risk in async contexts
+- **Tray**: Fixed exit prevention so the app lives in tray instead of fully quitting on window close
+- **Config**: Fixed `cfg-gated` field access on non-Windows, `map_err` return type mismatch in screen capture, `Option<&str>` vs `Option<String>` type mismatch in accessibility
+
+### Changed — Infrastructure
+
+- **CI**: Linux builds now run on `ubuntu-22.04` instead of `ubuntu-latest` — produces binaries with glibc 2.35 compatibility for older Ubuntu/Debian systems
+- **DEB**: Updated package dependencies to match Ubuntu 22.04 (`libxdo3` replaces `libxdo1`)
 
 ---
 
@@ -141,6 +146,7 @@ All notable changes to ClickyX are documented here.
 - NVIDIA NIM API support via configurable `openai_base_url`
 - Cross-platform CI/CD (Linux, Windows, macOS)
 
-[Unreleased]: https://github.com/unn-Known1/clickyX/compare/v0.1.1...HEAD
+[Unreleased]: https://github.com/unn-Known1/clickyX/compare/v0.1.2...HEAD
+[0.1.2]: https://github.com/unn-Known1/clickyX/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/unn-Known1/clickyX/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/unn-Known1/clickyX/releases/tag/v0.1.0

@@ -57,7 +57,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-13, macos-latest]
+        os: [ubuntu-22.04, windows-latest, macos-latest]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v5
@@ -84,7 +84,7 @@ jobs:
             ${{ matrix.os }}-cargo-
 
       - name: Install system deps (Linux)
-        if: matrix.os == 'ubuntu-latest'
+        if: matrix.os == 'ubuntu-22.04'
         run: |
           sudo apt-get update -y
           sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libxdo-dev libasound2-dev
@@ -112,7 +112,7 @@ jobs:
         run: npm run tauri build ${{ startsWith(matrix.os, 'macos') && '-- --bundles dmg,app' || '' }}
 
       - name: Verify Linux build artifacts
-        if: matrix.os == 'ubuntu-latest'
+        if: matrix.os == 'ubuntu-22.04'
         run: |
           BUNDLE_DIR="src-tauri/target/release/bundle"
           echo "=== Linux build artifacts ==="
@@ -153,7 +153,7 @@ jobs:
           mv ClickyX.app.zip ../dmg/ 2>/dev/null || true
 
       - name: Upload artifacts (Linux)
-        if: matrix.os == 'ubuntu-latest'
+        if: matrix.os == 'ubuntu-22.04'
         uses: actions/upload-artifact@v6
         with:
           name: clickyx-linux
@@ -173,9 +173,4 @@ jobs:
           name: clickyx-macos-aarch64
           path: src-tauri/target/release/bundle/
 
-      - name: Upload artifacts (macOS x86_64)
-        if: matrix.os == 'macos-13'
-        uses: actions/upload-artifact@v6
-        with:
-          name: clickyx-macos-x86_64
-          path: src-tauri/target/release/bundle/
+
