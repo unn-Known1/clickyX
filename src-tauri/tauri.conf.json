@@ -60,7 +60,13 @@
     },
     "macOS": {
       "minimumSystemVersion": "12.0",
-      "signingIdentity": null
+      "signingIdentity": null,
+      "privacyDescriptions": {
+        "NSCameraUsageDescription": "ClickyX needs camera access for screen context and visual analysis",
+        "NSMicrophoneUsageDescription": "ClickyX needs microphone access for voice commands and audio features",
+        "NSScreenCaptureUsageDescription": "ClickyX needs screen recording permission for automation and context awareness",
+        "NSAppleEventsUsageDescription": "ClickyX needs accessibility access to control other applications on your behalf"
+      }
     },
     "linux": {
       "deb": {

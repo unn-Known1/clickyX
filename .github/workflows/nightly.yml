@@ -18,7 +18,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
+        os: [ubuntu-latest, windows-latest, macos-13, macos-latest]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v5
@@ -53,7 +53,7 @@ jobs:
         run: npm run build
 
       - name: Build Tauri app
-        run: npm run tauri build ${{ matrix.os == 'macos-latest' && '-- --bundles app' || '' }}
+        run: npm run tauri build ${{ startsWith(matrix.os, 'macos') && '-- --bundles dmg,app' || '' }}
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v6

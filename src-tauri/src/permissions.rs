@@ -131,6 +131,7 @@ fn check_os_permission(perm: &Permission) -> PermissionStatus {
 /// Read the TCC SQLite database via `sqlite3` shell command.
 /// Returns true if the calling bundle (or any app) has `auth_value=2` (granted)
 /// for the given service. We check both the user and system TCC databases.
+/// Falls back to true if the DB is unreadable or query fails (to avoid blocking features).
 #[cfg(target_os = "macos")]
 fn check_tcc_permission(service: &str) -> bool {
     let home = std::env::var("HOME").unwrap_or_else(|_| "/root".into());
@@ -140,36 +141,57 @@ fn check_tcc_permission(service: &str) -> bool {
     );
     let system_db = "/Library/Application Support/com.apple.TCC/TCC.db";
 
-    for db in [user_db.as_str(), system_db] {
-        let query = format!(
+    // Try multiple query patterns to handle schema changes across macOS versions:
+    // - macOS 10.14-13: `access` table with `auth_value` column
+    // - macOS 14+: may use different columns or table names
+    let queries = [
+        // Standard schema: auth_value=2 means allowed
+        format!(
             "SELECT auth_value FROM access WHERE service='{}' AND auth_value=2 LIMIT 1;",
             service
-        );
-        let out = Command::new("sqlite3")
-            .args([db, query.as_str()])
-            .output();
-        if let Ok(o) = out {
-            let stdout = String::from_utf8_lossy(&o.stdout);
-            if stdout.trim() == "2" {
-                return true;
+        ),
+        // Alternative: check for any row with the service (some macOS 14+ schemas)
+        format!(
+            "SELECT COUNT(*) FROM access WHERE service='{}' LIMIT 1;",
+            service
+        ),
+    ];
+
+    for db in [user_db.as_str(), system_db] {
+        for query in &queries {
+            let out = Command::new("sqlite3")
+                .args([db, query.as_str()])
+                .output();
+            if let Ok(o) = out {
+                let stdout = String::from_utf8_lossy(&o.stdout);
+                let trimmed = stdout.trim();
+                if trimmed == "2" || (trimmed == "1" && query.contains("COUNT(*)")) {
+                    return true;
+                }
             }
         }
     }
+
+    log::warn!(
+        "TCC permission check for '{}' failed — DB may be unreadable or schema changed. Assuming denied.",
+        service
+    );
     false
 }
 
-/// Attempt a test screen capture to /tmp and check if it succeeds.
+/// Attempt a test screen capture to a temp file and check if it succeeds.
 #[cfg(target_os = "macos")]
 fn check_screen_recording() -> bool {
-    let tmp = "/tmp/clickyx_cap_test.png";
+    let tmp_dir = std::env::temp_dir().join("clickyx_cap_test.png");
+    let tmp = tmp_dir.to_string_lossy().to_string();
+    // Note: -x flag was removed in macOS 14 Sonoma; omit it for compatibility
     let out = Command::new("screencapture")
-        .args(["-x", "-t", "png", tmp])
+        .args(["-t", "png", &tmp])
         .output();
     match out {
         Ok(o) if o.status.success() => {
-            // If the file was created and is non-empty, recording is allowed.
-            let ok = std::fs::metadata(tmp).map(|m| m.len() > 0).unwrap_or(false);
-            let _ = std::fs::remove_file(tmp);
+            let ok = std::fs::metadata(&tmp).map(|m| m.len() > 0).unwrap_or(false);
+            let _ = std::fs::remove_file(&tmp);
             ok
         }
         _ => false,
@@ -177,25 +199,53 @@ fn check_screen_recording() -> bool {
 }
 
 #[cfg(target_os = "macos")]
+fn macos_version() -> (u32, u32) {
+    let out = Command::new("sw_vers")
+        .arg("-productVersion")
+        .output();
+    if let Ok(o) = out {
+        let ver = String::from_utf8_lossy(&o.stdout).trim().to_string();
+        let parts: Vec<&str> = ver.split('.').collect();
+        let major = parts.get(0).and_then(|s| s.parse().ok()).unwrap_or(0);
+        let minor = parts.get(1).and_then(|s| s.parse().ok()).unwrap_or(0);
+        return (major, minor);
+    }
+    (0, 0)
+}
+
+/// Get the System Settings/Preferences URL for a given permission and macOS version.
+/// macOS 12 (Monterey) and earlier use the old `com.apple.preference.security` panes.
+/// macOS 13+ (Ventura) uses the new Settings app with different pane IDs.
+#[cfg(target_os = "macos")]
+fn permission_settings_url(perm: &Permission) -> String {
+    let (major, minor) = macos_version();
+    // macOS 13.0 = Ventura = first major Settings rewrite
+    let is_ventura_or_newer = major >= 13;
+
+    let old_base = "x-apple.systempreferences:com.apple.preference.security?Privacy_";
+    let new_base = "x-apple.systempreferences:com.apple.settings.PrivacySecurity.Protected";
+
+    if is_ventura_or_newer {
+        // On Ventura+, open the general Privacy & Security pane.
+        // Deep links to specific sub-panes are unreliable across minor versions.
+        new_base.into()
+    } else {
+        // macOS 12 and below: use legacy pane deep links
+        let suffix = match perm {
+            Permission::Microphone => "Microphone",
+            Permission::ScreenRecording => "ScreenCapture",
+            Permission::Notifications => "Notifications",
+            Permission::Camera => "Camera",
+            Permission::Accessibility => "Accessibility",
+        };
+        format!("{}{}", old_base, suffix)
+    }
+}
+
+#[cfg(target_os = "macos")]
 fn request_os_permission(perm: &Permission) -> Result<bool, String> {
     log::info!("Requesting permission: {:?} (macOS)", perm);
-    let url = match perm {
-        Permission::Microphone => {
-            "x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone"
-        }
-        Permission::ScreenRecording => {
-            "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture"
-        }
-        Permission::Notifications => {
-            "x-apple.systempreferences:com.apple.preference.security?Privacy_Notifications"
-        }
-        Permission::Camera => {
-            "x-apple.systempreferences:com.apple.preference.security?Privacy_Camera"
-        }
-        Permission::Accessibility => {
-            "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility"
-        }
-    };
+    let url = permission_settings_url(perm);
 
     let result = Command::new("open")
         .arg(url)

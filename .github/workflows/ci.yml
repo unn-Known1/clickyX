@@ -57,7 +57,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
+        os: [ubuntu-latest, windows-latest, macos-13, macos-latest]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v5
@@ -109,7 +109,7 @@ jobs:
           Write-Host "✔ Windows build dependencies verified"
 
       - name: Build Tauri app
-        run: npm run tauri build ${{ matrix.os == 'macos-latest' && '-- --bundles dmg,app' || '' }}
+        run: npm run tauri build ${{ startsWith(matrix.os, 'macos') && '-- --bundles dmg,app' || '' }}
 
       - name: Verify Linux build artifacts
         if: matrix.os == 'ubuntu-latest'
@@ -146,7 +146,7 @@ jobs:
           echo "=== Verification complete ==="
 
       - name: Create macOS zip (fallback)
-        if: matrix.os == 'macos-latest'
+        if: startsWith(matrix.os, 'macos')
         run: |
           cd src-tauri/target/release/bundle/macos 2>/dev/null || true
           zip -r ClickyX.app.zip ClickyX.app 2>/dev/null || true
@@ -166,9 +166,16 @@ jobs:
           name: clickyx-windows
           path: src-tauri/target/release/bundle/
 
-      - name: Upload artifacts (macOS)
+      - name: Upload artifacts (macOS ARM64)
         if: matrix.os == 'macos-latest'
         uses: actions/upload-artifact@v6
         with:
-          name: clickyx-macos
+          name: clickyx-macos-aarch64
+          path: src-tauri/target/release/bundle/
+
+      - name: Upload artifacts (macOS x86_64)
+        if: matrix.os == 'macos-13'
+        uses: actions/upload-artifact@v6
+        with:
+          name: clickyx-macos-x86_64
           path: src-tauri/target/release/bundle/

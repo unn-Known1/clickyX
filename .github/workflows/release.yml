@@ -13,7 +13,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
+        os: [ubuntu-latest, windows-latest, macos-13, macos-latest]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v5
@@ -48,10 +48,10 @@ jobs:
         run: npm run build
 
       - name: Build Tauri app
-        run: npm run tauri build ${{ matrix.os == 'macos-latest' && '-- --bundles dmg,app' || '' }}
+        run: npm run tauri build ${{ startsWith(matrix.os, 'macos') && '-- --bundles dmg,app' || '' }}
 
       - name: Create macOS zip (fallback)
-        if: matrix.os == 'macos-latest'
+        if: startsWith(matrix.os, 'macos')
         run: |
           cd src-tauri/target/release/bundle/macos 2>/dev/null || true
           zip -r ClickyX.app.zip ClickyX.app 2>/dev/null || true
@@ -75,15 +75,16 @@ jobs:
           Remove-Item $certPath -Force
 
       - name: Sign (macOS)
-        if: matrix.os == 'macos-latest'
+        if: startsWith(matrix.os, 'macos')
         env:
           APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
           APPLE_NOTARIZATION_USERNAME: ${{ secrets.APPLE_NOTARIZATION_USERNAME }}
           APPLE_NOTARIZATION_PASSWORD: ${{ secrets.APPLE_NOTARIZATION_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
           if [ -n "$APPLE_SIGNING_IDENTITY" ]; then
             bash scripts/sign-macos.sh "$APPLE_SIGNING_IDENTITY"
-            bash scripts/notarize-macos.sh "$APPLE_NOTARIZATION_USERNAME" "$APPLE_NOTARIZATION_PASSWORD"
+            bash scripts/notarize-macos.sh "$APPLE_NOTARIZATION_USERNAME" "$APPLE_NOTARIZATION_PASSWORD" "" "$APPLE_TEAM_ID"
           else
             echo "No signing identity available, skipping sign"
           fi

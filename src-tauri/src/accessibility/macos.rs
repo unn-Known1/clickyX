@@ -4,6 +4,7 @@
 
 use super::{AccessibilityElement, AccessibilityTree, AccessibilityApi};
 use std::process::Command;
+use std::sync::OnceLock;
 
 pub struct MacAccessibility;
 
@@ -13,16 +14,36 @@ impl MacAccessibility {
     }
 }
 
+/// Escape a string for safe embedding in AppleScript string literals.
+/// Escapes backslashes and double quotes.
+fn escape_applescript(s: &str) -> String {
+    s.replace('\\', "\\\\").replace('"', "\\\"")
+}
+
+/// Log a one-time warning if cliclick is not installed.
+fn warn_once_cliclick_missing() {
+    static WARNED: OnceLock<()> = OnceLock::new();
+    WARNED.get_or_init(|| {
+        log::info!("cliclick not found — mouse position and fast clicks will fall back to osascript. Install with: brew install cliclick");
+    });
+}
+
 /// Run an AppleScript one-liner via `osascript -e` and return trimmed stdout.
 fn osascript(script: &str) -> Option<String> {
     let out = Command::new("osascript")
         .args(["-e", script])
         .output()
+        .map_err(|e| {
+            log::warn!("osascript launch failed: {e}");
+            e
+        })
         .ok()?;
     if out.status.success() {
         let s = String::from_utf8_lossy(&out.stdout).trim().to_string();
         if s.is_empty() { None } else { Some(s) }
     } else {
+        let stderr = String::from_utf8_lossy(&out.stderr);
+        log::warn!("osascript failed (exit {}): {}", out.status, stderr.trim());
         None
     }
 }
@@ -98,6 +119,7 @@ fn mouse_location() -> (i32, i32) {
             }
         }
     }
+    warn_once_cliclick_missing();
     (0, 0)
 }
 
@@ -131,10 +153,11 @@ impl AccessibilityApi for MacAccessibility {
         // We check each visible app's front window bounds.
         let apps = list_visible_apps();
         for app in &apps {
+            let safe_app = escape_applescript(app);
             let script = format!(
                 "tell application \"System Events\" to tell application process \"{}\" \
                  to return {{name of front window, position of front window, size of front window}}",
-                app
+                safe_app
             );
             if let Some(info) = osascript(&script) {
                 // Parse the tuple: "Window Title, x, y, w, h"
@@ -258,10 +281,11 @@ impl AccessibilityApi for MacAccessibility {
         }
 
         // Try to get menu items for the current app
+        let safe_name = escape_applescript(&element.name);
         let script = format!(
             "tell application \"System Events\" to return name of every menu item of menu bar 1 of \
              application process \"{}\"",
-            element.name
+            safe_name
         );
         if let Some(items) = osascript(&script) {
             let children: Vec<AccessibilityElement> = items
@@ -365,7 +389,8 @@ impl AccessibilityApi for MacAccessibility {
                         }
                     })
                     .unwrap_or(&element.name);
-                let script = format!("tell application \"{}\" to activate", app_name);
+                let safe_name = escape_applescript(app_name);
+                let script = format!("tell application \"{}\" to activate", safe_name);
                 let _ = osascript(&script);
                 Ok(())
             }
@@ -381,6 +406,7 @@ impl AccessibilityApi for MacAccessibility {
                 {
                     return Ok(());
                 }
+                warn_once_cliclick_missing();
                 // Fallback: AppleScript click at coords
                 let script = format!(
                     "tell application \"System Events\" to click at {{{}, {}}}",

@@ -194,10 +194,61 @@ pub fn install_update(update_data: &[u8]) -> Result<(), String> {
             .spawn()
             .map_err(|e| format!("failed to launch installer: {e}"))?;
     } else if cfg!(target_os = "macos") {
-        std::process::Command::new("open")
-            .args(["-W", &path_str])
-            .spawn()
-            .map_err(|e| format!("failed to open DMG: {e}"))?;
+        // Mount DMG, copy .app to /Applications, then unmount.
+        let mount_output = std::process::Command::new("hdiutil")
+            .args(["attach", "-nobrowse", "-quiet", &path_str])
+            .output()
+            .map_err(|e| format!("failed to mount DMG: {e}"))?;
+        if !mount_output.status.success() {
+            let stderr = String::from_utf8_lossy(&mount_output.stderr);
+            return Err(format!("hdiutil attach failed: {}", stderr.trim()));
+        }
+        // Find the mounted volume path
+        let mount_out = String::from_utf8_lossy(&mount_output.stdout);
+        let vol_path = mount_out
+            .lines()
+            .filter_map(|l| {
+                let l = l.trim();
+                if l.contains("/Volumes/") {
+                    l.split_whitespace().last().map(|s| s.to_string())
+                } else {
+                    None
+                }
+            })
+            .next();
+        let vol_path = match vol_path {
+            Some(p) => p,
+            None => return Err("could not determine DMG mount path".into()),
+        };
+        // Find the .app on the volume
+        let app_on_vol = format!("{}/ClickyX.app", vol_path);
+        let apps_dir = dirs::home_dir()
+            .unwrap_or_default()
+            .join("/Applications");
+        let target_app = format!("{}/ClickyX.app", apps_dir.display());
+        // Remove existing app if present
+        let _ = std::fs::remove_dir_all(&target_app);
+        // Copy with ditto (preserves code signature, extended attributes)
+        let copy_result = std::process::Command::new("ditto")
+            .args([&app_on_vol, &target_app])
+            .output();
+        // Unmount DMG regardless of copy result
+        let _ = std::process::Command::new("hdiutil")
+            .args(["detach", "-quiet", &vol_path])
+            .output();
+        match copy_result {
+            Ok(out) if out.status.success() => {
+                log::info!("macOS app updated at {}", target_app);
+            }
+            Ok(out) => {
+                let stderr = String::from_utf8_lossy(&out.stderr);
+                return Err(format!("ditto copy failed: {}", stderr.trim()));
+            }
+            Err(e) => {
+                return Err(format!("ditto launch failed: {e}"));
+            }
+        }
+        log::info!("Update installed to /Applications. User must relaunch.");
     } else {
         let pkg_format = detect_linux_package_format();
         match pkg_format {

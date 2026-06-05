@@ -284,6 +284,22 @@ public class Input {{
             // Requires Accessibility permission.
             let cx = x as i64;
             let cy = y as i64;
+            // Quick accessibility probe before the expensive click
+            let probe = std::process::Command::new("osascript")
+                .args(["-e", "tell application \"System Events\" to return name of first process whose frontmost is true"])
+                .output();
+            match probe {
+                Ok(p) if !p.status.success() => {
+                    let stderr = String::from_utf8_lossy(&p.stderr);
+                    log::warn!("Accessibility permission not granted for osascript: {}", stderr.trim());
+                    return Err("osascript click failed: Accessibility permission not granted. Enable in System Settings > Privacy & Security > Accessibility.".into());
+                }
+                Err(e) => {
+                    log::warn!("osascript probe failed: {e}");
+                    return Err(format!("osascript launch failed: {e}"));
+                }
+                _ => {}
+            }
             let script = format!(
                 "tell application \"System Events\" to click at {{{}, {}}}",
                 cx, cy
