@@ -7,6 +7,11 @@ on:
 permissions:
   contents: write
 
+env:
+  CARGO_TERM_COLOR: always
+  SCCACHE_GHA_ENABLED: "true"
+  RUSTC_WRAPPER: sccache
+
 jobs:
   build:
     name: Build ${{ matrix.os }}
@@ -21,11 +26,14 @@ jobs:
         with:
           node-version: 24
           cache: npm
-      - uses: actions-rust-lang/setup-rust-toolchain@v1
+
+      - name: Install Rust toolchain
+        uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
           toolchain: stable
           rustflags: ''
           cache: false
+
       - name: Cache Rust dependencies
         uses: actions/cache@v5
         with:
@@ -35,11 +43,21 @@ jobs:
             ~/.cargo/git
           key: ${{ matrix.os }}-cargo-${{ hashFiles('src-tauri/Cargo.lock') }}
 
+      - name: Install sccache (Rust compile cache)
+        uses: mozilla-actions/sccache-action@v0.0.9
+
+      - name: Install mold linker (Linux)
+        if: matrix.os == 'ubuntu-22.04'
+        run: |
+          sudo apt-get install -y mold
+          echo 'CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER=/usr/bin/clang' >> $GITHUB_ENV
+          echo 'RUSTFLAGS=-C link-arg=-fuse-ld=mold' >> $GITHUB_ENV
+
       - name: Install system deps (Linux)
         if: matrix.os == 'ubuntu-22.04'
         run: |
           sudo apt-get update -y
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libxdo-dev libasound2-dev
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf libxdo-dev libasound2-dev
 
       - name: Install npm dependencies
         run: npm ci
@@ -64,11 +82,9 @@ jobs:
           SIGNING_PASSWORD: ${{ secrets.WINDOWS_SIGNING_PASSWORD }}
         shell: pwsh
         run: |
-          # Import cert
           $certBytes = [Convert]::FromBase64String($env:SIGNING_CERT)
           $certPath = "$env:TEMP\signing.pfx"
           [IO.File]::WriteAllBytes($certPath, $certBytes)
-          # Sign all .msi and .exe files
           Get-ChildItem -Path "src-tauri/target/release/bundle" -Recurse -Include "*.msi","*.exe" | ForEach-Object {
             & signtool sign /f $certPath /p $env:SIGNING_PASSWORD /tr http://timestamp.digicert.com /td sha256 /fd sha256 $_.FullName
           }

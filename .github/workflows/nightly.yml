@@ -12,6 +12,11 @@ concurrency:
   group: nightly-build
   cancel-in-progress: true
 
+env:
+  CARGO_TERM_COLOR: always
+  SCCACHE_GHA_ENABLED: "true"
+  RUSTC_WRAPPER: sccache
+
 jobs:
   build:
     name: Build ${{ matrix.os }}
@@ -31,6 +36,7 @@ jobs:
           toolchain: stable
           rustflags: ''
           cache: false
+
       - name: Cache Rust dependencies
         uses: actions/cache@v5
         with:
@@ -39,6 +45,16 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
           key: ${{ matrix.os }}-cargo-${{ hashFiles('src-tauri/Cargo.lock') }}
+
+      - name: Install sccache (Rust compile cache)
+        uses: mozilla-actions/sccache-action@v0.0.9
+
+      - name: Install mold linker (Linux)
+        if: matrix.os == 'ubuntu-22.04'
+        run: |
+          sudo apt-get install -y mold
+          echo 'CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER=/usr/bin/clang' >> $GITHUB_ENV
+          echo 'RUSTFLAGS=-C link-arg=-fuse-ld=mold' >> $GITHUB_ENV
 
       - name: Install system deps (Linux)
         if: matrix.os == 'ubuntu-22.04'

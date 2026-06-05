@@ -3,6 +3,8 @@ name = "clickyx"
 version = "0.1.2"
 description = "ClickyX - Cross-platform AI companion"
 authors = ["ClickyX Contributors"]
+repository = "https://github.com/unn-Known1/clickyX"
+homepage = "https://clickyx.ai"
 edition = "2021"
 default-run = "clickyx"
 
@@ -14,9 +16,9 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 name = "clickyx"
 path = "src/main.rs"
 
-[[bin]]
+[[example]]
 name = "export_types"
-path = "src/bin/export_types.rs"
+path = "examples/export_types.rs"
 required-features = ["specta-export"]
 
 [build-dependencies]
@@ -66,3 +68,8 @@ opt-level = 3
 lto = "fat"
 strip = "symbols"
 codegen-units = 1
+
+# The profile that 'dist' will build with
+[profile.dist]
+inherits = "release"
+lto = "thin"

@@ -9,6 +9,11 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  CARGO_TERM_COLOR: always
+  SCCACHE_GHA_ENABLED: "true"
+  RUSTC_WRAPPER: sccache
+
 jobs:
   check:
     name: Check
@@ -23,6 +28,7 @@ jobs:
         with:
           toolchain: stable
           cache: false
+
       - name: Cache Rust dependencies
         uses: actions/cache@v5
         with:
@@ -31,9 +37,18 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
           key: ubuntu-cargo-${{ hashFiles('src-tauri/Cargo.lock') }}
-          # Share Ubuntu cache with the build job (same key prefix)
           restore-keys: |
             ubuntu-latest-cargo-${{ hashFiles('src-tauri/Cargo.lock') }}
+
+      - name: Install sccache
+        uses: mozilla-actions/sccache-action@v0.0.9
+
+      - name: Install mold linker
+        run: |
+          sudo apt-get install -y mold
+          echo 'CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER=/usr/bin/clang' >> $GITHUB_ENV
+          echo 'RUSTFLAGS=-C link-arg=-fuse-ld=mold' >> $GITHUB_ENV
+
       - name: Install system deps (Linux)
         run: |
           sudo apt-get update -y
@@ -70,6 +85,7 @@ jobs:
           toolchain: stable
           rustflags: ''
           cache: false
+
       - name: Cache Rust dependencies
         uses: actions/cache@v5
         with:
@@ -78,10 +94,19 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
           key: ${{ matrix.os }}-cargo-${{ hashFiles('src-tauri/Cargo.lock') }}
-          # For Ubuntu, try restoring from the check job's cache too
           restore-keys: |
             ubuntu-cargo-${{ hashFiles('src-tauri/Cargo.lock') }}
             ${{ matrix.os }}-cargo-
+
+      - name: Install sccache (Rust compile cache)
+        uses: mozilla-actions/sccache-action@v0.0.9
+
+      - name: Install mold linker (Linux)
+        if: matrix.os == 'ubuntu-22.04'
+        run: |
+          sudo apt-get install -y mold
+          echo 'CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER=/usr/bin/clang' >> $GITHUB_ENV
+          echo 'RUSTFLAGS=-C link-arg=-fuse-ld=mold' >> $GITHUB_ENV
 
       - name: Install system deps (Linux)
         if: matrix.os == 'ubuntu-22.04'
@@ -118,7 +143,6 @@ jobs:
           echo "=== Linux build artifacts ==="
           find "$BUNDLE_DIR" -type f -ls
           echo ""
-          # Check that at least one bundle type exists
           if [ -d "$BUNDLE_DIR/deb" ]; then
             echo "✔ .deb found"
           fi
@@ -132,7 +156,6 @@ jobs:
           if [ -d "$BUNDLE_DIR/rpm" ]; then
             echo "✔ .rpm found"
           fi
-          # Check for missing shared library dependencies in the binary
           BINARY="src-tauri/target/release/clickyx"
           if [ -f "$BINARY" ]; then
             MISSING=$(ldd "$BINARY" 2>/dev/null | grep "not found" || true)
