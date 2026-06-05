@@ -265,7 +265,7 @@ impl AccessibilityApi for LinuxAccessibility {
                         enabled: true, focused: true, visible: true,
                         children: Vec::new(),
                         pid: None,
-                        description: Some("wayland-focus (limited)"),
+                        description: Some("wayland-focus (limited)".to_string()),
                         value: None, help_text: None,
                     };
                     if let Some((mx, my)) = mouse_location() {
@@ -313,9 +313,9 @@ impl AccessibilityApi for LinuxAccessibility {
             children,
             pid: None,
             description: Some(if display_server() == "wayland" {
-                "Wayland desktop (limited window enumeration)"
+                "Wayland desktop (limited window enumeration)".to_string()
             } else {
-                "AT-SPI2 root (via xdotool)"
+                "AT-SPI2 root (via xdotool)".to_string()
             }),
             value: None,
             help_text: None,

@@ -30,9 +30,15 @@ impl StreamWrapper {
             self.created_on = Some(std::thread::current().id());
         }
         let old = self.stream.replace(stream);
-        // Drop old stream on the thread that created it, if different from current
         if let Some(old_stream) = old {
-            Self::safe_drop_stream(old_stream, self.created_on);
+            #[cfg(target_os = "windows")]
+            {
+                Self::safe_drop_stream(old_stream, self.created_on);
+            }
+            #[cfg(not(target_os = "windows"))]
+            {
+                Self::safe_drop_stream(old_stream, None);
+            }
         }
     }
 
