@@ -11,8 +11,8 @@ fn setup_panic_hook() {
             extern "system" {
                 fn MessageBoxA(
                     hWnd: *const std::ffi::c_void,
-                    lpText: *const u8,
-                    lpCaption: *const u8,
+                    lpText: *const std::ffi::c_char,
+                    lpCaption: *const std::ffi::c_char,
                     uType: u32,
                 ) -> i32;
             }

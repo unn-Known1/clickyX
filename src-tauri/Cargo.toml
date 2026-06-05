@@ -10,6 +10,15 @@ default-run = "clickyx"
 name = "clickyx_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
+[[bin]]
+name = "clickyx"
+path = "src/main.rs"
+
+[[bin]]
+name = "export_types"
+path = "src/bin/export_types.rs"
+required-features = ["specta-export"]
+
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
 embed-resource = "3"
