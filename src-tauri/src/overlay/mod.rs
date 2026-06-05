@@ -13,6 +13,24 @@ use crate::agent::dock::AgentDockState;
 use lifecycle::AnnotationState;
 use manager::AnnotationManager;
 
+/// Log a warning if running on a display server or compositor with known
+/// transparency / input-passthrough limitations.
+#[cfg(target_os = "linux")]
+fn warn_compositor_quirks() {
+    let sess = std::env::var("XDG_SESSION_TYPE").unwrap_or_default();
+    if sess == "wayland" || sess.is_empty() && std::env::var("WAYLAND_DISPLAY").is_ok() {
+        let de = std::env::var("XDG_CURRENT_DESKTOP").unwrap_or_default();
+        let known_good = ["GNOME", "KDE", "Unity", "Budgie", "POP"];
+        if !known_good.iter().any(|k| de.contains(k)) {
+            log::warn!(
+                "Display server: Wayland, compositor: {}. Overlay transparency \
+                 and input-passthrough may not work as expected on this compositor.",
+                if de.is_empty() { "unknown" } else { &de }
+            );
+        }
+    }
+}
+
 static NEXT_ID: AtomicU64 = AtomicU64::new(1);
 
 fn next_id(prefix: &str) -> String {
@@ -87,6 +105,8 @@ pub struct OverlayState {
 }
 
 pub fn init_manager() -> Mutex<AnnotationManager> {
+    #[cfg(target_os = "linux")]
+    warn_compositor_quirks();
     Mutex::new(AnnotationManager::new())
 }
 
@@ -120,21 +140,33 @@ pub fn set_click_through<R: Runtime>(window: &WebviewWindow<R>, enabled: bool) -
 }
 
 pub fn show_overlay<R: Runtime>(app: &AppHandle<R>) -> Result<(), String> {
-    if let Some(window) = app.get_webview_window("overlay") {
-        window.show().map_err(|e| format!("show overlay: {e}"))?;
-        Ok(())
-    } else {
-        Err("overlay window not found".into())
+    // Show all per-screen overlay windows
+    let mut shown = false;
+    for i in 0.. {
+        let label = format!("overlay-{}", i);
+        if let Some(window) = app.get_webview_window(&label) {
+            window.show().map_err(|e| format!("show overlay {label}: {e}"))?;
+            shown = true;
+        } else {
+            break;
+        }
     }
+    if shown { Ok(()) } else { Err("no overlay windows found".into()) }
 }
 
 pub fn hide_overlay<R: Runtime>(app: &AppHandle<R>) -> Result<(), String> {
-    if let Some(window) = app.get_webview_window("overlay") {
-        window.hide().map_err(|e| format!("hide overlay: {e}"))?;
-        Ok(())
-    } else {
-        Err("overlay window not found".into())
+    // Hide all per-screen overlay windows
+    let mut hidden = false;
+    for i in 0.. {
+        let label = format!("overlay-{}", i);
+        if let Some(window) = app.get_webview_window(&label) {
+            window.hide().map_err(|e| format!("hide overlay {label}: {e}"))?;
+            hidden = true;
+        } else {
+            break;
+        }
     }
+    if hidden { Ok(()) } else { Err("no overlay windows found".into()) }
 }
 
 fn emit_overlay_event<R: Runtime>(app: &AppHandle<R>, event: &str, payload: impl Serialize + Clone) -> Result<(), String> {
@@ -387,6 +419,7 @@ pub fn start_hotplug_poll<R: Runtime>(app: AppHandle<R>, url: &str) {
     std::thread::spawn(move || {
         let mut last_count = 0usize;
         let mut last_geoms: Vec<(i32, i32, u32, u32)> = Vec::new();
+        let mut wm = OverlayWindowManager::<R>::new();
         loop {
             std::thread::sleep(std::time::Duration::from_secs(3));
 
@@ -407,7 +440,6 @@ pub fn start_hotplug_poll<R: Runtime>(app: AppHandle<R>, url: &str) {
                 last_count = current.len();
                 last_geoms = current.clone();
 
-                let mut wm = OverlayWindowManager::<R>::new();
                 if let Err(e) = wm.refresh_windows(&app, &url) {
                     log::error!("Hotplug window refresh failed: {e}");
                 } else {

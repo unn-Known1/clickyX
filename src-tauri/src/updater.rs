@@ -129,6 +129,38 @@ pub async fn download_update(url: &str) -> Result<Vec<u8>, String> {
     Ok(bytes.to_vec())
 }
 
+/// Detect the installed Linux update format.
+#[cfg(target_os = "linux")]
+fn detect_linux_package_format() -> &'static str {
+    // Check if installed via dpkg (.deb)
+    if let Ok(out) = std::process::Command::new("dpkg")
+        .args(["-l", "clickyx"])
+        .output()
+    {
+        if out.status.success() {
+            return "deb";
+        }
+    }
+    // Check if installed via rpm
+    if let Ok(out) = std::process::Command::new("rpm")
+        .args(["-q", "clickyx"])
+        .output()
+    {
+        if out.status.success() {
+            return "rpm";
+        }
+    }
+    // Check if installed as AppImage in ~/.local/bin
+    let appimage_path = dirs::home_dir()
+        .unwrap_or_default()
+        .join(".local/bin/clickyx");
+    if appimage_path.exists() {
+        return "appimage";
+    }
+    // Default to AppImage
+    "appimage"
+}
+
 pub fn install_update(update_data: &[u8]) -> Result<(), String> {
     let tmp_dir = std::env::temp_dir().join("clickyx-update");
     std::fs::create_dir_all(&tmp_dir)
@@ -139,7 +171,12 @@ pub fn install_update(update_data: &[u8]) -> Result<(), String> {
     } else if cfg!(target_os = "macos") {
         ".dmg"
     } else {
-        ".AppImage"
+        // Linux: detect installed format
+        match detect_linux_package_format() {
+            "deb" => ".deb",
+            "rpm" => ".rpm",
+            _ => ".AppImage",
+        }
     };
 
     let update_path = tmp_dir.join(format!("clickyx-update{}", ext));
@@ -162,16 +199,46 @@ pub fn install_update(update_data: &[u8]) -> Result<(), String> {
             .spawn()
             .map_err(|e| format!("failed to open DMG: {e}"))?;
     } else {
-        std::process::Command::new("chmod")
-            .args(["+x", &path_str])
-            .spawn()
-            .map_err(|e| format!("failed to chmod: {e}"))?;
-        let app_path = dirs::home_dir()
-            .unwrap_or_default()
-            .join(".local/bin/clickyx");
-        std::fs::copy(&update_path, &app_path)
-            .map_err(|e| format!("failed to copy AppImage: {e}"))?;
-        log::info!("AppImage installed to {:?}", app_path);
+        let pkg_format = detect_linux_package_format();
+        match pkg_format {
+            "deb" => {
+                let _ = std::process::Command::new("xdg-open")
+                    .arg(&path_str)
+                    .spawn();
+                log::info!("Opened .deb package for manual install; user should run: sudo dpkg -i {}", path_str);
+            }
+            "rpm" => {
+                let _ = std::process::Command::new("xdg-open")
+                    .arg(&path_str)
+                    .spawn();
+                log::info!("Opened .rpm package for manual install; user should run: sudo rpm -Uvh {}", path_str);
+            }
+            _ => {
+                // AppImage: chmod +x then install
+                std::process::Command::new("chmod")
+                    .args(["+x", &path_str])
+                    .spawn()
+                    .map_err(|e| format!("failed to chmod: {e}"))?;
+                let app_path = dirs::home_dir()
+                    .unwrap_or_default()
+                    .join(".local/bin/clickyx");
+                // Use rename (mv) instead of copy to avoid leaving temp file
+                if let Err(e) = std::fs::rename(&update_path, &app_path) {
+                    // Fall back to copy if rename fails (cross-device link)
+                    std::fs::copy(&update_path, &app_path)
+                        .map_err(|e2| format!("failed to copy AppImage: {e2}"))?;
+                    let _ = std::fs::remove_file(&update_path);
+                }
+                log::info!("AppImage installed to {:?}", app_path);
+                // Warn if ~/.local/bin is not in PATH
+                let path_var = std::env::var("PATH").unwrap_or_default();
+                if !path_var.contains(".local/bin") {
+                    log::warn!(
+                        "~/.local/bin is not in your PATH. Add 'export PATH=\"$HOME/.local/bin:$PATH\"' to your ~/.profile"
+                    );
+                }
+            }
+        }
     }
 
     Ok(())

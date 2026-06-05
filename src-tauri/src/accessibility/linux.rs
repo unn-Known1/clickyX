@@ -1,5 +1,3 @@
-// Linux accessibility stub — functions are intentionally not all called yet;
-// they form the complete xdotool-based API surface for future use.
 #![allow(dead_code)]
 
 use super::{AccessibilityElement, AccessibilityTree, AccessibilityApi};
@@ -13,7 +11,33 @@ impl LinuxAccessibility {
     }
 }
 
-/// Parse `xdotool getmouselocation --shell` output into (x, y).
+fn display_server() -> &'static str {
+    let sess = std::env::var("XDG_SESSION_TYPE").unwrap_or_default();
+    if sess == "wayland" || std::env::var("WAYLAND_DISPLAY").is_ok() {
+        "wayland"
+    } else if sess == "x11" || std::env::var("DISPLAY").is_ok() {
+        "x11"
+    } else {
+        "unknown"
+    }
+}
+
+fn run_with_fallback(
+    primary_cmd: &mut Command,
+    fallback_cmd: &mut Command,
+) -> Result<std::process::Output, std::io::Error> {
+    let is_wayland = display_server() == "wayland";
+    let (first, second) = if is_wayland {
+        (fallback_cmd, primary_cmd)
+    } else {
+        (primary_cmd, fallback_cmd)
+    };
+    match first.output() {
+        Ok(out) if out.status.success() => Ok(out),
+        _ => second.output(),
+    }
+}
+
 fn parse_mouse_location(output: &str) -> (i32, i32) {
     let mut x = 0i32;
     let mut y = 0i32;
@@ -28,23 +52,22 @@ fn parse_mouse_location(output: &str) -> (i32, i32) {
     (x, y)
 }
 
-/// Run `xdotool getfocus` and return the window ID string.
 fn get_focused_window_id() -> Option<String> {
-    let out = Command::new("xdotool")
-        .arg("getfocus")
-        .output()
-        .ok()?;
-    if out.status.success() {
-        let id = String::from_utf8_lossy(&out.stdout).trim().to_string();
-        if !id.is_empty() {
-            return Some(id);
-        }
+    if display_server() == "wayland" {
+        return None;
     }
-    None
+    let out = Command::new("xdotool").arg("getfocus").output().ok()?;
+    if !out.status.success() {
+        return None;
+    }
+    let id = String::from_utf8_lossy(&out.stdout).trim().to_string();
+    if id.is_empty() { None } else { Some(id) }
 }
 
-/// Get window name for a given window ID via `xdotool getwindowname`.
 fn get_window_name(win_id: &str) -> String {
+    if display_server() == "wayland" {
+        return "wayland-window".into();
+    }
     Command::new("xdotool")
         .args(["getwindowname", win_id])
         .output()
@@ -52,8 +75,10 @@ fn get_window_name(win_id: &str) -> String {
         .unwrap_or_else(|_| "unknown".into())
 }
 
-/// Get window geometry via `xdotool getwindowgeometry --shell`.
 fn get_window_geometry(win_id: &str) -> (i32, i32, u32, u32) {
+    if display_server() == "wayland" {
+        return (0, 0, 0, 0);
+    }
     let out = Command::new("xdotool")
         .args(["getwindowgeometry", "--shell", win_id])
         .output();
@@ -61,34 +86,26 @@ fn get_window_geometry(win_id: &str) -> (i32, i32, u32, u32) {
     if let Ok(o) = out {
         let s = String::from_utf8_lossy(&o.stdout);
         for line in s.lines() {
-            if let Some(v) = line.strip_prefix("X=") {
-                x = v.trim().parse().unwrap_or(0);
-            }
-            if let Some(v) = line.strip_prefix("Y=") {
-                y = v.trim().parse().unwrap_or(0);
-            }
-            if let Some(v) = line.strip_prefix("WIDTH=") {
-                w = v.trim().parse().unwrap_or(0);
-            }
-            if let Some(v) = line.strip_prefix("HEIGHT=") {
-                h = v.trim().parse().unwrap_or(0);
-            }
+            if let Some(v) = line.strip_prefix("X=") { x = v.trim().parse().unwrap_or(0); }
+            if let Some(v) = line.strip_prefix("Y=") { y = v.trim().parse().unwrap_or(0); }
+            if let Some(v) = line.strip_prefix("WIDTH=") { w = v.trim().parse().unwrap_or(0); }
+            if let Some(v) = line.strip_prefix("HEIGHT=") { h = v.trim().parse().unwrap_or(0); }
         }
     }
     (x, y, w, h)
 }
 
-/// Get WM_CLASS for a window via `xprop`.
 fn get_window_class(win_id: &str) -> String {
+    if display_server() == "wayland" {
+        return "wayland".into();
+    }
     let out = Command::new("xprop")
         .args(["-id", win_id, "WM_CLASS"])
         .output();
     if let Ok(o) = out {
         let s = String::from_utf8_lossy(&o.stdout);
-        // WM_CLASS(STRING) = "app_name", "App.Name"
         if let Some(eq_pos) = s.find('=') {
             let vals = s[eq_pos + 1..].trim();
-            // Take the second quoted component as the class
             let parts: Vec<&str> = vals.split(',').collect();
             if parts.len() >= 2 {
                 return parts[1].trim().trim_matches('"').to_string();
@@ -101,24 +118,25 @@ fn get_window_class(win_id: &str) -> String {
     "unknown".into()
 }
 
-/// Get PID for a window via `xdotool getwindowpid`.
 fn get_window_pid(win_id: &str) -> Option<u32> {
+    if display_server() == "wayland" {
+        return None;
+    }
     let out = Command::new("xdotool")
         .args(["getwindowpid", win_id])
         .output()
         .ok()?;
     if out.status.success() {
-        String::from_utf8_lossy(&out.stdout)
-            .trim()
-            .parse()
-            .ok()
+        String::from_utf8_lossy(&out.stdout).trim().parse().ok()
     } else {
         None
     }
 }
 
-/// Enumerate all visible windows via `xdotool search --onlyvisible`.
 fn list_visible_windows() -> Vec<String> {
+    if display_server() == "wayland" {
+        return Vec::new();
+    }
     let out = Command::new("xdotool")
         .args(["search", "--onlyvisible", "--class", ""])
         .output();
@@ -157,9 +175,35 @@ fn build_element_from_window(win_id: &str) -> AccessibilityElement {
     }
 }
 
+fn mouse_location() -> Option<(i32, i32)> {
+    if display_server() == "wayland" {
+        return Command::new("ydotool")
+            .args(["mousemove", "--shell"])
+            .output()
+            .ok()
+            .and_then(|o| {
+                let s = String::from_utf8_lossy(&o.stdout).to_string();
+                let (x, y) = parse_mouse_location(&s);
+                if x == 0 && y == 0 { None } else { Some((x, y)) }
+            });
+    }
+    Command::new("xdotool")
+        .args(["getmouselocation", "--shell"])
+        .output()
+        .ok()
+        .and_then(|o| {
+            let s = String::from_utf8_lossy(&o.stdout).to_string();
+            let (x, y) = parse_mouse_location(&s);
+            Some((x, y))
+        })
+}
+
 impl AccessibilityApi for LinuxAccessibility {
     fn get_element_at_point(&self, x: i32, y: i32) -> Result<AccessibilityElement, String> {
-        // Use xdotool to find the window at a given point.
+        if display_server() == "wayland" {
+            return Err("Wayland does not support xdotool window queries. Install ydotool or use X11.".into());
+        }
+
         let out = Command::new("xdotool")
             .args(["search", "--onlyvisible", "--class", ""])
             .output();
@@ -170,7 +214,6 @@ impl AccessibilityApi for LinuxAccessibility {
                 .lines()
                 .collect();
 
-            // Find the topmost window that contains the point.
             for win_id in ids.iter().rev() {
                 let win_id = win_id.trim();
                 if win_id.is_empty() {
@@ -188,7 +231,6 @@ impl AccessibilityApi for LinuxAccessibility {
             }
         }
 
-        // Fallback: get mouse location and focused window
         if let Some(win_id) = get_focused_window_id() {
             return Ok(build_element_from_window(&win_id));
         }
@@ -212,10 +254,25 @@ impl AccessibilityApi for LinuxAccessibility {
     }
 
     fn get_focused_element(&self) -> Result<Option<AccessibilityElement>, String> {
-        // Get focused window name and geometry.
         let win_id = match get_focused_window_id() {
             Some(id) => id,
             None => {
+                if display_server() == "wayland" {
+                    let mut elem = AccessibilityElement {
+                        role: "window".into(),
+                        name: "Focused Wayland Window".into(),
+                        x: 0, y: 0, width: 0, height: 0,
+                        enabled: true, focused: true, visible: true,
+                        children: Vec::new(),
+                        pid: None,
+                        description: Some("wayland-focus (limited)"),
+                        value: None, help_text: None,
+                    };
+                    if let Some((mx, my)) = mouse_location() {
+                        elem.description = Some(format!("wayland-focus (limited) | mouse:({},{})", mx, my));
+                    }
+                    return Ok(Some(elem));
+                }
                 return Ok(None);
             }
         };
@@ -223,13 +280,7 @@ impl AccessibilityApi for LinuxAccessibility {
         let mut elem = build_element_from_window(&win_id);
         elem.focused = true;
 
-        // Also capture mouse position and include it as metadata
-        if let Ok(mouse_out) = Command::new("xdotool")
-            .args(["getmouselocation", "--shell"])
-            .output()
-        {
-            let s = String::from_utf8_lossy(&mouse_out.stdout).to_string();
-            let (mx, my) = parse_mouse_location(&s);
+        if let Some((mx, my)) = mouse_location() {
             elem.description = Some(format!(
                 "{} | mouse:({},{})",
                 elem.description.unwrap_or_default(),
@@ -261,18 +312,20 @@ impl AccessibilityApi for LinuxAccessibility {
             visible: true,
             children,
             pid: None,
-            description: Some("AT-SPI2 root (via xdotool)".into()),
+            description: Some(if display_server() == "wayland" {
+                "Wayland desktop (limited window enumeration)"
+            } else {
+                "AT-SPI2 root (via xdotool)"
+            }),
             value: None,
             help_text: None,
         })
     }
 
     fn get_children(&self, element: &AccessibilityElement) -> Result<Vec<AccessibilityElement>, String> {
-        // Return already-populated children, or try to enumerate if this is a window.
         if !element.children.is_empty() {
             return Ok(element.children.clone());
         }
-        // For a window element, enumerate child windows via xdotool
         if element.role == "window" || element.role == "desktop" {
             return Ok(list_visible_windows()
                 .iter()
@@ -288,18 +341,12 @@ impl AccessibilityApi for LinuxAccessibility {
             AccessibilityElement {
                 role: "desktop".into(),
                 name: "Linux Desktop".into(),
-                x: 0,
-                y: 0,
-                width: 0,
-                height: 0,
-                enabled: true,
-                focused: false,
-                visible: true,
+                x: 0, y: 0, width: 0, height: 0,
+                enabled: true, focused: false, visible: true,
                 children: Vec::new(),
                 pid: None,
                 description: None,
-                value: None,
-                help_text: None,
+                value: None, help_text: None,
             },
         ])
     }
@@ -334,10 +381,13 @@ impl AccessibilityApi for LinuxAccessibility {
     }
 
     fn perform_action(&self, element: &AccessibilityElement, action: &str) -> Result<(), String> {
+        let is_wayland = display_server() == "wayland";
         match action {
             "focus" => {
+                if is_wayland {
+                    return Err("window focus not supported on Wayland".into());
+                }
                 if let Some(pid) = element.pid {
-                    // Try to focus the window for this PID via xdotool
                     let _ = Command::new("xdotool")
                         .args(["search", "--pid", &pid.to_string(), "windowfocus", "--sync"])
                         .output();
@@ -347,15 +397,15 @@ impl AccessibilityApi for LinuxAccessibility {
             "click" => {
                 let x = element.x + element.width as i32 / 2;
                 let y = element.y + element.height as i32 / 2;
+                if is_wayland {
+                    return Command::new("ydotool")
+                        .args(["mousemove", "--", &x.to_string(), &y.to_string(), "click", "0xC0"])
+                        .output()
+                        .map(|_| ())
+                        .map_err(|e| format!("click via ydotool failed: {e}"));
+                }
                 let _ = Command::new("xdotool")
-                    .args([
-                        "mousemove",
-                        "--sync",
-                        &x.to_string(),
-                        &y.to_string(),
-                        "click",
-                        "1",
-                    ])
+                    .args(["mousemove", "--sync", &x.to_string(), &y.to_string(), "click", "1"])
                     .output();
                 Ok(())
             }

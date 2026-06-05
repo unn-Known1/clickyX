@@ -1,6 +1,6 @@
 app-id: com.clickyx.ClickyX
 runtime: org.gnome.Platform
-runtime-version: '46'
+runtime-version: '47'
 sdk: org.gnome.Sdk
 command: clickyx
 finish-args:
@@ -8,10 +8,15 @@ finish-args:
   - --share=ipc
   - --socket=wayland
   - --socket=fallback-x11
+  - --socket=pulseaudio
   - --device=all
+  - --filesystem=xdg-config
+  - --filesystem=xdg-data
   - --talk-name=org.freedesktop.portal.Desktop
+  - --talk-name=org.freedesktop.portal.ScreenCast
+  - --talk-name=org.freedesktop.portal.RemoteDesktop
+  - --talk-name=org.freedesktop.Notifications
   - --talk-name=org.a11y.Bus
-  - --filesystem=home
 modules:
   - name: clickyx
     buildsystem: simple

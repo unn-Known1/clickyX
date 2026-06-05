@@ -1,0 +1,30 @@
+#include <windows.h>
+
+VS_VERSION_INFO VERSIONINFO
+FILEVERSION     0,1,1,0
+PRODUCTVERSION  0,1,1,0
+FILEFLAGSMASK   VS_FFI_FILEFLAGSMASK
+FILEFLAGS       0
+FILEOS          VOS_NT_WINDOWS32
+FILETYPE        VFT_APP
+FILESUBTYPE     0
+BEGIN
+    BLOCK "StringFileInfo"
+    BEGIN
+        BLOCK "040904B0"
+        BEGIN
+            VALUE "CompanyName",      "ClickyX Contributors"
+            VALUE "FileDescription",  "ClickyX - Cross-platform AI desktop companion"
+            VALUE "FileVersion",      "0.1.1.0"
+            VALUE "InternalName",     "clickyx"
+            VALUE "LegalCopyright",   "Copyright (C) 2025 ClickyX Contributors"
+            VALUE "OriginalFilename", "clickyx.exe"
+            VALUE "ProductName",      "ClickyX"
+            VALUE "ProductVersion",   "0.1.1.0"
+        END
+    END
+    BLOCK "VarFileInfo"
+    BEGIN
+        VALUE "Translation", 0x409, 0x04B0
+    END
+END

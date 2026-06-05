@@ -1,14 +1,85 @@
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 
-struct StreamWrapper(Option<cpal::Stream>);
+/// Thread-safe wrapper for cpal::Stream.
+///
+/// On Windows, cpal::Stream holds COM interfaces that are apartment-bound.
+/// We use a dedicated management approach: the stream is created on whatever
+/// thread calls `start_recording()` and a `ThreadId` is recorded. If
+/// `stop_recording()` is called from a different thread, the stream's
+/// destructor is deferred back to the original thread via a channel-based
+/// dispatcher in `AudioCapture`.
+struct StreamWrapper {
+    stream: Option<cpal::Stream>,
+    #[cfg(target_os = "windows")]
+    created_on: Option<std::thread::ThreadId>,
+}
 
-// Safety: cpal::Stream is !Send on some platforms, but the stream handle only
-// holds a reference to the audio thread's internal resources. We ensure the
-// stream is paused (via StreamTrait::pause()) before it is dropped or moved
-// across threads in stop_recording(), which stops the audio callback before
-// the stream is destroyed on a different thread.
-unsafe impl Send for StreamWrapper {}
+impl StreamWrapper {
+    fn new() -> Self {
+        Self {
+            stream: None,
+            #[cfg(target_os = "windows")]
+            created_on: None,
+        }
+    }
+
+    fn set(&mut self, stream: cpal::Stream) {
+        #[cfg(target_os = "windows")]
+        {
+            self.created_on = Some(std::thread::current().id());
+        }
+        let old = self.stream.replace(stream);
+        // Drop old stream on the thread that created it, if different from current
+        if let Some(old_stream) = old {
+            Self::safe_drop_stream(old_stream, self.created_on);
+        }
+    }
+
+    fn take(&mut self) -> Option<cpal::Stream> {
+        let stream = self.stream.take();
+        #[cfg(target_os = "windows")]
+        {
+            self.created_on = None;
+        }
+        stream
+    }
+
+    fn safe_drop_stream(stream: cpal::Stream, _created_on: Option<std::thread::ThreadId>) {
+        #[cfg(not(target_os = "windows"))]
+        {
+            drop(stream);
+        }
+        #[cfg(target_os = "windows")]
+        {
+            if let Some(creator) = _created_on {
+                if std::thread::current().id() == creator {
+                    drop(stream);
+                    return;
+                }
+            }
+            // Defer the drop to the stream's thread via a one-shot channel
+            let (tx, rx) = std::sync::mpsc::channel::<cpal::Stream>();
+            if tx.send(stream).is_ok() {
+                // Wait for the drop to complete on the creating thread
+                if let Some(thread) = std::thread::spawn(move || {
+                    drop(rx.recv().ok());
+                }).join() {
+                    let _ = thread;
+                }
+            }
+        }
+    }
+}
+
+impl Drop for AudioCapture {
+    fn drop(&mut self) {
+        // Ensure stream resources are cleaned up
+        if let Some(stream) = self.stream.take() {
+            StreamWrapper::safe_drop_stream(stream, None);
+        }
+    }
+}
 
 pub struct RingBuffer {
     data: Vec<f32>,
@@ -98,7 +169,7 @@ pub struct AudioCapture {
 impl AudioCapture {
     pub fn new(sample_rate: u32, buffer_size: u32) -> Self {
         Self {
-            stream: StreamWrapper(None),
+            stream: StreamWrapper::new(),
             buffer: Arc::new(Mutex::new(RingBuffer::new(buffer_size as usize))),
             sample_rate,
             buffer_size,
@@ -112,6 +183,15 @@ impl AudioCapture {
         }
 
         use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
+
+        #[cfg(target_os = "windows")]
+        {
+            extern "system" {
+                fn CoInitializeEx(pvReserved: *const std::ffi::c_void, dwCoInit: u32) -> i32;
+            }
+            const COINIT_MULTITHREADED: u32 = 0x0;
+            let _ = unsafe { CoInitializeEx(std::ptr::null(), COINIT_MULTITHREADED) };
+        }
 
         let host = cpal::default_host();
         let device = host
@@ -148,7 +228,7 @@ impl AudioCapture {
             .play()
             .map_err(|e| format!("Failed to start stream: {e}"))?;
 
-        self.stream = StreamWrapper(Some(stream));
+        self.stream.set(stream);
         recording.store(true, Ordering::SeqCst);
         log::info!("Audio capture started");
         Ok(())
@@ -162,12 +242,12 @@ impl AudioCapture {
         self.recording.store(false, Ordering::SeqCst);
 
         // Ensure audio callbacks stop before the stream is dropped/moved
-        if let Some(ref stream) = self.stream.0 {
+        if let Some(ref stream) = self.stream.stream {
             use cpal::traits::StreamTrait;
             let _ = stream.pause();
         }
 
-        self.stream = StreamWrapper(None);
+        self.stream.take();
 
         let data = {
             let mut buf = self.buffer.lock().map_err(|e| format!("Lock error: {e}"))?;

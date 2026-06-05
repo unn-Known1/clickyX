@@ -5,6 +5,17 @@ use serde::{Deserialize, Serialize};
 
 use crate::config::TypeModeConfig;
 
+#[cfg(target_os = "windows")]
+fn ensure_com() {
+    extern "system" {
+        fn CoInitializeEx(pvReserved: *const std::ffi::c_void, dwCoInit: u32) -> i32;
+    }
+    const COINIT_MULTITHREADED: u32 = 0x0;
+    unsafe {
+        CoInitializeEx(std::ptr::null(), COINIT_MULTITHREADED);
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub enum TypeModeState {
     Idle,
@@ -108,6 +119,19 @@ impl TypeModeEngine {
         if !self.is_active() {
             return Err("Type mode not active".into());
         }
+        #[cfg(target_os = "windows")]
+        ensure_com();
+        #[cfg(target_os = "linux")]
+        if std::env::var("XDG_SESSION_TYPE").unwrap_or_default() == "wayland"
+            || std::env::var("WAYLAND_DISPLAY").is_ok()
+        {
+            let escaped = text.replace('\\', "\\\\").replace('"', "\\\"");
+            return std::process::Command::new("wtype")
+                .args(["-k", "--", &escaped])
+                .output()
+                .map(|_| ())
+                .map_err(|e| format!("type_text via wtype failed: {e}"));
+        }
         let mut enigo = Enigo::new(&Settings::default()).map_err(|e| format!("enigo: {e}"))?;
         enigo.text(text).map_err(|e| format!("type_text: {e}"))
     }
@@ -115,6 +139,16 @@ impl TypeModeEngine {
     pub fn key_press(&self, key: Key) -> Result<(), String> {
         if !self.is_active() {
             return Err("Type mode not active".into());
+        }
+        #[cfg(target_os = "windows")]
+        ensure_com();
+        #[cfg(target_os = "linux")]
+        if std::env::var("XDG_SESSION_TYPE").unwrap_or_default() == "wayland"
+            || std::env::var("WAYLAND_DISPLAY").is_ok()
+        {
+            return Err(format!(
+                "key_press not supported on Wayland. Install wtype and use type_text instead."
+            ));
         }
         let mut enigo = Enigo::new(&Settings::default()).map_err(|e| format!("enigo: {e}"))?;
         enigo.key(key, Direction::Click).map_err(|e| format!("key_press: {e}"))

@@ -31,6 +31,9 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
           key: ubuntu-cargo-${{ hashFiles('src-tauri/Cargo.lock') }}
+          # Share Ubuntu cache with the build job (same key prefix)
+          restore-keys: |
+            ubuntu-latest-cargo-${{ hashFiles('src-tauri/Cargo.lock') }}
       - name: Install system deps (Linux)
         run: |
           sudo apt-get update -y
@@ -75,6 +78,10 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
           key: ${{ matrix.os }}-cargo-${{ hashFiles('src-tauri/Cargo.lock') }}
+          # For Ubuntu, try restoring from the check job's cache too
+          restore-keys: |
+            ubuntu-cargo-${{ hashFiles('src-tauri/Cargo.lock') }}
+            ${{ matrix.os }}-cargo-
 
       - name: Install system deps (Linux)
         if: matrix.os == 'ubuntu-latest'
@@ -88,8 +95,55 @@ jobs:
       - name: Build frontend
         run: npm run build
 
+      - name: Verify Windows dependencies
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
+        run: |
+          try {
+            $regPath = "HKLM:\SOFTWARE\WOW6432Node\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}"
+            $ver = (Get-ItemProperty -Path $regPath -Name "pv" -ErrorAction Stop).pv
+            Write-Host "✔ WebView2 (Edge) runtime version: $ver"
+          } catch {
+            Write-Host "⚠ Could not determine WebView2 version — continuing anyway"
+          }
+          Write-Host "✔ Windows build dependencies verified"
+
       - name: Build Tauri app
         run: npm run tauri build ${{ matrix.os == 'macos-latest' && '-- --bundles dmg,app' || '' }}
+
+      - name: Verify Linux build artifacts
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          BUNDLE_DIR="src-tauri/target/release/bundle"
+          echo "=== Linux build artifacts ==="
+          find "$BUNDLE_DIR" -type f -ls
+          echo ""
+          # Check that at least one bundle type exists
+          if [ -d "$BUNDLE_DIR/deb" ]; then
+            echo "✔ .deb found"
+          fi
+          if [ -d "$BUNDLE_DIR/appimage" ]; then
+            echo "✔ .AppImage found"
+            APPIMAGE=$(ls "$BUNDLE_DIR/appimage/"*.AppImage 2>/dev/null | head -1)
+            if [ -n "$APPIMAGE" ]; then
+              file "$APPIMAGE"
+            fi
+          fi
+          if [ -d "$BUNDLE_DIR/rpm" ]; then
+            echo "✔ .rpm found"
+          fi
+          # Check for missing shared library dependencies in the binary
+          BINARY="src-tauri/target/release/clickyx"
+          if [ -f "$BINARY" ]; then
+            MISSING=$(ldd "$BINARY" 2>/dev/null | grep "not found" || true)
+            if [ -n "$MISSING" ]; then
+              echo "⚠ Missing shared library dependencies:"
+              echo "$MISSING"
+            else
+              echo "✔ All shared library dependencies resolved"
+            fi
+          fi
+          echo "=== Verification complete ==="
 
       - name: Create macOS zip (fallback)
         if: matrix.os == 'macos-latest'

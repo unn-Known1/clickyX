@@ -3,6 +3,34 @@ use enigo::{
 };
 use serde::{Deserialize, Serialize};
 
+#[cfg(target_os = "linux")]
+fn display_server() -> &'static str {
+    let sess = std::env::var("XDG_SESSION_TYPE").unwrap_or_default();
+    if sess == "wayland" || std::env::var("WAYLAND_DISPLAY").is_ok() {
+        "wayland"
+    } else if sess == "x11" || std::env::var("DISPLAY").is_ok() {
+        "x11"
+    } else {
+        "unknown"
+    }
+}
+
+#[cfg(not(target_os = "linux"))]
+fn display_server() -> &'static str {
+    "x11"
+}
+
+#[cfg(target_os = "windows")]
+fn ensure_com() {
+    extern "system" {
+        fn CoInitializeEx(pvReserved: *const std::ffi::c_void, dwCoInit: u32) -> i32;
+    }
+    const COINIT_MULTITHREADED: u32 = 0x0;
+    unsafe {
+        CoInitializeEx(std::ptr::null(), COINIT_MULTITHREADED);
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum CuaBackend {
     Native,
@@ -74,6 +102,15 @@ impl InputSimulator {
     }
 
     fn click_native(&mut self, x: f64, y: f64) -> ClickResult {
+        #[cfg(target_os = "windows")]
+        ensure_com();
+
+        #[cfg(target_os = "linux")]
+        if display_server() == "wayland" {
+            log::warn!("enigo not supported on Wayland; falling back to ydotool");
+            return self.click_via_ydotool(x, y);
+        }
+
         let mut enigo = match Enigo::new(&Settings::default()) {
             Ok(e) => e,
             Err(e) => {
@@ -118,6 +155,27 @@ impl InputSimulator {
             y,
             success: true,
             backend: "native".into(),
+        }
+    }
+
+    fn click_via_ydotool(&self, x: f64, y: f64) -> ClickResult {
+        let cx = x as i64;
+        let cy = y as i64;
+        match std::process::Command::new("ydotool")
+            .args(["mousemove", "--", &cx.to_string(), &cy.to_string(), "click", "0xC0"])
+            .output()
+        {
+            Ok(out) if out.status.success() => ClickResult {
+                x, y, success: true, backend: "ydotool".into(),
+            },
+            Ok(out) => ClickResult {
+                x, y, success: false,
+                backend: format!("ydotool_exit_{}", out.status),
+            },
+            Err(e) => ClickResult {
+                x, y, success: false,
+                backend: format!("ydotool_error_{}", e),
+            },
         }
     }
 
@@ -246,6 +304,16 @@ public class Input {{
 
         #[cfg(target_os = "linux")]
         {
+            if display_server() == "wayland" {
+                let cx = x as i64;
+                let cy = y as i64;
+                return std::process::Command::new("ydotool")
+                    .args(["mousemove", "--", &cx.to_string(), &cy.to_string(), "click", "0xC0"])
+                    .output()
+                    .map(|_| ())
+                    .map_err(|e| format!("ydotool click failed: {e}"));
+            }
+
             // Linux: use xdotool to click the window at the given screen coords
             // without actually moving the hardware cursor globally.
             let cx = x as i64;
@@ -341,36 +409,54 @@ public class Input {{
     }
 
     pub fn type_text(&mut self, text: &str) -> Result<(), String> {
+        #[cfg(target_os = "linux")]
+        if display_server() == "wayland" {
+            return wtype_text(text);
+        }
         let mut enigo = Enigo::new(&Settings::default()).map_err(|e| format!("enigo: {e}"))?;
         enigo.text(text).map_err(|e| format!("type_text: {e}"))
     }
 
     pub fn key_press(&mut self, key: Key) -> Result<(), String> {
+        #[cfg(target_os = "linux")]
+        if display_server() == "wayland" {
+            return Err(format!(
+                "key_press via enigo not supported on Wayland. Install ydotool and use type_text instead."
+            ));
+        }
         let mut enigo = Enigo::new(&Settings::default()).map_err(|e| format!("enigo: {e}"))?;
         enigo.key(key, Direction::Click).map_err(|e| format!("key_press: {e}"))
     }
 
     pub fn move_cursor(&mut self, x: f64, y: f64) -> Result<(), String> {
+        #[cfg(target_os = "linux")]
+        if display_server() == "wayland" {
+            return Err(format!(
+                "move_cursor via enigo not supported on Wayland. Install ydotool."
+            ));
+        }
         let mut enigo = Enigo::new(&Settings::default()).map_err(|e| format!("enigo: {e}"))?;
         enigo.move_mouse(x as i32, y as i32, Coordinate::Abs)
             .map_err(|e| format!("move_cursor: {e}"))
     }
 
-    /// Scroll at position (x, y) by (delta_x, delta_y) units (Windows scroll-wheel units, 120 per notch).
     pub fn scroll(&mut self, x: f64, y: f64, delta_x: f64, delta_y: f64) -> Result<(), String> {
+        #[cfg(target_os = "linux")]
+        if display_server() == "wayland" {
+            return Err(format!(
+                "scroll via enigo not supported on Wayland. Install ydotool."
+            ));
+        }
         let mut enigo = Enigo::new(&Settings::default()).map_err(|e| format!("enigo: {e}"))?;
-        // Move to position first
         enigo.move_mouse(x as i32, y as i32, Coordinate::Abs)
             .map_err(|e| format!("scroll move: {e}"))?;
         std::thread::sleep(std::time::Duration::from_millis(30));
-        // Scroll vertically
         if delta_y.abs() > 0.1 {
             let steps = ((delta_y.abs() / 120.0).max(1.0) as i32)
                 .saturating_mul(if delta_y > 0.0 { 1 } else { -1 });
             enigo.scroll(steps, enigo::Axis::Vertical)
                 .map_err(|e| format!("scroll vertical: {e}"))?;
         }
-        // Scroll horizontally
         if delta_x.abs() > 0.1 {
             let steps = ((delta_x.abs() / 120.0).max(1.0) as i32)
                 .saturating_mul(if delta_x > 0.0 { 1 } else { -1 });
@@ -380,6 +466,16 @@ public class Input {{
         log::info!("Scroll at ({}, {}) delta=({}, {})", x, y, delta_x, delta_y);
         Ok(())
     }
+}
+
+#[cfg(target_os = "linux")]
+fn wtype_text(text: &str) -> Result<(), String> {
+    let escaped = text.replace('\\', "\\\\").replace('"', "\\\"");
+    std::process::Command::new("wtype")
+        .args(["-k", "--", &escaped])
+        .output()
+        .map(|_| ())
+        .map_err(|e| format!("wtype failed: {e}"))
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

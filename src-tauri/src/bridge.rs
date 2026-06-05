@@ -1251,57 +1251,74 @@ pub fn start_bridge(app_handle: AppHandle, bridge_token: Option<String>) {
         let data = web::Data::new(bridge_state);
         let auth_config = web::Data::new(BridgeAuthConfig { token: bridge_token });
 
-        let rt = actix_rt::System::new();
-        rt.block_on(async {
-            let server = HttpServer::new(move || {
-                App::new()
-                    .wrap(actix_cors::Cors::permissive())
-                    .wrap(middleware::Logger::default())
-                    .app_data(data.clone())
-                    .app_data(auth_config.clone())
-                    .route("/health", web::get().to(health))
-                    .route("/panel/toggle", web::post().to(toggle_panel))
-                    .route("/v1/messages", web::post().to(proxy_messages))
-                    .route("/v1/responses", web::post().to(proxy_responses))
-                    .route("/models", web::get().to(list_models))
-                    .route("/screenshot", web::post().to(screenshot))
-                    .route("/cursor", web::post().to(show_cursor))
-                    .route("/cursors", web::post().to(show_cursors))
-                    .route("/rectangle", web::post().to(show_rectangle))
-                    .route("/scribble", web::post().to(show_scribble))
-                    .route("/caption", web::post().to(show_caption))
-                    .route("/click", web::post().to(click))
-                    .route("/clear", web::post().to(clear_overlays))
-                    .route("/speak", web::post().to(speak))
-                    .route("/transcribe", web::post().to(transcribe))
-                    .route("/audio-level", web::get().to(audio_level))
-                    .route("/events", web::get().to(events))
-                    .route("/notify", web::post().to(notify))
-                    .route("/mcp/tools", web::get().to(mcp_tools))
-                    .route("/mcp/call", web::post().to(mcp_call))
-                    .route("/scroll", web::post().to(scroll_handler))
-                    .route("/agents", web::get().to(bridge_list_agents))
-                    .route("/agent/create", web::post().to(bridge_create_agent))
-                    .route("/agent/{slug}/run", web::post().to(bridge_run_agent))
-                    .route("/agent/{slug}/stop", web::post().to(bridge_stop_agent))
-                    .route("/agent/{slug}/status", web::get().to(bridge_agent_status))
-                    .route("/skills", web::get().to(bridge_list_skills))
-                    .default_service(web::route().to(not_found))
-            })
-            .workers(1)
-            .bind("127.0.0.1:32123");
-
-            match server {
-                Ok(s) => {
-                    log::info!("Bridge server running on http://127.0.0.1:32123");
-                    if let Err(e) = s.run().await {
-                        log::error!("Bridge server error: {e}");
-                    }
-                }
-                Err(e) => {
-                    log::error!("Failed to bind bridge server: {e}");
-                }
-            }
-        });
+        #[cfg(target_os = "windows")]
+        {
+            // On Windows, create a single-threaded runtime to avoid any I/O
+            // completion port interactions with Tauri's own tokio runtime.
+            actix_web::rt::System::new().block_on(async {
+                run_bridge_server(data, auth_config).await;
+            });
+        }
+        #[cfg(not(target_os = "windows"))]
+        {
+            actix_web::rt::System::new().block_on(async {
+                run_bridge_server(data, auth_config).await;
+            });
+        }
     });
+}
+
+async fn run_bridge_server(
+    data: web::Data<BridgeState>,
+    auth_config: web::Data<BridgeAuthConfig>,
+) {
+    let server = HttpServer::new(move || {
+        App::new()
+            .wrap(actix_cors::Cors::permissive())
+            .wrap(middleware::Logger::default())
+            .app_data(data.clone())
+            .app_data(auth_config.clone())
+            .route("/health", web::get().to(health))
+            .route("/panel/toggle", web::post().to(toggle_panel))
+            .route("/v1/messages", web::post().to(proxy_messages))
+            .route("/v1/responses", web::post().to(proxy_responses))
+            .route("/models", web::get().to(list_models))
+            .route("/screenshot", web::post().to(screenshot))
+            .route("/cursor", web::post().to(show_cursor))
+            .route("/cursors", web::post().to(show_cursors))
+            .route("/rectangle", web::post().to(show_rectangle))
+            .route("/scribble", web::post().to(show_scribble))
+            .route("/caption", web::post().to(show_caption))
+            .route("/click", web::post().to(click))
+            .route("/clear", web::post().to(clear_overlays))
+            .route("/speak", web::post().to(speak))
+            .route("/transcribe", web::post().to(transcribe))
+            .route("/audio-level", web::get().to(audio_level))
+            .route("/events", web::get().to(events))
+            .route("/notify", web::post().to(notify))
+            .route("/mcp/tools", web::get().to(mcp_tools))
+            .route("/mcp/call", web::post().to(mcp_call))
+            .route("/scroll", web::post().to(scroll_handler))
+            .route("/agents", web::get().to(bridge_list_agents))
+            .route("/agent/create", web::post().to(bridge_create_agent))
+            .route("/agent/{slug}/run", web::post().to(bridge_run_agent))
+            .route("/agent/{slug}/stop", web::post().to(bridge_stop_agent))
+            .route("/agent/{slug}/status", web::get().to(bridge_agent_status))
+            .route("/skills", web::get().to(bridge_list_skills))
+            .default_service(web::route().to(not_found))
+    })
+    .workers(1)
+    .bind("127.0.0.1:32123");
+
+    match server {
+        Ok(s) => {
+            log::info!("Bridge server running on http://127.0.0.1:32123");
+            if let Err(e) = s.run().await {
+                log::error!("Bridge server error: {e}");
+            }
+        }
+        Err(e) => {
+            log::error!("Failed to bind bridge server: {e}");
+        }
+    }
 }

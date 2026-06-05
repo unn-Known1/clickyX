@@ -369,9 +369,8 @@ fn check_os_permission(perm: &Permission) -> PermissionStatus {
             }
         }
         Permission::Camera => {
-            // Check if /dev/video0 or similar exists and is accessible.
-            let granted = std::path::Path::new("/dev/video0").exists()
-                || std::path::Path::new("/dev/video1").exists();
+            // Check if any /dev/video* device exists and is accessible.
+            let granted = (0..=9).any(|i| std::path::Path::new(&format!("/dev/video{}", i)).exists());
             PermissionStatus {
                 permission: perm.name().into(),
                 granted,
@@ -398,11 +397,16 @@ fn check_os_permission(perm: &Permission) -> PermissionStatus {
     }
 }
 
-/// Check if PulseAudio/PipeWire is available via `pactl info`.
+/// Check if PulseAudio/PipeWire is available via `pactl info` or `pw-cli`.
 #[cfg(target_os = "linux")]
 fn check_linux_audio() -> bool {
-    // Try pactl first, then check /proc/asound
     if let Ok(out) = Command::new("pactl").arg("info").output() {
+        if out.status.success() {
+            return true;
+        }
+    }
+    // Check pure PipeWire via pw-cli
+    if let Ok(out) = Command::new("pw-cli").arg("info").output() {
         if out.status.success() {
             return true;
         }
@@ -414,6 +418,28 @@ fn check_linux_audio() -> bool {
 /// Check if PipeWire screen sharing portal is active.
 #[cfg(target_os = "linux")]
 fn check_linux_pipewire() -> bool {
+    // Try pw-cli first (works without systemd)
+    if let Ok(out) = Command::new("pw-cli").arg("info").output() {
+        if out.status.success() {
+            return true;
+        }
+    }
+    // Fallback: check the pipewire runtime socket (/run/user/<uid>/pipewire-0)
+    if let Ok(entries) = std::fs::read_dir("/run/user") {
+        for entry in entries.flatten() {
+            let sock = entry.path().join("pipewire-0");
+            if sock.exists() {
+                return true;
+            }
+        }
+    }
+    // Also try pgrep
+    if let Ok(out) = Command::new("pgrep").args(["-x", "pipewire"]).output() {
+        if out.status.success() {
+            return true;
+        }
+    }
+    // Try systemctl last (systemd-only)
     if let Ok(out) = Command::new("systemctl")
         .args(["--user", "is-active", "pipewire"])
         .output()
@@ -423,7 +449,12 @@ fn check_linux_pipewire() -> bool {
             return true;
         }
     }
-    // Also check xdg-desktop-portal
+    // Also check xdg-desktop-portal via pgrep
+    if let Ok(out) = Command::new("pgrep").args(["-x", "xdg-desktop-portal"]).output() {
+        if out.status.success() {
+            return true;
+        }
+    }
     if let Ok(out) = Command::new("systemctl")
         .args(["--user", "is-active", "xdg-desktop-portal"])
         .output()
@@ -439,14 +470,7 @@ fn check_linux_pipewire() -> bool {
 /// Check D-Bus for a running notification service.
 #[cfg(target_os = "linux")]
 fn check_linux_notifications() -> bool {
-    if let Ok(out) = Command::new("busctl")
-        .args(["--user", "list"])
-        .output()
-    {
-        let stdout = String::from_utf8_lossy(&out.stdout).to_lowercase();
-        return stdout.contains("notifications") || stdout.contains("notify");
-    }
-    // Fallback: try gdbus
+    // Try gdbus first (more portable than busctl)
     if let Ok(out) = Command::new("gdbus")
         .args([
             "call",
@@ -462,12 +486,21 @@ fn check_linux_notifications() -> bool {
     {
         return out.status.success();
     }
+    // Fallback: systemd's busctl
+    if let Ok(out) = Command::new("busctl")
+        .args(["--user", "list"])
+        .output()
+    {
+        let stdout = String::from_utf8_lossy(&out.stdout).to_lowercase();
+        return stdout.contains("notifications") || stdout.contains("notify");
+    }
     false
 }
 
 /// Check if at-spi-bus-launcher is running.
 #[cfg(target_os = "linux")]
 fn check_linux_atspi() -> bool {
+    // pgrep works on all distros
     if let Ok(out) = Command::new("pgrep")
         .args(["-x", "at-spi-bus-laun"])
         .output()
@@ -485,37 +518,80 @@ fn check_linux_atspi() -> bool {
     false
 }
 
+/// Detect the current desktop environment.
+#[cfg(target_os = "linux")]
+fn detect_desktop_environment() -> &'static str {
+    let de = std::env::var("XDG_CURRENT_DESKTOP").unwrap_or_default();
+    let de_lower = de.to_lowercase();
+    if de_lower.contains("kde") { "kde" }
+    else if de_lower.contains("gnome") || de_lower.contains("unity") { "gnome" }
+    else if de_lower.contains("xfce") { "xfce" }
+    else if de_lower.contains("cinnamon") { "cinnamon" }
+    else if de_lower.contains("mate") { "mate" }
+    else { "other" }
+}
+
 #[cfg(target_os = "linux")]
 fn request_os_permission(perm: &Permission) -> Result<bool, String> {
     log::info!("Requesting permission: {:?} (Linux)", perm);
-    // On Linux, most permissions are controlled by the distribution's
-    // package/group setup. We can try to open the relevant settings app.
+    let de = detect_desktop_environment();
     match perm {
         Permission::Microphone | Permission::Camera => {
-            // Try to open GNOME Control Center privacy panel
-            let _ = Command::new("gnome-control-center")
-                .arg("privacy")
-                .spawn();
+            match de {
+                "gnome" => {
+                    let _ = Command::new("gnome-control-center")
+                        .arg("privacy")
+                        .spawn();
+                }
+                "kde" => {
+                    let _ = Command::new("systemsettings")
+                        .arg("kcm_privacy")
+                        .spawn();
+                }
+                _ => {
+                    log::info!("No settings app known for DE '{}'; user must grant manually", de);
+                }
+            }
         }
         Permission::ScreenRecording => {
-            // Try to start PipeWire if not running
-            let _ = Command::new("systemctl")
-                .args(["--user", "start", "pipewire"])
-                .output();
-            let _ = Command::new("systemctl")
-                .args(["--user", "start", "xdg-desktop-portal"])
-                .output();
+            // Try to start PipeWire if not running via multiple methods
+            if Command::new("systemctl").arg("--version").output().is_ok() {
+                let _ = Command::new("systemctl")
+                    .args(["--user", "start", "pipewire"])
+                    .output();
+                let _ = Command::new("systemctl")
+                    .args(["--user", "start", "xdg-desktop-portal"])
+                    .output();
+            } else {
+                log::info!("systemctl not available; user must start PipeWire manually");
+            }
         }
         Permission::Accessibility => {
-            // Try to ensure at-spi2 is running
-            let _ = Command::new("systemctl")
-                .args(["--user", "start", "at-spi-dbus-bus"])
-                .output();
+            if Command::new("systemctl").arg("--version").output().is_ok() {
+                let _ = Command::new("systemctl")
+                    .args(["--user", "start", "at-spi-dbus-bus"])
+                    .output();
+            } else {
+                log::info!("systemctl not available; user must start at-spi2 manually");
+            }
         }
         Permission::Notifications => {
-            let _ = Command::new("gnome-control-center")
-                .arg("notifications")
-                .spawn();
+            // Try to open notification settings based on DE
+            match de {
+                "gnome" => {
+                    let _ = Command::new("gnome-control-center")
+                        .arg("notifications")
+                        .spawn();
+                }
+                "kde" => {
+                    let _ = Command::new("systemsettings")
+                        .arg("kcm_notifications")
+                        .spawn();
+                }
+                _ => {
+                    log::info!("No settings app known for DE '{}'; user must configure notifications manually", de);
+                }
+            }
         }
     }
     // Re-check after attempting to enable

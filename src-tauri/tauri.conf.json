@@ -28,19 +28,6 @@
         "visible": true,
         "transparent": true,
         "shadow": false
-      },
-      {
-        "label": "overlay",
-        "title": "ClickyX Overlay",
-        "url": "/src/overlay/index.html",
-        "width": 800,
-        "height": 600,
-        "decorations": false,
-        "transparent": true,
-        "alwaysOnTop": true,
-        "skipTaskbar": true,
-        "focus": false,
-        "visible": false
       }
     ],
     "trayIcon": {
@@ -64,7 +51,11 @@
     ],
     "windows": {
       "nsis": {
-        "installMode": "currentUser"
+        "installMode": "currentUser",
+        "installerIcon": "icons/icon.ico",
+        "displayIcon": "icons/icon.ico",
+        "languages": ["English"],
+        "webviewInstallMode": "downloadBootstrapper"
       }
     },
     "macOS": {
@@ -73,7 +64,13 @@
     },
     "linux": {
       "deb": {
-        "depends": []
+        "depends": [
+          "libwebkit2gtk-4.1-0",
+          "libxdo1",
+          "librsvg2-2",
+          "libasound2",
+          "libappindicator3-1"
+        ]
       },
       "appimage": {
         "bundleMediaFramework": true

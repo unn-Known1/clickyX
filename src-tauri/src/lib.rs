@@ -156,7 +156,6 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .plugin(tauri_plugin_shell::init())
-        .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_deep_link::init())
         .setup(|app| {
             let handle = app.handle().clone();
@@ -169,10 +168,12 @@ pub fn run() {
             let managed_config = config.clone();
             handle.manage(managed_config);
 
-            // Register default global hotkeys. The Windows backend can crash the
-            // release app on invalid persisted shortcuts, so startup skips it there.
-            #[cfg(not(target_os = "windows"))]
-            register_hotkeys(&handle)?;
+            // Register default global hotkeys. Previously skipped on Windows
+            // because invalid persisted shortcuts could crash the app. Now handled
+            // with per-binding error logging so a single bad shortcut never blocks startup.
+            if let Err(e) = register_hotkeys(&handle) {
+                log::warn!("Hotkey registration (some may have failed): {e}");
+            }
 
             // Initialize app state
             let state = Mutex::new(commands::AppState::default());

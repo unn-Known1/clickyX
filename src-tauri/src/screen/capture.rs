@@ -21,6 +21,31 @@ fn encode_rgba_as_jpeg_base64(img: &image::RgbaImage, quality: u8) -> Result<Str
     Ok(base64::engine::general_purpose::STANDARD.encode(&buf))
 }
 
+/// Provide user-facing guidance when screen capture fails on Linux.
+#[cfg(target_os = "linux")]
+fn with_capture_guide<T>(result: Result<T, String>) -> Result<T, String> {
+    result.map_err(|e| {
+        if e.contains("portal") || e.contains("PipeWire") || e.contains("pipewire") {
+            format!(
+                "{}\n\nHint: Ensure PipeWire and xdg-desktop-portal are running:\n  systemctl --user start pipewire xdg-desktop-portal\n\nOr on non-systemd systems, start pipewire manually.",
+                e
+            )
+        } else if e.contains("permission") || e.contains("denied") {
+            format!(
+                "{}\n\nHint: Grant screen capture permission in your desktop environment's privacy settings.",
+                e
+            )
+        } else {
+            e
+        }
+    })
+}
+
+#[cfg(not(target_os = "linux"))]
+fn with_capture_guide<T>(result: Result<T, String>) -> Result<T, String> {
+    result
+}
+
 fn capture_monitor(monitor: &Monitor) -> Result<ScreenImage, String> {
     let id = monitor.id().map_err(|e| format!("monitor id: {e}"))?;
     let width = monitor.width().map_err(|e| format!("monitor width: {e}"))?;
@@ -32,7 +57,8 @@ fn capture_monitor(monitor: &Monitor) -> Result<ScreenImage, String> {
 
 pub fn capture_all_screens() -> Result<Vec<ScreenImage>, String> {
     let monitors = Monitor::all().map_err(|e| format!("enumerate monitors: {e}"))?;
-    monitors.iter().map(capture_monitor).collect()
+    monitors.iter().map(capture_monitor).collect::<Result<Vec<_>, _>>()
+        .map_or_else(|e| with_capture_guide(Err(e)), Ok)
 }
 
 pub fn capture_cursor_screen() -> Result<ScreenImage, String> {
@@ -53,13 +79,16 @@ pub fn capture_cursor_screen() -> Result<ScreenImage, String> {
         }
     }
     monitors.first().ok_or_else(|| "no monitors found".into()).and_then(capture_monitor)
+        .map_or_else(|e| with_capture_guide(Err(e)), Ok)
 }
 
 pub fn capture_focused_window() -> Result<Option<ScreenImage>, String> {
     let windows = Window::all().map_err(|e| format!("enumerate windows: {e}"))?;
     for w in &windows {
         if w.is_focused().unwrap_or(false) {
-            let img = w.capture_image().map_err(|e| format!("window capture: {e}"))?;
+            let img = w.capture_image().map_err(|e| {
+                with_capture_guide(Err(format!("window capture: {e}")))
+            })?;
             let id = w.id().map_err(|e| format!("window id: {e}"))?;
             let width = img.width();
             let height = img.height();
