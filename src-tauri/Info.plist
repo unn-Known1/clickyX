@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>NSCameraUsageDescription</key>
+    <string>ClickyX needs camera access for screen context and visual analysis</string>
+    <key>NSMicrophoneUsageDescription</key>
+    <string>ClickyX needs microphone access for voice commands and audio features</string>
+    <key>NSScreenCaptureUsageDescription</key>
+    <string>ClickyX needs screen recording permission for automation and context awareness</string>
+    <key>NSAppleEventsUsageDescription</key>
+    <string>ClickyX needs accessibility access to control other applications on your behalf</string>
+</dict>
+</plist>
