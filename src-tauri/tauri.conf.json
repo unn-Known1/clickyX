@@ -53,7 +53,6 @@
       "nsis": {
         "installMode": "currentUser",
         "installerIcon": "icons/icon.ico",
-        "displayIcon": "icons/icon.ico",
         "languages": ["English"],
         "webviewInstallMode": "downloadBootstrapper"
       }
