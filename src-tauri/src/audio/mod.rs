@@ -1,4 +1,5 @@
 mod capture;
+mod capture_thread;
 mod pipeline;
 mod stt;
 mod tts;

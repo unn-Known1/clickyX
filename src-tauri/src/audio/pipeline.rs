@@ -7,7 +7,7 @@ use std::time::{Duration, Instant};
 use crate::config::AudioConfig;
 use crate::config::WakeWordConfig;
 
-use super::capture::AudioCapture;
+use super::capture_thread::CaptureThreadHandle;
 use super::handoff::VoiceAgentHandoff;
 use super::stt::{self, SttConfig, SttProvider};
 use super::tts::{self, TtsConfig, TtsProvider};
@@ -75,7 +75,7 @@ impl Default for AlwaysOnConfig {
 }
 
 pub struct VoicePipeline {
-    capture: Arc<Mutex<AudioCapture>>,
+    capture: CaptureThreadHandle,
     state: Arc<Mutex<PipelineState>>,
     stt_config: Arc<Mutex<SttConfig>>,
     tts_config: Arc<Mutex<TtsConfig>>,
@@ -96,10 +96,7 @@ impl VoicePipeline {
     pub fn new() -> Self {
         let config = AudioConfig::default();
         Self {
-            capture: Arc::new(Mutex::new(AudioCapture::new(
-                config.sample_rate,
-                config.buffer_size,
-            ))),
+            capture: CaptureThreadHandle::spawn(config.sample_rate, config.buffer_size),
             state: Arc::new(Mutex::new(PipelineState::Idle)),
             stt_config: Arc::new(Mutex::new(SttConfig::default())),
             tts_config: Arc::new(Mutex::new(TtsConfig::default())),
@@ -123,10 +120,7 @@ impl VoicePipeline {
             ..Default::default()
         };
         Self {
-            capture: Arc::new(Mutex::new(AudioCapture::new(
-                config.sample_rate,
-                config.buffer_size,
-            ))),
+            capture: CaptureThreadHandle::spawn(config.sample_rate, config.buffer_size),
             state: Arc::new(Mutex::new(PipelineState::Idle)),
             stt_config: Arc::new(Mutex::new(stt)),
             tts_config: Arc::new(Mutex::new(tts)),
@@ -152,15 +146,9 @@ impl VoicePipeline {
             return Err(format!("Pipeline is {:?}, cannot start recording", state));
         }
 
-        let mut capture = self
-            .capture
-            .lock()
-            .map_err(|e| format!("Capture lock error: {e}"))?;
-
         if *state == PipelineState::Idle {
-            capture.start_recording()?;
+            self.capture.start_recording()?;
         }
-        // If WakeWordListening, capture is already recording
 
         *state = PipelineState::Listening;
         log::info!("Voice pipeline: started listening");
@@ -179,13 +167,7 @@ impl VoicePipeline {
             *state = PipelineState::Processing;
         }
 
-        let audio_data = {
-            let mut capture = self
-                .capture
-                .lock()
-                .map_err(|e| format!("Capture lock error: {e}"))?;
-            capture.stop_recording()?
-        };
+        let audio_data = self.capture.stop_recording()?;
 
         let stt_cfg = self
             .stt_config
@@ -301,10 +283,8 @@ impl VoicePipeline {
     }
 
     pub fn get_audio_level(&self) -> AudioLevel {
-        if let Ok(capture) = self.capture.lock() {
-            if capture.is_recording() {
-                return capture.audio_level();
-            }
+        if self.capture.is_recording() {
+            return self.capture.audio_level();
         }
         AudioLevel::zero()
     }
@@ -321,11 +301,7 @@ impl VoicePipeline {
             ));
         }
 
-        let mut capture = self
-            .capture
-            .lock()
-            .map_err(|e| format!("Capture lock error: {e}"))?;
-        capture.start_recording()?;
+        self.capture.start_recording()?;
 
         let mut detector = self
             .wake_word_detector
@@ -351,13 +327,7 @@ impl VoicePipeline {
             ));
         }
 
-        let data = {
-            let mut capture = self
-                .capture
-                .lock()
-                .map_err(|e| format!("Capture lock error: {e}"))?;
-            capture.stop_recording()?
-        };
+        let data = self.capture.stop_recording()?;
         log::info!(
             "Wake word mode stopped, {} samples discarded",
             data.len()
@@ -382,16 +352,10 @@ impl VoicePipeline {
             return Ok(false);
         }
 
-        let samples = {
-            let capture = self
-                .capture
-                .lock()
-                .map_err(|e| format!("Capture lock error: {e}"))?;
-            if !capture.is_recording() {
-                return Ok(false);
-            }
-            capture.get_buffer_samples()
-        };
+        if !self.capture.is_recording() {
+            return Ok(false);
+        }
+        let samples = self.capture.get_buffer_samples();
 
         if samples.len() < 160 {
             return Ok(false);
@@ -437,11 +401,7 @@ impl VoicePipeline {
             return Err(format!("Pipeline is {:?}, cannot start always-on", state));
         }
 
-        let mut capture = self
-            .capture
-            .lock()
-            .map_err(|e| format!("Capture lock error: {e}"))?;
-        capture.start_recording()?;
+        self.capture.start_recording()?;
         *state = PipelineState::WakeWordListening;
         self.always_on_running.store(true, Ordering::SeqCst);
         log::info!("Voice pipeline: always-on listening started");
@@ -461,12 +421,8 @@ impl VoicePipeline {
             }
 
             *state = PipelineState::Idle;
-            let mut capture = self
-                .capture
-                .lock()
-                .map_err(|e| format!("Capture lock error: {e}"))?;
-            if capture.is_recording() {
-                capture.stop_recording()?
+            if self.capture.is_recording() {
+                self.capture.stop_recording()?
             } else {
                 Vec::new()
             }
@@ -483,7 +439,7 @@ impl VoicePipeline {
         &self,
         on_transcript: Box<dyn Fn(String) + Send + 'static>,
     ) -> Result<(), String> {
-        let capture_arc = self.capture.clone();
+        let capture_handle = self.capture.clone();
         let state_arc = self.state.clone();
         let running = self.always_on_running.clone();
         let ao_config = self
@@ -526,12 +482,8 @@ impl VoicePipeline {
                 }
 
                 let samples = {
-                    if let Ok(capture) = capture_arc.lock() {
-                        if capture.is_recording() {
-                            capture.get_buffer_samples()
-                        } else {
-                            continue;
-                        }
+                    if capture_handle.is_recording() {
+                        capture_handle.get_buffer_samples()
                     } else {
                         continue;
                     }
@@ -718,7 +670,7 @@ impl VoicePipeline {
         Ok(())
     }
 
-    pub fn capture_handle(&self) -> Arc<Mutex<AudioCapture>> {
+    pub fn capture_handle(&self) -> CaptureThreadHandle {
         self.capture.clone()
     }
 

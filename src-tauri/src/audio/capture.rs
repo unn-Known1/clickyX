@@ -167,6 +167,14 @@ pub struct AudioCapture {
 }
 
 impl AudioCapture {
+    pub fn buffer_clone(&self) -> Arc<Mutex<RingBuffer>> {
+        self.buffer.clone()
+    }
+
+    pub fn recording_clone(&self) -> Arc<AtomicBool> {
+        self.recording.clone()
+    }
+
     pub fn new(sample_rate: u32, buffer_size: u32) -> Self {
         Self {
             stream: StreamWrapper::new(),

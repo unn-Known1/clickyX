@@ -274,7 +274,7 @@ pub fn install_update(update_data: &[u8]) -> Result<(), String> {
                     .unwrap_or_default()
                     .join(".local/bin/clickyx");
                 // Use rename (mv) instead of copy to avoid leaving temp file
-                if let Err(e) = std::fs::rename(&update_path, &app_path) {
+                if let Err(_e) = std::fs::rename(&update_path, &app_path) {
                     // Fall back to copy if rename fails (cross-device link)
                     std::fs::copy(&update_path, &app_path)
                         .map_err(|e2| format!("failed to copy AppImage: {e2}"))?;
