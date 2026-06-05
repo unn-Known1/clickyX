@@ -245,7 +245,7 @@ pub fn run() {
             // Start automation background tick loop
             {
                 let handle = app.handle().clone();
-                tokio::spawn(async move {
+                tauri::async_runtime::spawn(async move {
                     let mut interval = tokio::time::interval(Duration::from_secs(1));
                     loop {
                         interval.tick().await;
@@ -302,7 +302,7 @@ pub fn run() {
             {
                 let handle = app.handle().clone();
                 let version = config.version.clone();
-                tokio::spawn(async move {
+                tauri::async_runtime::spawn(async move {
                     match crate::updater::check_for_updates(&version).await {
                         Ok(info) if info.available => {
                             let ver = info.version.clone().unwrap_or_default();
