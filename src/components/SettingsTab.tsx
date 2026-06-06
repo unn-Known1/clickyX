@@ -82,57 +82,63 @@ function SettingsTab({ onOpenAbout }: Props) {
   const tabById = (id: SettingsTabId) => SETTINGS_TABS.find((t) => t.id === id)!;
 
   return (
-    <div className="settings-tab">
-      <h2>Settings</h2>
-      <nav className="settings-nav" role="tablist" aria-label="Settings sections">
-        {NAV_GROUPS.map((group) => (
-          <div key={group.label} className="settings-nav-group">
-            <span className="settings-nav-group-label">{group.label}</span>
-            {group.items.map((id) => {
-              const tab = tabById(id);
-              return (
-                <button
-                  key={tab.id}
-                  role="tab"
-                  aria-selected={activeSection === tab.id}
-                  className={`settings-nav-btn ${activeSection === tab.id ? "active" : ""}`}
-                  onClick={() => handleSectionChange(tab.id)}
-                >
-                  <span className="settings-nav-btn-icon">
-                    <Icon name={tab.icon} size={12} />
-                    {tab.label}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-        ))}
-      </nav>
-      <div className="settings-content" ref={contentRef}>
-        {activeSection === "general"      && <GeneralSettings />}
-        {activeSection === "voice"        && <VoiceSettings />}
-        {activeSection === "providers"    && <AiProviderSettings />}
-        {activeSection === "computer_use" && <ComputerUseSettings />}
-        {activeSection === "permissions"  && <PermissionsSettings />}
-        {activeSection === "agents"       && (
-          <section className="settings-section">
-            <h3>Agents</h3>
-            <p className="settings-placeholder">Agent configuration is managed in the Agents tab.</p>
-          </section>
-        )}
-        {activeSection === "automations"  && (
-          <section className="settings-section">
-            <h3>Automations</h3>
-            <p className="settings-placeholder">Automation CRUD is available in the Connections tab.</p>
-          </section>
-        )}
-        {activeSection === "3d_models" && (
-          <Suspense fallback={<div className="skeleton-loader" />}>
-            <ModelGeneratorTab />
-          </Suspense>
-        )}
-        {activeSection === "system"       && <SystemSettings onOpenAbout={onOpenAbout} />}
-      </div>
+    <div className="settings-layout glass-panel">
+      <aside className="settings-sidebar">
+        <h2 className="settings-header">Settings</h2>
+        <nav className="settings-nav" role="tablist" aria-label="Settings sections">
+          {NAV_GROUPS.map((group) => (
+            <div key={group.label} className="settings-nav-group">
+              <span className="settings-nav-group-label">{group.label}</span>
+              {group.items.map((id) => {
+                const tab = tabById(id);
+                return (
+                  <button
+                    key={tab.id}
+                    role="tab"
+                    aria-selected={activeSection === tab.id}
+                    className={`settings-nav-btn ${activeSection === tab.id ? "active" : ""}`}
+                    onClick={() => handleSectionChange(tab.id)}
+                  >
+                    <span className="settings-nav-btn-icon">
+                      <Icon name={tab.icon} size={16} />
+                    </span>
+                    <span className="settings-nav-btn-label">{tab.label}</span>
+                    {activeSection === tab.id && <div className="settings-nav-active-indicator" />}
+                  </button>
+                );
+              })}
+            </div>
+          ))}
+        </nav>
+      </aside>
+
+      <main className="settings-main-area" ref={contentRef}>
+        <div className="settings-content-wrapper fade-in-up">
+          {activeSection === "general"      && <GeneralSettings />}
+          {activeSection === "voice"        && <VoiceSettings />}
+          {activeSection === "providers"    && <AiProviderSettings />}
+          {activeSection === "computer_use" && <ComputerUseSettings />}
+          {activeSection === "permissions"  && <PermissionsSettings />}
+          {activeSection === "agents"       && (
+            <section className="settings-section elevated-card">
+              <h3>Agents</h3>
+              <p className="settings-placeholder">Agent configuration is managed in the Agents tab.</p>
+            </section>
+          )}
+          {activeSection === "automations"  && (
+            <section className="settings-section elevated-card">
+              <h3>Automations</h3>
+              <p className="settings-placeholder">Automation CRUD is available in the Connections tab.</p>
+            </section>
+          )}
+          {activeSection === "3d_models" && (
+            <Suspense fallback={<div className="skeleton-loader" />}>
+              <ModelGeneratorTab />
+            </Suspense>
+          )}
+          {activeSection === "system"       && <SystemSettings onOpenAbout={onOpenAbout} />}
+        </div>
+      </main>
     </div>
   );
 }

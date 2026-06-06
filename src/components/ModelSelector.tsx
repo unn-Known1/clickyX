@@ -10,7 +10,7 @@ interface ModelSelectorProps {
 function ModelSelector({ selectedModel, onModelChange }: ModelSelectorProps) {
   // Load current AI config to know which providers have keys configured
   const { data: aiConfig } = useQuery<AiConfig>({
-    queryKey: ["ai-config"],
+    queryKey: ["ai_config"],
     queryFn: () => invoke<AiConfig>("get_ai_config"),
     staleTime: 30_000,
   });

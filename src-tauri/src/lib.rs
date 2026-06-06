@@ -154,6 +154,12 @@ pub fn run() {
     init_logging();
 
     tauri::Builder::default()
+        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+            if let Some(window) = app.get_webview_window("main") {
+                let _ = window.show();
+                let _ = window.set_focus();
+            }
+        }))
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_deep_link::init())
@@ -303,8 +309,15 @@ pub fn run() {
             });
             handle.manage(Mutex::new(auto_capture_engine));
 
-            // Initialize agent state
-            let agent_store = Mutex::new(agent::session::AgentStore::new());
+            let config = config::load_config(&handle).unwrap_or_default();
+            let agent_store = match agent::session::AgentStore::load(&config.agent.encryption_key) {
+                Ok(store) => store,
+                Err(e) => {
+                    log::error!("Failed to load AgentStore: {e}, starting fresh");
+                    agent::session::AgentStore::new()
+                }
+            };
+            let agent_store = Mutex::new(agent_store);
             handle.manage(agent_store);
 
             // Initialize codex state
@@ -371,6 +384,8 @@ pub fn run() {
             commands::get_app_state,
             commands::show_overlay,
             commands::hide_overlay,
+            commands::load_conversations,
+            commands::save_conversations,
             commands::send_chat_message,
             commands::send_chat_message_stream,
             commands::get_models,

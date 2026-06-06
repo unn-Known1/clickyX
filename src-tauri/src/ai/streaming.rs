@@ -2,11 +2,12 @@ use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "type")]
 pub enum StreamEvent {
-    TextDelta(String),
-    TextDone(String),
-    Error(String),
-    Done,
+    TextDelta { text: String, session_id: Option<String> },
+    TextDone { text: String, session_id: Option<String> },
+    Error { message: String, session_id: Option<String> },
+    Done { session_id: Option<String> },
 }
 
 pub type StreamReceiver = mpsc::Receiver<StreamEvent>;

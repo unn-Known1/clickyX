@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { commands } from "../bindings";
 import type { ChatMessage } from "./useChat";
 
@@ -8,31 +8,6 @@ export interface Conversation {
   createdAt: number;
   updatedAt: number;
   messages: ChatMessage[];
-}
-
-const STORAGE_KEY = "clickyx_conversations";
-
-function loadFromStorage(): Conversation[] {
-  try {
-    const raw = sessionStorage.getItem(STORAGE_KEY);
-    if (!raw) return [];
-    return JSON.parse(raw) as Conversation[];
-  } catch {
-    return [];
-  }
-}
-
-function saveToStorage(convos: Conversation[]) {
-  try {
-    // Keep last 50 conversations, trim messages to last 200 per thread
-    const trimmed = convos.slice(-50).map(c => ({
-      ...c,
-      messages: c.messages.slice(-200),
-    }));
-    sessionStorage.setItem(STORAGE_KEY, JSON.stringify(trimmed));
-  } catch {
-    // storage full — ignore
-  }
 }
 
 function generateId(): string {
@@ -47,17 +22,33 @@ function deriveTitle(messages: ChatMessage[]): string {
 }
 
 export function useConversations() {
-  const [conversations, setConversations] = useState<Conversation[]>(() => loadFromStorage());
-  const [activeId, setActiveId] = useState<string | null>(() => {
-    const saved = loadFromStorage();
-    return saved.length > 0 ? saved[saved.length - 1].id : null;
-  });
+  const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [activeId, setActiveId] = useState<string | null>(null);
+  const [isLoaded, setIsLoaded] = useState(false);
+
+  useEffect(() => {
+    commands.loadConversations().then((loaded) => {
+      const convos = (loaded || []) as Conversation[];
+      setConversations(convos);
+      if (convos.length > 0) {
+        setActiveId(convos[convos.length - 1].id);
+      }
+      setIsLoaded(true);
+    }).catch(e => {
+      console.error("Failed to load conversations:", e);
+      setIsLoaded(true);
+    });
+  }, []);
 
   const activeConversation = conversations.find(c => c.id === activeId) ?? null;
 
   const persist = useCallback((convos: Conversation[]) => {
     setConversations(convos);
-    saveToStorage(convos);
+    const trimmed = convos.slice(-50).map(c => ({
+      ...c,
+      messages: c.messages.slice(-200),
+    }));
+    commands.saveConversations(trimmed).catch(console.error);
   }, []);
 
   const createConversation = useCallback((): string => {
@@ -96,9 +87,8 @@ export function useConversations() {
     persist(updated);
   }, [conversations, persist]);
 
-  /** Persist conversation to Rust backend (best-effort, non-blocking) */
-  const syncToBackend = useCallback((convo: Conversation) => {
-    commands.saveConversation(convo).catch(() => {/* backend may not support yet */});
+  const syncToBackend = useCallback((_convo: Conversation) => {
+    // Legacy mapping, handled by persist now.
   }, []);
 
   return {
@@ -111,5 +101,6 @@ export function useConversations() {
     updateMessages,
     renameConversation,
     syncToBackend,
+    isLoaded,
   };
 }

@@ -222,7 +222,7 @@ impl AnthropicProvider {
                 .await
                 .unwrap_or_default();
             let _ = sender
-                .send(StreamEvent::Error(format!("API error ({}): {}", status, text)))
+                .send(StreamEvent::Error { message: format!("API error ({}): {}", status, text), session_id: None })
                 .await;
             return Ok(());
         }
@@ -237,7 +237,7 @@ impl AnthropicProvider {
             let chunk = match chunk {
                 Ok(c) => c,
                 Err(e) => {
-                    let _ = sender.send(StreamEvent::Error(e.to_string())).await;
+                    let _ = sender.send(StreamEvent::Error { message: e.to_string(), session_id: None }).await;
                     return Ok(());
                 }
             };
@@ -262,7 +262,7 @@ impl AnthropicProvider {
                             {
                                 full_text.push_str(text);
                                 let _ = sender
-                                    .send(StreamEvent::TextDelta(text.to_string()))
+                                    .send(StreamEvent::TextDelta { text: text.to_string(), session_id: None })
                                     .await;
                             }
                         }
@@ -273,8 +273,8 @@ impl AnthropicProvider {
             }
         }
 
-        let _ = sender.send(StreamEvent::TextDone(full_text)).await;
-        let _ = sender.send(StreamEvent::Done).await;
+        let _ = sender.send(StreamEvent::TextDone { text: full_text, session_id: None }).await;
+        let _ = sender.send(StreamEvent::Done { session_id: None }).await;
 
         Ok(())
     }

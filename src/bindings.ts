@@ -374,7 +374,8 @@ export const commands = {
   sendChatMessageStream: (message: string, model: string | null, sessionId?: string) => invoke<void>("send_chat_message_stream", { message, model, sessionId }),
   sendChatMessageStreamVision: (message: string, images: string[], model: string | null, sessionId?: string) => invoke<void>("send_chat_message_stream_vision", { message, images, model, sessionId }),
   chatWithVision: (message: string, images: string[], model: string | null) => invoke<string>("chat_with_vision", { message, images, model }),
-  saveConversation: (conversation: unknown) => invoke<void>("save_conversation", { conversation }),
+  loadConversations: () => invoke<unknown[]>("load_conversations"),
+  saveConversations: (conversations: unknown[]) => invoke<void>("save_conversations", { conversations }),
 
   // Voice
   getVoiceProviders: () => invoke<VoiceProvider[]>("get_voice_providers"),

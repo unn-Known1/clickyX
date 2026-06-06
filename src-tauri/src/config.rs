@@ -6,22 +6,35 @@ use tauri::AppHandle;
 use crate::ai::AiConfig;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
 pub struct AgentConfig {
     pub codex_path: Option<String>,
     pub codex_home: String,
     pub max_workers: u32,
     pub agent_dock_position: String,
     pub enabled_skills: Vec<String>,
+    pub encryption_key: String,
 }
 
 impl Default for AgentConfig {
     fn default() -> Self {
+        use rand::RngCore;
+        let mut key = [0u8; 32];
+        rand::thread_rng().fill_bytes(&mut key);
+        let encryption_key = hex::encode(key);
+
         Self {
             codex_path: None,
-            codex_home: agent_data_dir(),
-            max_workers: 1,
+            codex_home: {
+                let mut p = dirs::data_dir().unwrap_or_else(|| std::path::PathBuf::from("."));
+                p.push("clickyx");
+                p.push("codex");
+                p.to_string_lossy().to_string()
+            },
+            max_workers: 2,
             agent_dock_position: "bottom".into(),
-            enabled_skills: vec![],
+            enabled_skills: vec!["file_reader".into()],
+            encryption_key,
         }
     }
 }
@@ -352,9 +365,9 @@ mod tests {
     fn test_agent_config_defaults() {
         let cfg = AgentConfig::default();
         assert!(cfg.codex_path.is_none());
-        assert_eq!(cfg.max_workers, 1);
+        assert_eq!(cfg.max_workers, 2);
         assert_eq!(cfg.agent_dock_position, "bottom");
-        assert!(cfg.enabled_skills.is_empty());
+        assert_eq!(cfg.enabled_skills.len(), 1);
     }
 
     #[test]

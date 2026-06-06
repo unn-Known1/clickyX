@@ -276,7 +276,15 @@ function AppInner() {
         <UpdateBanner />
 
         {/* F-010: Panel drag region / titlebar */}
-        <div className="app-titlebar" data-tauri-drag-region>
+        <div 
+          className="app-titlebar" 
+          data-tauri-drag-region
+          onPointerDown={(e) => {
+            if (e.target === e.currentTarget || (e.target as HTMLElement).classList.contains('app-title')) {
+              getCurrentWindow().startDragging();
+            }
+          }}
+        >
           <div className="app-title" data-tauri-drag-region>ClickyX</div>
           <div className="window-controls">
             <button

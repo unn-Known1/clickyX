@@ -95,6 +95,28 @@ impl AgentStore {
         sessions
     }
 
+    pub fn load(encryption_key: &str) -> Result<Self, String> {
+        let path = agents_file_path();
+        if !path.exists() {
+            return Ok(Self::new());
+        }
+        let data = std::fs::read(path).map_err(|e| format!("Failed to read agents file: {e}"))?;
+        let decrypted = decrypt_data(&data, encryption_key)?;
+        let store: Self = serde_json::from_str(&decrypted).map_err(|e| format!("Deserialization error: {e}"))?;
+        Ok(store)
+    }
+
+    pub fn save(&self, encryption_key: &str) -> Result<(), String> {
+        let json = serde_json::to_string(self).map_err(|e| format!("Serialization error: {e}"))?;
+        let encrypted = encrypt_data(&json, encryption_key)?;
+        let path = agents_file_path();
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent).unwrap_or_default();
+        }
+        std::fs::write(path, encrypted).map_err(|e| format!("Failed to write agents file: {e}"))?;
+        Ok(())
+    }
+
     pub fn remove(&mut self, slug: &str) -> bool {
         self.sessions.remove(slug).is_some()
     }
@@ -107,4 +129,37 @@ fn now_utc() -> String {
         .unwrap_or_default();
     let secs = duration.as_secs();
     format!("{}", secs)
+}
+
+fn agents_file_path() -> std::path::PathBuf {
+    let base = dirs::config_dir().expect("could not find config directory");
+    base.join("clickyx").join("agents.enc")
+}
+
+use aes_gcm::{
+    aead::{Aead, AeadCore, KeyInit, OsRng},
+    Aes256Gcm, Key, Nonce,
+};
+
+pub fn encrypt_data(data: &str, key_hex: &str) -> Result<Vec<u8>, String> {
+    let key_bytes = hex::decode(key_hex).map_err(|e| format!("Invalid hex key: {e}"))?;
+    if key_bytes.len() != 32 { return Err("Key must be 32 bytes".into()); }
+    let key = Key::<Aes256Gcm>::from_slice(&key_bytes);
+    let cipher = Aes256Gcm::new(key);
+    let nonce = Aes256Gcm::generate_nonce(&mut OsRng);
+    let ciphertext = cipher.encrypt(&nonce, data.as_bytes()).map_err(|e| format!("Encryption error: {:?}", e))?;
+    let mut result = nonce.to_vec();
+    result.extend_from_slice(&ciphertext);
+    Ok(result)
+}
+
+pub fn decrypt_data(data: &[u8], key_hex: &str) -> Result<String, String> {
+    if data.len() < 12 { return Err("Data too short".into()); }
+    let key_bytes = hex::decode(key_hex).map_err(|e| format!("Invalid hex key: {e}"))?;
+    if key_bytes.len() != 32 { return Err("Key must be 32 bytes".into()); }
+    let key = Key::<Aes256Gcm>::from_slice(&key_bytes);
+    let cipher = Aes256Gcm::new(key);
+    let nonce = Nonce::from_slice(&data[..12]);
+    let plaintext = cipher.decrypt(nonce, &data[12..]).map_err(|e| format!("Decryption error: {:?}", e))?;
+    String::from_utf8(plaintext).map_err(|e| format!("Invalid UTF-8: {e}"))
 }

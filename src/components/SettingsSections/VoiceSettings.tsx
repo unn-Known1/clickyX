@@ -136,6 +136,11 @@ function VoiceSettings() {
           <option value="system">System (Offline)</option>
         </select>
       </div>
+      {audioConfig.tts_provider === "system" && (
+        <div className="settings-hint" style={{ marginTop: -8, marginBottom: 12 }}>
+          <strong>System TTS:</strong> Plays directly through your OS, bypassing the app's internal volume and waveform animations. No setup required on Windows/macOS. Linux requires <code>speech-dispatcher</code>.
+        </div>
+      )}
       <div className="setting-row">
         <label>Activation Mode</label>
         <select

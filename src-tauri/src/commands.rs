@@ -199,6 +199,42 @@ pub fn hide_overlay(app: AppHandle) -> Result<(), String> {
     crate::overlay::hide_overlay(&app)
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Conversation {
+    pub id: String,
+    pub title: String,
+    #[serde(rename = "createdAt")]
+    pub created_at: u64,
+    #[serde(rename = "updatedAt")]
+    pub updated_at: u64,
+    pub messages: Vec<ai::ChatMessage>,
+}
+
+#[tauri::command]
+pub fn load_conversations(app: AppHandle) -> Result<Vec<Conversation>, String> {
+    let config = config::load_config(&app).unwrap_or_default();
+    let path = dirs::config_dir().expect("no config dir").join("clickyx").join("conversations.enc");
+    if !path.exists() {
+        return Ok(vec![]);
+    }
+    let data = std::fs::read(&path).map_err(|e| e.to_string())?;
+    let decrypted = crate::agent::session::decrypt_data(&data, &config.agent.encryption_key)?;
+    serde_json::from_str(&decrypted).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn save_conversations(app: AppHandle, conversations: Vec<Conversation>) -> Result<(), String> {
+    let config = config::load_config(&app).unwrap_or_default();
+    let path = dirs::config_dir().expect("no config dir").join("clickyx").join("conversations.enc");
+    let json = serde_json::to_string(&conversations).map_err(|e| e.to_string())?;
+    let encrypted = crate::agent::session::encrypt_data(&json, &config.agent.encryption_key)?;
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent).unwrap_or_default();
+    }
+    std::fs::write(&path, encrypted).map_err(|e| e.to_string())?;
+    Ok(())
+}
+
 #[tauri::command]
 pub async fn send_chat_message(
     app: AppHandle,
@@ -227,6 +263,7 @@ pub async fn send_chat_message_stream(
     app: AppHandle,
     message: String,
     model: Option<String>,
+    session_id: Option<String>,
 ) -> Result<(), String> {
     let config = config::load_config(&app).unwrap_or_default();
     let msg = ai::ChatMessage {
@@ -242,7 +279,7 @@ pub async fn send_chat_message_stream(
         let provider = match ai::create_provider_for_model(&config.ai, &model) {
             Ok(p) => p,
             Err(e) => {
-                let _ = app_clone.emit("stream-event", StreamEvent::Error(e.to_string()));
+                let _ = app_clone.emit("stream-event", StreamEvent::Error { message: e.to_string(), session_id: session_id.clone() });
                 return;
             }
         };
@@ -250,14 +287,20 @@ pub async fn send_chat_message_stream(
         let mut receiver = match provider.chat_stream(&[msg], &model).await {
             Ok(r) => r,
             Err(e) => {
-                let _ = app_clone.emit("stream-event", StreamEvent::Error(e.to_string()));
+                let _ = app_clone.emit("stream-event", StreamEvent::Error { message: e.to_string(), session_id: session_id.clone() });
                 return;
             }
         };
 
-        while let Some(event) = receiver.recv().await {
+        while let Some(mut event) = receiver.recv().await {
+            match &mut event {
+                StreamEvent::TextDelta { session_id: s, .. } => *s = session_id.clone(),
+                StreamEvent::TextDone { session_id: s, .. } => *s = session_id.clone(),
+                StreamEvent::Error { session_id: s, .. } => *s = session_id.clone(),
+                StreamEvent::Done { session_id: s } => *s = session_id.clone(),
+            }
             let _ = app_clone.emit("stream-event", &event);
-            if matches!(event, StreamEvent::Done | StreamEvent::Error(_)) {
+            if matches!(event, StreamEvent::Done { .. } | StreamEvent::Error { .. }) {
                 break;
             }
         }
@@ -1292,6 +1335,7 @@ pub fn list_agents(state: tauri::State<'_, Mutex<AgentStore>>) -> Result<Vec<Age
 
 #[tauri::command]
 pub fn create_agent(
+    app: AppHandle,
     name: String,
     slug: String,
     skills: Vec<String>,
@@ -1299,11 +1343,14 @@ pub fn create_agent(
 ) -> Result<AgentSession, String> {
     let mut store = state.lock().map_err(|e| format!("lock error: {e}"))?;
     let session = store.create(name, slug, skills);
+    let config = config::load_config(&app).unwrap_or_default();
+    let _ = store.save(&config.agent.encryption_key);
     Ok(session)
 }
 
 #[tauri::command]
 pub async fn run_agent(
+    app: AppHandle,
     slug: String,
     prompt: String,
     state: tauri::State<'_, Mutex<AgentStore>>,
@@ -1324,11 +1371,14 @@ pub async fn run_agent(
             .as_secs()
             .to_string();
     session.updated_at = now;
+    let config = config::load_config(&app).unwrap_or_default();
+    let _ = store.save(&config.agent.encryption_key);
     Ok(())
 }
 
 #[tauri::command]
 pub fn stop_agent(
+    app: AppHandle,
     slug: String,
     state: tauri::State<'_, Mutex<AgentStore>>,
 ) -> Result<(), String> {
@@ -1349,11 +1399,14 @@ pub fn stop_agent(
             .as_secs()
             .to_string();
     session.updated_at = now;
+    let config = config::load_config(&app).unwrap_or_default();
+    let _ = store.save(&config.agent.encryption_key);
     Ok(())
 }
 
 #[tauri::command]
 pub fn archive_agent(
+    app: AppHandle,
     slug: String,
     state: tauri::State<'_, Mutex<AgentStore>>,
 ) -> Result<(), String> {
@@ -1369,6 +1422,8 @@ pub fn archive_agent(
             .as_secs()
             .to_string();
     session.updated_at = now;
+    let config = config::load_config(&app).unwrap_or_default();
+    let _ = store.save(&config.agent.encryption_key);
     Ok(())
 }
 
@@ -1570,13 +1625,15 @@ pub fn open_agent_hud(app: AppHandle, slug: String) -> Result<(), String> {
     use tauri::webview::WebviewWindowBuilder;
 
     let label = format!("agent-hud-{}", slug.replace(['.', '/', ' '], "-"));
-    let url = format!("agent-hud.html?agent={}", urlencoding_simple(&slug));
+    let url = "agent-hud.html";
 
     // If the window already exists, focus it
     if let Some(existing) = app.get_webview_window(&label) {
         existing.set_focus().ok();
         return Ok(());
     }
+
+    let init_script = format!("window.__AGENT_SLUG = '{}';", slug.replace('\'', "\\'"));
 
     WebviewWindowBuilder::new(&app, &label, WebviewUrl::App(url.into()))
         .title(format!("Agent HUD — {}", slug))
@@ -1586,6 +1643,7 @@ pub fn open_agent_hud(app: AppHandle, slug: String) -> Result<(), String> {
         .transparent(true)
         .always_on_top(false)
         .resizable(true)
+        .initialization_script(&init_script)
         .build()
         .map(|_| ())
         .map_err(|e| format!("Failed to open Agent HUD: {e}"))

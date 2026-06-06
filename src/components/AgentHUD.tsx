@@ -37,8 +37,8 @@ function Timeline({ items }: { items: TimelineItem[] }) {
 
 // ── Main HUD component ────────────────────────────────────────────────────────
 export default function AgentHUD() {
-  // Read slug from URL params
-  const slug = new URLSearchParams(window.location.search).get("agent") || "";
+  // Read slug from global var set by Tauri initialization script
+  const slug = (window as any).__AGENT_SLUG || new URLSearchParams(window.location.search).get("agent") || "";
   const [activeSection, setActiveSection] = useState<"transcript" | "diff" | "timeline">("transcript");
   const [minimized, setMinimized] = useState(false);
   const transcriptEndRef = useRef<HTMLDivElement>(null);
@@ -150,7 +150,7 @@ export default function AgentHUD() {
           {agent && (
             <div className="hud-meta">
               <span>Slug: {agent.slug}</span>
-              <span>Updated: {new Date(agent.updated_at).toLocaleTimeString()}</span>
+              <span>Updated: {new Date(Number(agent.updated_at) * 1000).toLocaleTimeString()}</span>
               <span>Skills: {agent.skills.join(", ") || "none"}</span>
             </div>
           )}

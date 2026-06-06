@@ -57,6 +57,10 @@ tts = "0.26"
 lazy_static = "1"
 specta = { version = "2.0.0-rc.22", features = ["export"], optional = true }
 specta-typescript = { version = "0.0.9", optional = true }
+tauri-plugin-single-instance = "2.0.0-rc.0"
+aes-gcm = "0.10.3"
+rand = "0.8.5"
+hex = "0.4.3"
 
 [dev-dependencies]
 tempfile = "3"
