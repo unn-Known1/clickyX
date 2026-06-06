@@ -62,6 +62,11 @@ export function useAgents() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: AGENTS_KEY }),
   });
 
+  const deleteMutation = useMutation<void, Error, string>({
+    mutationFn: (slug) => commands.deleteAgent(slug),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: AGENTS_KEY }),
+  });
+
   const enableSkillMutation = useMutation<void, Error, { slug: string; skillName: string }>({
     mutationFn: ({ slug, skillName }) => commands.enableSkill(slug, skillName),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: AGENTS_KEY }),
@@ -88,6 +93,8 @@ export function useAgents() {
 
   const archiveAgent = (slug: string) => archiveMutation.mutateAsync(slug);
 
+  const deleteAgent = (slug: string) => deleteMutation.mutateAsync(slug);
+
   const enableSkill = (slug: string, skillName: string) =>
     enableSkillMutation.mutateAsync({ slug, skillName });
 
@@ -109,6 +116,7 @@ export function useAgents() {
     runAgent,
     stopAgent,
     archiveAgent,
+    deleteAgent,
     enableSkill,
     disableSkill,
     attachFiles,

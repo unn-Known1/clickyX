@@ -1298,6 +1298,17 @@ html, body, #root {
   color: var(--accent);
 }
 
+.agent-btn-delete {
+  border-color: #ef5350;
+  color: #ef5350;
+}
+
+.agent-btn-delete:hover {
+  background: rgba(239, 83, 80, 0.15);
+  border-color: #f44336;
+  color: #f44336;
+}
+
 .create-agent-form {
   background: var(--bg-surface);
   border: 1px solid var(--border);

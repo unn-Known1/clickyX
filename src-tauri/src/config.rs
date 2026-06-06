@@ -18,11 +18,6 @@ pub struct AgentConfig {
 
 impl Default for AgentConfig {
     fn default() -> Self {
-        use rand::RngCore;
-        let mut key = [0u8; 32];
-        rand::thread_rng().fill_bytes(&mut key);
-        let encryption_key = hex::encode(key);
-
         Self {
             codex_path: None,
             codex_home: {
@@ -34,7 +29,7 @@ impl Default for AgentConfig {
             max_workers: 2,
             agent_dock_position: "bottom".into(),
             enabled_skills: vec!["file_reader".into()],
-            encryption_key,
+            encryption_key: String::new(),
         }
     }
 }
@@ -47,6 +42,7 @@ fn agent_data_dir() -> String {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
 pub struct AudioConfig {
     pub ptt_hotkey: String,
     pub stt_provider: String,
@@ -109,6 +105,7 @@ pub struct ApiKey {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
 pub struct WindowPrefs {
     pub pin: bool,
     pub width: u32,
@@ -126,6 +123,7 @@ impl Default for WindowPrefs {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
 pub struct ScreenConfig {
     pub max_dimension: u32,
     pub jpeg_quality: u8,
@@ -143,6 +141,7 @@ impl Default for ScreenConfig {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
 pub struct TypeModeConfig {
     pub enabled: bool,
     pub double_tap_timeout_ms: u64,
@@ -160,6 +159,7 @@ impl Default for TypeModeConfig {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
 pub struct ComputerUseConfig {
     pub pointing_model: String,
     pub cua_backend: String,
@@ -177,6 +177,7 @@ impl Default for ComputerUseConfig {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
 pub struct OverlayPrefs {
     pub cursor_accent: String,
     pub cursor_size: u32,
@@ -205,6 +206,7 @@ impl Default for OverlayPrefs {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
 pub struct WakeWordConfig {
     pub enabled: bool,
     pub phrase: String,
@@ -233,6 +235,7 @@ pub struct McpServerConfig {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
 pub struct AppConfig {
     pub hotkeys: Vec<HotkeyBinding>,
     pub theme: String,
@@ -293,19 +296,45 @@ pub fn load_config(_app: &AppHandle) -> Result<AppConfig, String> {
     let path = config_path();
     if !path.exists() {
         log::info!("No config file found at {:?}, creating defaults", path);
-        let config = AppConfig::default();
+        let mut config = AppConfig::default();
+        // Generate a stable encryption key on first run
+        {
+            use rand::RngCore;
+            let mut key = [0u8; 32];
+            rand::thread_rng().fill_bytes(&mut key);
+            config.agent.encryption_key = hex::encode(key);
+        }
         save_config_inner(&config)?;
         return Ok(config);
     }
     let content = fs::read_to_string(&path).map_err(|e| format!("failed to read config: {e}"))?;
     match serde_json::from_str::<AppConfig>(&content) {
-        Ok(config) => {
+        Ok(mut config) => {
+            // Ensure encryption key is generated and persisted if missing
+            if config.agent.encryption_key.is_empty() {
+                use rand::RngCore;
+                let mut key = [0u8; 32];
+                rand::thread_rng().fill_bytes(&mut key);
+                config.agent.encryption_key = hex::encode(key);
+                log::info!("Generated new encryption key for agent store");
+                let _ = save_config_inner(&config);
+            }
             log::info!("Config loaded successfully from {:?}", path);
             Ok(config)
         }
         Err(e) => {
             log::warn!("Invalid config file at {:?}, using defaults: {e}", path);
-            Ok(AppConfig::default())
+            let config = AppConfig::default();
+            // Generate and persist a stable encryption key
+            let mut config = config;
+            if config.agent.encryption_key.is_empty() {
+                use rand::RngCore;
+                let mut key = [0u8; 32];
+                rand::thread_rng().fill_bytes(&mut key);
+                config.agent.encryption_key = hex::encode(key);
+            }
+            let _ = save_config_inner(&config);
+            Ok(config)
         }
     }
 }

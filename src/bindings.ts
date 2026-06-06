@@ -357,6 +357,7 @@ export const commands = {
   runAgent: (slug: string, prompt: string) => invoke<void>("run_agent", { slug, prompt }),
   stopAgent: (slug: string) => invoke<void>("stop_agent", { slug }),
   archiveAgent: (slug: string) => invoke<void>("archive_agent", { slug }),
+  deleteAgent: (slug: string) => invoke<void>("delete_agent", { slug }),
   enableSkill: (slug: string, skillName: string) => invoke<void>("enable_skill", { slug, skillName }),
   disableSkill: (slug: string, skillName: string) => invoke<void>("disable_skill", { slug, skillName }),
   listSkills: () => invoke<SkillInfo[]>("list_skills"),

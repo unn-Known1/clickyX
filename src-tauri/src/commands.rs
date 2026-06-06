@@ -1428,6 +1428,21 @@ pub fn archive_agent(
 }
 
 #[tauri::command]
+pub fn delete_agent(
+    app: AppHandle,
+    slug: String,
+    state: tauri::State<'_, Mutex<AgentStore>>,
+) -> Result<(), String> {
+    let mut store = state.lock().map_err(|e| format!("lock error: {e}"))?;
+    if !store.remove(&slug) {
+        return Err(format!("agent '{slug}' not found"));
+    }
+    let config = config::load_config(&app).unwrap_or_default();
+    let _ = store.save(&config.agent.encryption_key);
+    Ok(())
+}
+
+#[tauri::command]
 pub fn get_agent_status(
     slug: String,
     state: tauri::State<'_, Mutex<AgentStore>>,

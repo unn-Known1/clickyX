@@ -20,6 +20,7 @@ pub struct ImageInput {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
 pub struct AiConfig {
     pub anthropic_api_key: Option<String>,
     pub anthropic_model: String,

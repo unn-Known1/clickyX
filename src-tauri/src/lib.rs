@@ -455,6 +455,7 @@ pub fn run() {
             commands::run_agent,
             commands::stop_agent,
             commands::archive_agent,
+            commands::delete_agent,
             commands::get_agent_status,
             commands::get_agent_transcript,
             commands::list_skills,

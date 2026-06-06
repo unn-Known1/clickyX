@@ -7,11 +7,12 @@ import { SkeletonList } from "./SkeletonLoader";
 import { Sounds } from "../utils/sounds";
 
 function AgentCard({
-  agent, selected, onSelect, onRun, onStop, onArchive, onPopOut, dragOver,
+  agent, selected, onSelect, onRun, onStop, onArchive, onDelete, onPopOut, dragOver,
   onDragOver, onDragLeave, onDrop,
 }: {
   agent: AgentInfo; selected: boolean;
   onSelect: () => void; onRun: () => void; onStop: () => void; onArchive: () => void;
+  onDelete: () => void;
   onPopOut: () => void;
   dragOver: boolean;
   onDragOver: (e: React.DragEvent) => void;
@@ -49,6 +50,7 @@ function AgentCard({
         {label !== "archived" && (
           <button className="agent-btn agent-btn-archive" onClick={(e) => { e.stopPropagation(); onArchive(); }}>Archive</button>
         )}
+        <button className="agent-btn agent-btn-delete" onClick={(e) => { e.stopPropagation(); onDelete(); }} title="Delete agent permanently">Delete</button>
         {label === "running" && (
           <button
             className="agent-btn agent-btn-popout"
@@ -127,10 +129,10 @@ function CreateAgentForm({ skills, onCreate }: {
 }
 
 function AgentDetail({
-  agent, skills, onRun, onStop, onArchive, onEnableSkill, onDisableSkill,
+  agent, skills, onRun, onStop, onArchive, onDelete, onEnableSkill, onDisableSkill,
 }: {
   agent: AgentInfo; skills: SkillInfo[];
-  onRun: () => void; onStop: () => void; onArchive: () => void;
+  onRun: () => void; onStop: () => void; onArchive: () => void; onDelete: () => void;
   onEnableSkill: (s: string) => void; onDisableSkill: (s: string) => void;
 }) {
   const { showToast } = useAppContext();
@@ -159,6 +161,7 @@ function AgentDetail({
           ? <button className="agent-btn agent-btn-stop" onClick={onStop}>Stop</button>
           : <button className="agent-btn agent-btn-run" onClick={onRun}>Run</button>}
         <button className="agent-btn agent-btn-archive" onClick={onArchive}>Archive</button>
+        <button className="agent-btn agent-btn-delete" onClick={onDelete} title="Delete agent permanently">Delete</button>
       </div>
       <div className="agent-detail-skills">
         <h4>Skills</h4>
@@ -203,7 +206,7 @@ function AgentDetail({
 function AgentsTab() {
   const {
     agents, skills, loading, error,
-    createAgent, runAgent, stopAgent, archiveAgent, enableSkill, disableSkill, attachFiles,
+    createAgent, runAgent, stopAgent, archiveAgent, deleteAgent, enableSkill, disableSkill, attachFiles,
   } = useAgents();
 
   const { showToast } = useAppContext();
@@ -303,6 +306,7 @@ function AgentsTab() {
                 onRun={() => { setSelectedSlug(agent.slug); handleRun(agent.slug); }}
                 onStop={() => stopAgent(agent.slug)}
                 onArchive={() => archiveAgent(agent.slug)}
+                onDelete={() => { deleteAgent(agent.slug); if (selectedSlug === agent.slug) setSelectedSlug(null); }}
                 onPopOut={() => handlePopOut(agent.slug)}
                 dragOver={dragOverSlug === agent.slug}
                 onDragOver={(e) => { e.preventDefault(); setDragOverSlug(agent.slug); }}
@@ -328,6 +332,7 @@ function AgentsTab() {
               onRun={() => handleRun(selectedAgent.slug)}
               onStop={() => stopAgent(selectedAgent.slug)}
               onArchive={() => archiveAgent(selectedAgent.slug)}
+              onDelete={() => { deleteAgent(selectedAgent.slug); setSelectedSlug(null); }}
               onEnableSkill={(s) => enableSkill(selectedAgent.slug, s)}
               onDisableSkill={(s) => disableSkill(selectedAgent.slug, s)}
             />

@@ -417,8 +417,17 @@ pub fn start_hotplug_poll<R: Runtime>(app: AppHandle<R>, url: &str) {
     use window_manager::OverlayWindowManager;
     let url = url.to_string();
     std::thread::spawn(move || {
-        let mut last_count = 0usize;
-        let mut last_geoms: Vec<(i32, i32, u32, u32)> = Vec::new();
+        // Initialize with current state so first tick doesn't trigger creation
+        let (mut last_count, mut last_geoms) = match xcap::Monitor::all() {
+            Ok(m) => {
+                let geoms: Vec<_> = m.iter()
+                    .map(|mon| (mon.x().unwrap_or(0), mon.y().unwrap_or(0), mon.width().unwrap_or(0), mon.height().unwrap_or(0)))
+                    .collect();
+                let count = geoms.len();
+                (count, geoms)
+            }
+            Err(_) => (0, Vec::new()),
+        };
         let mut wm = OverlayWindowManager::<R>::new();
         loop {
             std::thread::sleep(std::time::Duration::from_secs(3));
