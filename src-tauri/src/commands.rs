@@ -834,6 +834,16 @@ pub fn check_google_workspace() -> Result<crate::agent::google::WorkspaceStatus,
 }
 
 #[tauri::command]
+pub fn google_workspace_auth_start() -> Result<(), String> {
+    crate::agent::google::GoogleWorkspace::start_auth()
+}
+
+#[tauri::command]
+pub fn google_workspace_auth_revoke() -> Result<(), String> {
+    crate::agent::google::GoogleWorkspace::revoke_auth()
+}
+
+#[tauri::command]
 pub fn list_emails(count: Option<u32>) -> Result<Vec<crate::agent::google::Email>, String> {
     crate::agent::google::GoogleWorkspace::list_emails(count.unwrap_or(10))
 }

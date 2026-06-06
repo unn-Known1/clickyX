@@ -42,13 +42,13 @@ Artifacts land in `src-tauri/target/release/bundle/`:
 
 | Category | What's included |
 |----------|----------------|
-| **Voice** | Push-to-talk (key-capture, 5 presets), always-on VAD with barge-in suppression, wake word "Hey Clicky", STT (Deepgram/Whisper/AssemblyAI), TTS (ElevenLabs/Cartesia/Edge/Deepgram Aura/OpenAI Realtime), drag-to-rotate voice-discovery orbit picker |
+| **Voice** | Push-to-talk (key-capture, 5 presets), always-on VAD with barge-in suppression, wake word "Hey Clicky", STT (Deepgram/Whisper/AssemblyAI), TTS (ElevenLabs/Cartesia/Edge/Deepgram Aura/OpenAI Realtime/**System TTS — offline, no key**), drag-to-rotate voice-discovery orbit picker |
 | **Screen** | All-monitor / cursor / focused-window capture via `xcap`, auto-capture with diff detection, coordinate normalization, multi-monitor per-screen overlay routing |
-| **Overlay** | Animated bezier-arc cursor, 5-ring active-control glow, calibration box, rectangles, scribbles, captions, streaming text bubble, real-amplitude waveform, agent dock, HIGHLIGHT/SHAPE annotation tags, display hotplug detection |
+| **Overlay** | Animated bezier-arc cursor, 5-ring active-control glow, calibration box, rectangles, scribbles, captions, streaming text bubble, real-amplitude waveform, agent dock, HIGHLIGHT/SHAPE annotation tags, display hotplug detection; pet sprite visible only during active AI operations |
 | **Agents** | Codex Node.js sidecar, session lifecycle, floating HUD window, 63 bundled skills, voice-agent handoff, file drag-drop onto cards |
 | **Computer Use** | `enigo`-based click/double-click/scroll/type/key on all platforms; background mode (no cursor warp); app-specific CUA context injection |
-| **Chat** | react-markdown + syntax highlighting, conversation sidebar, per-session stream scoping, draft persistence, stop/cancel, drag-drop images |
-| **Connections** | Google Workspace auth UI, MCP CRUD (real stdio JSON-RPC), automation cron/interval + run history, app usage log |
+| **Chat** | react-markdown + syntax highlighting, conversation sidebar, per-session stream scoping, draft persistence, stop/cancel, drag-drop images, model selector filtered to configured providers |
+| **Connections** | Google Workspace (status shown, OAuth2 setup required), MCP CRUD (real stdio JSON-RPC), automation cron/interval + run history, app usage log |
 | **Bridge API** | 25+ endpoints on `localhost:32123` — REST + SSE, token auth, CORS, Anthropic/OpenAI proxy, MCP tool routing (full reference: `docs/BRIDGE_API.md`) |
 | **Automations** | Cron + interval scheduling, JSON persistence, agent binding, run history |
 | **3D Generation** | Tripo3D API + Three.js GLB orbit viewer |

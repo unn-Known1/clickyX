@@ -9,6 +9,9 @@ import { useConversations } from "../hooks/useConversations";
 import type { ChatMessage } from "../hooks/useChat";
 import ModelSelector from "./ModelSelector";
 import { useAppContext } from "../context/AppContext";
+import { useQuery } from "@tanstack/react-query";
+import { invoke } from "../bindings";
+import type { AiConfig } from "../bindings";
 
 const DRAFT_KEY = "clickyx_chat_draft";
 
@@ -181,16 +184,33 @@ function ChatTab({ initialText }: { initialText?: string }) {
     setActiveId, createConversation, deleteConversation, updateMessages,
   } = useConversations();
 
+  // Load AI config to derive default model
+  const { data: aiConfig } = useQuery<AiConfig>({
+    queryKey: ["ai-config"],
+    queryFn: () => invoke<AiConfig>("get_ai_config"),
+    staleTime: 30_000,
+  });
+
   // Draft preserved in sessionStorage
   const [input, setInput] = useState(() => {
     if (initialText) return initialText;
     try { return sessionStorage.getItem(DRAFT_KEY) ?? ""; } catch { return ""; }
   });
-  const [selectedModel, setSelectedModel] = useState("claude-sonnet-4-20250514");
+  const [selectedModel, setSelectedModel] = useState("");
   const [isDraggingOver, setIsDraggingOver] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  // Derive default model from saved config when it loads
+  useEffect(() => {
+    if (!aiConfig || selectedModel) return;
+    const defaultModel =
+      aiConfig.default_provider === "openai"
+        ? aiConfig.openai_model || "gpt-4o"
+        : aiConfig.anthropic_model || "claude-sonnet-4-20250514";
+    setSelectedModel(defaultModel);
+  }, [aiConfig, selectedModel]);
 
   // Persist draft on every keystroke
   useEffect(() => {

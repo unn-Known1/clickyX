@@ -67,10 +67,8 @@ export function invoke<T>(cmd: string, args?: any): Promise<T> {
       }) as any;
     }
     if (cmd === "get_models") {
-      return Promise.resolve([
-        { id: "claude-3-5-sonnet", provider: "anthropic", name: "Claude 3.5 Sonnet", capabilities: ["chat"] },
-        { id: "gpt-4o", provider: "openai", name: "GPT-4o", capabilities: ["chat"] }
-      ]) as any;
+      // In browser mode, return empty list to simulate no provider configured
+      return Promise.resolve([]) as any;
     }
     if (cmd === "get_voice_providers") {
       return Promise.resolve([
@@ -315,6 +313,8 @@ export interface PermissionStatus {
 export interface WorkspaceStatus {
   available: boolean;
   authenticated: boolean;
+  email?: string;
+  scopes?: string[];
 }
 
 // ── Log ───────────────────────────────────────────────────────────────────────

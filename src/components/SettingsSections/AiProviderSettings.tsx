@@ -19,53 +19,89 @@ interface AppConfig {
 
 function AiProviderSettings() {
   const { showToast } = useAppContext();
-  const [aiConfig, setAiConfig] = useState<AiConfig | null>(null);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [loaded, setLoaded] = useState(false);
+
+  // Use refs for API keys so password fields never go blank after save.
+  // These are separate from aiConfig because the backend doesn't echo
+  // back keys (they're returned as null for security).
+  const [anthropicKey, setAnthropicKey] = useState("");
+  const [openaiKey, setOpenaiKey] = useState("");
+  const [openaiBaseUrl, setOpenaiBaseUrl] = useState("https://api.openai.com/v1");
+  const [anthropicModel, setAnthropicModel] = useState("claude-sonnet-4-20250514");
+  const [openaiModel, setOpenaiModel] = useState("gpt-4o");
+  const [defaultProvider, setDefaultProvider] = useState("anthropic");
+  const [systemPrompt, setSystemPrompt] = useState("");
 
   const [elevenlabsKey, setElevenlabsKey] = useState("");
   const [cartesiaKey, setCartesiaKey] = useState("");
   const [deepgramKey, setDeepgramKey] = useState("");
   const [assemblyaiKey, setAssemblyaiKey] = useState("");
 
+  // Track whether we have a saved key on the server (for placeholder display)
+  const [hasAnthropicKey, setHasAnthropicKey] = useState(false);
+  const [hasOpenaiKey, setHasOpenaiKey] = useState(false);
+
   useEffect(() => {
     setError(null);
-    invoke<AiConfig>("get_ai_config")
-      .then(setAiConfig)
-      .catch((e) => {
-        console.error("Failed to load AI config:", e);
-        setError("Failed to load AI provider settings");
-      });
-    invoke<AppConfig>("get_config")
-      .then((cfg) => {
+    Promise.all([
+      invoke<AiConfig>("get_ai_config"),
+      invoke<AppConfig>("get_config"),
+    ])
+      .then(([aiCfg, cfg]) => {
+        // Only pre-fill non-sensitive fields; never try to show the actual key
+        setAnthropicModel(aiCfg.anthropic_model || "claude-sonnet-4-20250514");
+        setOpenaiModel(aiCfg.openai_model || "gpt-4o");
+        setOpenaiBaseUrl(aiCfg.openai_base_url || "https://api.openai.com/v1");
+        setDefaultProvider(aiCfg.default_provider || "anthropic");
+        setSystemPrompt(aiCfg.system_prompt || "");
+        // Track if keys are saved (key is non-null but we won't echo it)
+        setHasAnthropicKey(!!aiCfg.anthropic_api_key);
+        setHasOpenaiKey(!!aiCfg.openai_api_key);
+
         const keys = cfg.api_keys || [];
-        const getKey = (provider: string) => keys.find((k) => k.provider === provider)?.key || "";
+        const getKey = (provider: string) =>
+          keys.find((k) => k.provider === provider)?.key || "";
         setElevenlabsKey(getKey("elevenlabs"));
         setCartesiaKey(getKey("cartesia"));
         setDeepgramKey(getKey("deepgram"));
         setAssemblyaiKey(getKey("assemblyai"));
+        setLoaded(true);
       })
-      .catch(console.error);
+      .catch((e) => {
+        console.error("Failed to load AI config:", e);
+        setError("Failed to load AI provider settings");
+        setLoaded(true);
+      });
   }, []);
 
   const saveAiConfig = useCallback(async () => {
-    if (!aiConfig) return;
     setSaving(true);
     setError(null);
     try {
-      const updated = await invoke<AiConfig>("update_ai_config", {
+      // Only send the key if the user actually typed something new
+      await invoke<AiConfig>("update_ai_config", {
         partial: {
-          anthropic_api_key: aiConfig.anthropic_api_key || null,
-          anthropic_model: aiConfig.anthropic_model,
-          openai_api_key: aiConfig.openai_api_key || null,
-          openai_model: aiConfig.openai_model,
-          openai_base_url: aiConfig.openai_base_url,
-          default_provider: aiConfig.default_provider,
-          system_prompt: aiConfig.system_prompt,
+          ...(anthropicKey ? { anthropic_api_key: anthropicKey } : {}),
+          anthropic_model: anthropicModel,
+          ...(openaiKey ? { openai_api_key: openaiKey } : {}),
+          openai_model: openaiModel,
+          openai_base_url: openaiBaseUrl,
+          default_provider: defaultProvider,
+          system_prompt: systemPrompt,
         },
       });
-      setAiConfig(updated);
+
+      // Update "has key" status if user typed a new one
+      if (anthropicKey) setHasAnthropicKey(true);
+      if (openaiKey) setHasOpenaiKey(true);
+
+      // Clear the typed key fields (they've been saved — don't echo back)
+      setAnthropicKey("");
+      setOpenaiKey("");
+
       const newApiKeys = [
         elevenlabsKey && { provider: "elevenlabs", key: elevenlabsKey },
         cartesiaKey && { provider: "cartesia", key: cartesiaKey },
@@ -75,6 +111,7 @@ function AiProviderSettings() {
       await invoke("update_config", {
         partial: { api_keys: newApiKeys },
       });
+
       setSaved(true);
       showToast("Settings saved", "success");
       setTimeout(() => setSaved(false), 2000);
@@ -85,13 +122,12 @@ function AiProviderSettings() {
     } finally {
       setSaving(false);
     }
-  }, [aiConfig, elevenlabsKey, cartesiaKey, deepgramKey, assemblyaiKey]);
+  }, [
+    anthropicKey, anthropicModel, openaiKey, openaiModel, openaiBaseUrl,
+    defaultProvider, systemPrompt, elevenlabsKey, cartesiaKey, deepgramKey, assemblyaiKey,
+  ]);
 
-  const updateAiField = useCallback((key: string, value: unknown) => {
-    setAiConfig((prev) => (prev ? { ...prev, [key]: value } : prev));
-  }, []);
-
-  if (error) {
+  if (error && !loaded) {
     return (
       <section className="settings-section">
         <h3>AI Providers</h3>
@@ -100,7 +136,7 @@ function AiProviderSettings() {
     );
   }
 
-  if (!aiConfig) {
+  if (!loaded) {
     return (
       <section className="settings-section">
         <h3>AI Providers</h3>
@@ -118,40 +154,52 @@ function AiProviderSettings() {
           <input
             type="password"
             className="settings-input"
-            placeholder="API Key (sk-ant-...)"
-            value={aiConfig.anthropic_api_key || ""}
-            onChange={(e) => updateAiField("anthropic_api_key", e.target.value || null)}
+            placeholder={hasAnthropicKey ? "API Key saved — enter new key to update" : "API Key (sk-ant-...)"}
+            value={anthropicKey}
+            onChange={(e) => setAnthropicKey(e.target.value)}
+            autoComplete="new-password"
           />
+          {hasAnthropicKey && !anthropicKey && (
+            <span className="settings-hint" style={{ color: "var(--color-success, #4caf50)" }}>
+              ✓ API key is saved
+            </span>
+          )}
           <input
             type="text"
             className="settings-input"
             placeholder="Model (e.g., claude-sonnet-4-20250514)"
-            value={aiConfig.anthropic_model}
-            onChange={(e) => updateAiField("anthropic_model", e.target.value)}
+            value={anthropicModel}
+            onChange={(e) => setAnthropicModel(e.target.value)}
           />
         </div>
         <div className="ai-provider-group">
-          <h4>OpenAI (GPT)</h4>
+          <h4>OpenAI / Compatible</h4>
           <input
             type="password"
             className="settings-input"
-            placeholder="API Key (sk-proj-...)"
-            value={aiConfig.openai_api_key || ""}
-            onChange={(e) => updateAiField("openai_api_key", e.target.value || null)}
+            placeholder={hasOpenaiKey ? "API Key saved — enter new key to update" : "API Key (sk-proj-... or nvapi-...)"}
+            value={openaiKey}
+            onChange={(e) => setOpenaiKey(e.target.value)}
+            autoComplete="new-password"
           />
+          {hasOpenaiKey && !openaiKey && (
+            <span className="settings-hint" style={{ color: "var(--color-success, #4caf50)" }}>
+              ✓ API key is saved
+            </span>
+          )}
           <input
             type="text"
             className="settings-input"
             placeholder="Model (e.g., gpt-4o)"
-            value={aiConfig.openai_model}
-            onChange={(e) => updateAiField("openai_model", e.target.value)}
+            value={openaiModel}
+            onChange={(e) => setOpenaiModel(e.target.value)}
           />
           <input
             type="text"
             className="settings-input"
-            placeholder="Base URL (e.g., https://integrate.api.nvidia.com)"
-            value={aiConfig.openai_base_url}
-            onChange={(e) => updateAiField("openai_base_url", e.target.value)}
+            placeholder="Base URL (e.g., https://integrate.api.nvidia.com/v1)"
+            value={openaiBaseUrl}
+            onChange={(e) => setOpenaiBaseUrl(e.target.value)}
           />
           <span className="settings-hint">
             For NVIDIA: use your NVIDIA API key (nvapi-...) with base URL
@@ -202,11 +250,11 @@ function AiProviderSettings() {
           <h4>Default Provider</h4>
           <select
             className="settings-select"
-            value={aiConfig.default_provider}
-            onChange={(e) => updateAiField("default_provider", e.target.value)}
+            value={defaultProvider}
+            onChange={(e) => setDefaultProvider(e.target.value)}
           >
             <option value="anthropic">Anthropic</option>
-            <option value="openai">OpenAI</option>
+            <option value="openai">OpenAI / Compatible</option>
           </select>
         </div>
         <div className="ai-provider-group">
@@ -214,8 +262,8 @@ function AiProviderSettings() {
           <textarea
             className="settings-textarea"
             rows={3}
-            value={aiConfig.system_prompt}
-            onChange={(e) => updateAiField("system_prompt", e.target.value)}
+            value={systemPrompt}
+            onChange={(e) => setSystemPrompt(e.target.value)}
           />
         </div>
         <button
@@ -223,7 +271,7 @@ function AiProviderSettings() {
           onClick={saveAiConfig}
           disabled={saving}
         >
-          {saving ? "Saving..." : saved ? "Saved!" : "Save AI Settings"}
+          {saving ? "Saving..." : saved ? "Saved ✓" : "Save AI Settings"}
         </button>
         {error && <div className="settings-error">{error}</div>}
       </div>

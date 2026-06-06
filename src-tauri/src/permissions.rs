@@ -350,6 +350,10 @@ fn check_windows_capability(capability: &str) -> bool {
 
 #[cfg(target_os = "windows")]
 fn request_os_permission(perm: &Permission) -> Result<bool, String> {
+    use std::os::windows::process::CommandExt;
+    // CREATE_NO_WINDOW prevents any blank terminal/CMD window from flashing
+    const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+
     log::info!("Requesting permission: {:?} (Windows)", perm);
     let ms_settings_uri = match perm {
         Permission::Microphone => "ms-settings:privacy-microphone",
@@ -359,8 +363,18 @@ fn request_os_permission(perm: &Permission) -> Result<bool, String> {
         Permission::Accessibility => "ms-settings:easeofaccess-narrator",
     };
 
-    let result = Command::new("cmd")
-        .args(["/C", "start", "", ms_settings_uri])
+    // Use PowerShell Start-Process with Hidden window style to silently open Settings
+    let ps_command = format!("Start-Process '{}'", ms_settings_uri);
+    let result = Command::new("powershell")
+        .args([
+            "-WindowStyle",
+            "Hidden",
+            "-NonInteractive",
+            "-NoProfile",
+            "-Command",
+            &ps_command,
+        ])
+        .creation_flags(CREATE_NO_WINDOW)
         .output()
         .map_err(|e| format!("Failed to open Settings: {e}"))?;
 

@@ -4,6 +4,15 @@ All notable changes to ClickyX are documented here.
 
 ## [Unreleased]
 
+### Fixed — First-Run Experience
+
+- **Permissions (Windows):** Replaced `cmd /C start` with `powershell -WindowStyle Hidden Start-Process` + `CREATE_NO_WINDOW` process flag — eliminates blank terminal windows flashing when clicking "Grant Permission" for microphone, screen, etc.
+- **Google Workspace:** Removed broken `gogcli` dependency (package does not exist on npm). `check_google_workspace` now returns `available: false` cleanly. Added missing `google_workspace_auth_start` and `google_workspace_auth_revoke` Tauri commands that were previously undefined (caused frontend crashes). UI now shows a clear "not yet configured" message instead of the broken gogcli install guide.
+- **AI Settings — Blank after Save:** Fixed `AiProviderSettings.tsx` resetting API key fields to blank after save. The backend never echoes keys back for security; the component now tracks key state separately, shows a "✓ API key is saved" indicator, and only sends updated key values when the user types new ones.
+- **Model Selector:** Rewrote `ModelSelector.tsx` to use `useQuery` (react-query, per AGENTS.md rule 7). Now filters models to only show providers with configured API keys. Shows "No AI provider configured — set up in Settings" when no provider is available instead of showing all hardcoded models.
+- **Default Chat Model:** `ChatTab.tsx` no longer hardcodes `claude-sonnet-4-20250514` as the starting model. Default is now derived from the saved AI config (`default_provider` → saved model name).
+- **Overlay Pet Sprite (Floating Smiley):** Pet sprite (animated smiley on overlays) is now only visible during active AI operations (processing, listening, cursors/rects displayed, or always-listening active). Hidden when idle — no more smiley on every monitor all the time. RAF animation loop also pauses when idle to save CPU.
+
 ---
 
 ## [0.1.3] - 2026-06-06

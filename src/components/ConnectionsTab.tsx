@@ -210,7 +210,6 @@ function ConnectionsTab() {
 
   // F-012: Google Workspace OAuth state
   const [workspaceConnecting, setWorkspaceConnecting] = useState(false);
-  const [showGoogleGuide, setShowGoogleGuide] = useState(false);
 
   /* ── MCP ─────────────────────────────────────────────────────────────────── */
   const addMcpServer = async () => {
@@ -427,7 +426,7 @@ function ConnectionsTab() {
                   Disconnect
                 </button>
               </div>
-            ) : (
+            ) : workspace.available ? (
               <div className="google-auth-options">
                 <button
                   className="btn-primary google-oauth-btn"
@@ -436,36 +435,19 @@ function ConnectionsTab() {
                 >
                   {workspaceConnecting ? "Connecting…" : "Connect with Google"}
                 </button>
-                <span className="google-or-sep">or</span>
-                <button
-                  className="btn-small"
-                  onClick={() => setShowGoogleGuide((v) => !v)}
-                >
-                  {showGoogleGuide ? "Hide guide" : "Use gogcli"}
-                </button>
-                {showGoogleGuide && (
-                  <div className="google-guide">
-                    <ol className="google-guide-steps">
-                      <li>Install gogcli: <code>npm install -g gogcli</code></li>
-                      <li>Run: <code>gogcli auth login</code></li>
-                      <li>Follow the browser prompt to authorize</li>
-                      <li>Return here and refresh</li>
-                    </ol>
-                    <button
-                      className="btn-small"
-                      style={{ marginTop: 8 }}
-                      onClick={() => {
-                        invoke<WorkspaceStatus>("check_google_workspace")
-                          .then((result) => queryClient.setQueryData(["google-workspace"], result))
-                          .catch(() => {});
-                      }}
-                    >
-                      Refresh status
-                    </button>
-                  </div>
-                )}
+              </div>
+            ) : (
+              <div className="google-unavailable">
+                <p className="section-empty" style={{ marginBottom: 8 }}>
+                  Google Workspace integration is not yet configured in this build.
+                </p>
+                <p style={{ fontSize: 12, opacity: 0.6, margin: 0 }}>
+                  To enable Google Workspace, OAuth2 credentials must be configured.
+                  Check the project documentation for setup instructions.
+                </p>
               </div>
             )}
+
           </div>
         ) : (
           <p className="section-empty">Checking…</p>

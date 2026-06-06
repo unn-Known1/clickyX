@@ -1,6 +1,6 @@
 # ClickyX — Project Specification
 
-> **Last updated:** 2026-06-04
+> **Last updated:** 2026-06-06
 > **Repo:** `github.com/unn-Known1/clickyX`
 > **Stack:** Tauri v2 (Rust) + React 19 + TypeScript + Vite + Zustand + react-query
 
@@ -41,7 +41,7 @@ It is a faithful reimplementation of **HeyClicky** (Farza Majeed, YC W26) — th
 │  Rust Backend (src-tauri/src/)                              │
 │    audio/      Capture, VAD, STT, TTS, Wake Word, Handoff   │
 │    ai/         Anthropic, OpenAI, Catalog, Guidance Tags    │
-│    agent/      Codex, Sessions, Skills, Dock                │
+│    agent/      Codex, Sessions, Skills, Dock, Google stub   │
 │    screen/     xcap capture, Auto-capture, Coordinates      │
 │    overlay/    Cursors, Glow, Lifecycle, Screen Router      │
 │    cua.rs      enigo input simulation                       │
@@ -105,7 +105,7 @@ Type mode:
 
 **STT providers:** Deepgram (WebSocket), OpenAI Whisper (HTTP), AssemblyAI (HTTP)
 
-**TTS providers:** ElevenLabs, Cartesia, Microsoft Edge TTS (no key), Deepgram Aura, OpenAI Realtime
+**TTS providers:** ElevenLabs, Cartesia, Microsoft Edge TTS (no key), Deepgram Aura, OpenAI Realtime, **System TTS** (SAPI on Windows, AVFoundation on macOS, Speech Dispatcher on Linux — no key, fully offline)
 
 **Voice discovery:** Drag-to-rotate orbit picker, 5-provider voice catalog, click-to-select with per-voice accent color auto-applied to overlay
 
@@ -132,6 +132,7 @@ Per-screen transparent `WebviewWindow` (always-on-top, click-through), `macOSPri
 - `AlwaysListeningIndicator` — shown when `always-on-state-changed` fires with `{ active: true }`
 - `HighlightOverlay` (pulsing yellow) and `ShapeOverlay` (SVG arrow/curve) for `[HIGHLIGHT]` / `[SHAPE]` tags
 - RAF paused on `document.hidden`; all 18+ listeners use `cancelled` + async cleanup pattern
+- **Pet sprite (smiley):** only visible during active AI operations (processing, listening, cursors/rects active). Hidden when idle to avoid appearing on all monitors during normal use. RAF loop paused when idle to save CPU.
 - Display hotplug: `start_hotplug_watcher()` polls monitors every 2s, calls `refresh_windows()` on change, emits `display-config-changed`
 
 **Guidance tags parsed from AI responses:**
@@ -190,7 +191,7 @@ Per-screen transparent `WebviewWindow` (always-on-top, click-through), `macOSPri
 
 Real OS-level checks and requests — no stubs:
 - **macOS:** sqlite3 TCC database, `screencapture` probe for screen, `osascript` for accessibility; `open x-apple.systempreferences:...` to request
-- **Windows:** PowerShell `CapabilityAccessManager` registry; `ms-settings:privacy-*` URIs to request
+- **Windows:** PowerShell `CapabilityAccessManager` registry; `ms-settings:privacy-*` URIs to request via `powershell -WindowStyle Hidden` (no blank terminal flash)
 - **Linux:** `pactl info` (mic), `systemctl --user is-active pipewire` (screen), `busctl --user list` (notifications), `pgrep at-spi-bus-laun` (accessibility)
 
 ### 3.8 External HTTP Bridge (`localhost:32123`)
@@ -242,6 +243,13 @@ Full reference: `docs/BRIDGE_API.md`
 | Google Gemini | gemini-* | Optional fallback |
 | OpenRouter | any | User-configurable override |
 | NVIDIA AI | llama-3.1-* | via OpenAI-compatible base URL |
+| System TTS | OS native | Offline, no API key required |
+
+**API key notes:**
+- Keys are stored securely in platform config dir, never echoed back by the backend
+- The AI settings page shows "✓ API key is saved" when a key exists without displaying it
+- Only non-empty new key inputs are sent on save — existing saved keys are preserved
+- Model selector only shows models for providers that have API keys configured
 
 ### 3.10 Automations
 
@@ -265,6 +273,7 @@ Full reference: `docs/BRIDGE_API.md`
 - Stop/cancel streaming (per-session `sessionIdRef` scoping — no cross-contamination)
 - Drag-and-drop image attachments, ↑ arrow fills last message
 - Conversation sidebar: list, create, delete, rename
+- Default model derived from saved AI config (`default_provider` → `anthropic_model` / `openai_model`); model selector uses `useQuery` (react-query) and filters to configured providers only
 
 ### 3.13 Settings
 
@@ -274,9 +283,9 @@ Full reference: `docs/BRIDGE_API.md`
 | Overlay | Cursor size, opacity, show/hide prefs |
 | Capture | Auto-capture mode, interval, event-driven status |
 | Voice & Audio | PTT shortcuts (5 presets + custom), STT/TTS provider, always-on config, voice discovery |
-| AI Providers | API keys for all providers, model selection, system prompt |
+| AI Providers | API keys for all providers (never echoed back), "✓ saved" indicator, model selection, system prompt, custom OpenAI base URL |
 | Computer Use | CUA backend, native mode toggle |
-| Permissions | Per-permission check + request, OS-specific guidance |
+| Permissions | Per-permission check + request, OS-specific guidance (no terminal flash on Windows) |
 | System & Logs | Log viewer (5MB rotation, filter, search, copy), language switcher (EN/ES/FR/JA), About |
 | 3D Models | Tripo3D key + generator UI |
 
@@ -284,7 +293,7 @@ Scroll position is remembered per sub-tab.
 
 ### 3.14 Connections Tab
 
-- **Google Workspace:** OAuth flow UI (`google_workspace_auth_start`), gogcli setup guide, connected state with email/scopes, disconnect
+- **Google Workspace:** Feature status shows "not yet configured" — requires OAuth2 credential setup (gogcli dependency has been removed; see documentation for setup instructions). Backend commands `google_workspace_auth_start` and `google_workspace_auth_revoke` are defined and return helpful error messages.
 - **MCP Servers:** CRUD with tag-array args editor, `env` key=value editor, "Test" button, search/filter
 - **Automations:** CRUD with cron/interval UI, run history, agent binding, toggle
 - **App Usage Log:** Collapsible table of encountered apps with time/interactions/last-seen, clear button
@@ -295,11 +304,12 @@ Scroll position is remembered per sub-tab.
 - Camera permission step reconciled with PermissionsSettings
 - `OnboardingIntro` component — video with animated SVG fallback
 - Gated on `onboarding_completed` config flag
+- Step-by-step navigation — no forced "grant all" on first screen
 
 ### 3.16 Distribution & CI/CD
 
 | Platform | Artifact | Signing |
-|----------|----------|---------|
+|----------|----------|---------| 
 | Windows | `.msi` + `.exe` | `signtool` (needs `WINDOWS_SIGNING_CERT` secret) |
 | macOS | `.dmg` + `.app` + `.zip` | `codesign --deep --options runtime` (needs `APPLE_SIGNING_IDENTITY` secret) |
 | Linux | `.deb` + `.AppImage` | GPG (optional) |
@@ -326,6 +336,7 @@ Scroll position is remembered per sub-tab.
 | `src/hooks/useChat.ts` | Streaming chat, per-session scoping via `sessionIdRef`, vision fallback |
 | `src/hooks/useConversations.ts` | Multi-thread history, sessionStorage persistence |
 | `src/components/AgentHUD.tsx` | Floating HUD window with transcript/diff/timeline |
+| `src/components/ModelSelector.tsx` | react-query model list, filters by configured providers, setup prompt when no key |
 | `src/components/SkeletonLoader.tsx` | `SkeletonLine`, `SkeletonCard`, `SkeletonList` |
 | `src/utils/sounds.ts` | `playSound()` / `Sounds.*` — agent launch/done/error sounds |
 | `src/i18n/` | i18next EN + ES + FR + JA locales |
@@ -353,14 +364,14 @@ cargo test --all-features    # Rust unit tests
 ## 4. Technology Reference
 
 | HeyClicky (macOS) | ClickyX (Cross-platform) |
-|-------------------|--------------------------|
+|-------------------|--------------------------| 
 | Swift + SwiftUI + AppKit | Tauri v2 (Rust + React 19 + TypeScript) |
 | NSPanel per-screen | Per-screen `WebviewWindow` (transparent, always-on-top) |
 | ScreenCaptureKit | `xcap` crate |
 | AVFoundation / AVAudioEngine | `cpal` crate |
 | CGEvent / Apple Events | `enigo` crate |
 | SFSpeechRecognizer | Deepgram / Whisper / AssemblyAI |
-| AVSpeechSynthesizer | Microsoft Edge TTS (no key needed) |
+| AVSpeechSynthesizer | System TTS (SAPI/AVFoundation/Speech Dispatcher) + cloud providers |
 | Sparkle 2 auto-update | Custom `updater.rs` |
 | Supabase / PostHog / Sentry | **Omitted** — local-first, zero telemetry |
 | Codex (Node.js sidecar) | Codex (same — already cross-platform) |
@@ -392,6 +403,7 @@ Full schema: `docs/CONFIGURATION.md`
 | Windows code signing | Set `WINDOWS_SIGNING_CERT` (base64 PFX) and `WINDOWS_SIGNING_PASSWORD` as GitHub repo secrets |
 | Audio assets | Place `agent-launch.mp3`, `agent-done.mp3`, `agent-close.mp3`, `wake.mp3`, etc. in `public/sounds/` (see README there) |
 | Onboarding video | Place `intro.mp4` in `public/onboarding/` (SVG fallback is already rendered) |
+| Google Workspace OAuth | OAuth2 credentials must be configured in the Rust backend to enable Google Workspace. The `gogcli` external dependency has been removed. See `src-tauri/src/agent/google.rs` for the stub implementation. |
 
 ---
 
@@ -403,7 +415,6 @@ Full schema: `docs/CONFIGURATION.md`
 | `docs/CONFIGURATION.md` | Full config schema reference |
 | `docs/BRIDGE_API.md` | Complete `localhost:32123` endpoint reference |
 | `docs/SETUP.md` | Developer setup guide |
-| `docs/FRONTEND_UI_AUDIT.md` | Historical audit report (all items resolved) |
 | `CHANGELOG.md` | Full version history |
 | `AGENTS.md` | Agent/AI coding instructions for this codebase |
 | `CONTRIBUTING.md` | Contribution guidelines |

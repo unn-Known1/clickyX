@@ -37,6 +37,7 @@ Full specification: `docs/PROJECT_SPEC.md` — the single source of truth for fe
 | Overlay | Per-screen transparent `WebviewWindow` (`src/overlay/`) |
 | AI providers | HTTP/WebSocket — Anthropic, OpenAI, Deepgram, ElevenLabs, etc. |
 | Agent runtime | Codex (Node.js, already cross-platform) |
+| System TTS | `tts` crate — SAPI (Windows), AVFoundation (macOS), Speech Dispatcher (Linux) |
 
 ---
 
@@ -63,15 +64,16 @@ npm run test:visual           # Playwright visual regression
 | `bridge_auth.rs` | Constant-time token auth middleware |
 | `audio/pipeline.rs` | VAD loop, audio ducking, voice-agent handoff, always-on mode |
 | `audio/handoff.rs` | `VoiceAgentHandoff` — phrase detection → `voice-agent-handoff` event |
-| `audio/tts.rs` | TTS providers (ElevenLabs, Cartesia, Edge, Deepgram Aura, OpenAI Realtime) |
+| `audio/tts.rs` | TTS providers (ElevenLabs, Cartesia, Edge, Deepgram Aura, OpenAI Realtime, System TTS) |
 | `audio/stt.rs` | STT providers (Deepgram, Whisper, AssemblyAI) |
-| `audio/voices.rs` | 5-provider voice catalog |
+| `audio/voices.rs` | 6-provider voice catalog (includes System TTS) |
 | `ai/guidance.rs` | Annotation tag parser — POINT, RECT, SCRIBBLE, OFFER, HIGHLIGHT, SHAPE |
 | `ai/app_contexts.rs` | Per-app CUA context injection (VS Code, Figma, Terminal, Blender, etc.) |
 | `ai/catalog.rs` | Dynamic model catalog |
 | `agent/session.rs` | Agent session lifecycle (create/run/stop/archive) |
 | `agent/skills.rs` | Skills loader |
 | `agent/codex.rs` | Codex sidecar process management |
+| `agent/google.rs` | Google Workspace stub — returns `available: false`; OAuth2 not yet wired (gogcli dependency removed) |
 | `screen/capture.rs` | xcap-based screenshot capture |
 | `screen/auto_capture.rs` | Diff-based continuous capture engine |
 | `screen/coordinate.rs` | Y-flip + coordinate normalization |
@@ -111,7 +113,7 @@ npm run test:visual           # Playwright visual regression
 | `components/HomeTab.tsx` | Hero, dynamic suggestions, agent dock strip, empty-state CTA |
 | `components/AgentsTab.tsx` | Agent CRUD, skill management, slug auto-derive, drag-drop, HUD pop-out |
 | `components/AgentHUD.tsx` | Floating HUD — transcript, diff, activity timeline |
-| `components/ConnectionsTab.tsx` | Google Workspace auth, MCP CRUD, automations, app usage log |
+| `components/ConnectionsTab.tsx` | Google Workspace status (shows unavailable message, no gogcli), MCP CRUD, automations, app usage log |
 | `components/SettingsTab.tsx` | 8 sections with icon nav, group headers, scroll memory |
 | `components/SettingsSections/AppearanceSettings.tsx` | Theme, accent variants, color picker |
 | `components/SettingsSections/OverlayPrefsSettings.tsx` | Cursor size, opacity |
@@ -126,7 +128,8 @@ npm run test:visual           # Playwright visual regression
 | `components/Icon.tsx` | Shared SVG icon set (30+ icons) |
 | `components/UpdateBanner.tsx` | Auto-updater notification |
 | `components/AboutDialog.tsx` | Version + links dialog |
-| `overlay/OverlayApp.tsx` | Glow, calibration, waveform (real amplitude), cursors, captions, dock, HIGHLIGHT/SHAPE, AlwaysListeningIndicator |
+| `components/ModelSelector.tsx` | react-query model list; filters by configured providers; shows setup prompt when no API key |
+| `overlay/OverlayApp.tsx` | Glow, calibration, waveform (real amplitude), cursors, captions, dock, HIGHLIGHT/SHAPE, AlwaysListeningIndicator; pet sprite only shown when AI is active |
 | `overlay/overlay.css` | Overlay-specific styles |
 | `styles/theme.css` | All panel styles, semantic color tokens, 6 accent variants |
 

@@ -105,6 +105,7 @@ The `StreamWrapper` wraps `Option<cpal::Stream>` in a `Mutex` in `AudioPipeline`
 |----------|--------------------------|
 | **Root cause** | `check_os_permission` on Windows is **not** empty — it queries the Windows Capability Access Manager registry via **PowerShell** for microphone, camera, and notifications. ScreenRecording and Accessibility always return `true` (by design — desktop apps can use DXGI/UIA without explicit permission gates). The real issue: if PowerShell fails (execution policy, missing binary), all consent checks fall back to `"Allow"` (regardless of actual setting). |
 | **Impact** | Microphone privacy blocked in Windows Settings → PowerShell query fails → permission reports allowed → `cpal` fails at stream creation with a confusing error. The user sees a capture failure instead of a permission prompt. |
+| **✅ Partial fix (2026-06-06)** | `request_os_permission` now uses `powershell -WindowStyle Hidden -NonInteractive -NoProfile -Command Start-Process` with the `CREATE_NO_WINDOW` Win32 flag instead of `cmd /C start`. This eliminates the blank CMD terminal windows that flashed on screen when clicking "Grant Permission". The underlying PowerShell dependency for _checking_ permission status remains; see action item #5 below for the full Win32 replacement. |
 
 ---
 
@@ -126,6 +127,7 @@ The `StreamWrapper` wraps `Option<cpal::Stream>` in a `Mutex` in `AudioPipeline`
 | **Code** | `#[cfg(not(target_os = "windows"))] register_hotkeys(&handle)?;` |
 | **Reason (comment)** | "the Windows backend can crash the release app on invalid persisted shortcuts" |
 | **Impact** | Push-to-Talk (PTT) hotkey is completely disabled on Windows. A core feature of the app (voice agent trigger) doesn't work. |
+| **✅ Fixed (v0.1.3)** | Hotkey registration is now unconditional on all platforms. Per-binding error logging (`log::warn`) prevents a single bad shortcut from blocking startup. Invalid persisted hotkeys are now skipped with a warning instead of crashing. |
 | **Fix** | Implement proper error handling and key validation instead of disabling the feature entirely. |
 
 ---

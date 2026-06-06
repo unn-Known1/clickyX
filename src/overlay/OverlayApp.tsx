@@ -368,6 +368,9 @@ function OverlayAppInner() {
   const streamingRef = useRef<StreamingCaption | null>(null);
 
   // F-020: RAF-based pet animation with visibility pause
+  // Only animate when the pet is actually shown (active state) to save CPU across all monitors
+  const isPetActive = processing || waveformActive || cursors.length > 0 || rects.length > 0 || alwaysListening;
+
   const scheduleNextPetFrame = useCallback(() => {
     petRafRef.current = requestAnimationFrame(() => {
       setPetPos(prev => ({
@@ -379,22 +382,26 @@ function OverlayAppInner() {
   }, []);
 
   useEffect(() => {
+    if (!isPetActive) {
+      cancelAnimationFrame(petRafRef.current);
+      return;
+    }
     scheduleNextPetFrame();
     return () => cancelAnimationFrame(petRafRef.current);
-  }, [scheduleNextPetFrame]);
+  }, [isPetActive, scheduleNextPetFrame]);
 
   // F-020: Pause RAF when overlay is hidden
   useEffect(() => {
     const handleVisibility = () => {
       if (document.hidden) {
         cancelAnimationFrame(petRafRef.current);
-      } else {
+      } else if (isPetActive) {
         scheduleNextPetFrame();
       }
     };
     document.addEventListener("visibilitychange", handleVisibility);
     return () => document.removeEventListener("visibilitychange", handleVisibility);
-  }, [scheduleNextPetFrame]);
+  }, [scheduleNextPetFrame, isPetActive]);
 
   // F-019: startStreamingCaption uses ref to avoid stale closure
   const startStreamingCaption = useCallback((cap: CaptionState) => {
@@ -631,8 +638,8 @@ function OverlayAppInner() {
       {/* F-014: Always-listening indicator — top-right corner */}
       {alwaysListening && <AlwaysListeningIndicator accent={accent} />}
 
-      {/* Pet sprite — hidden during calibration */}
-      {!calibration.active && (
+      {/* Pet sprite — only shown during active AI operations, hidden during calibration or idle */}
+      {!calibration.active && (processing || waveformActive || cursors.length > 0 || rects.length > 0 || alwaysListening) && (
         <div className="pet-sprite" style={{ left: petPos.x, top: petPos.y - 30 }}>
           <svg width="32" height="32" viewBox="0 0 32 32">
             <circle cx="16" cy="16" r="14" fill={withAlpha(accent, 0.35)} stroke={accent} strokeWidth="1.5" />

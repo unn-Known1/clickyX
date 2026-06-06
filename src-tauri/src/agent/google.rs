@@ -1,6 +1,4 @@
 use serde::{Deserialize, Serialize};
-use std::path::PathBuf;
-use std::process::Command;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Email {
@@ -32,127 +30,54 @@ pub struct DriveFile {
 pub struct WorkspaceStatus {
     pub available: bool,
     pub authenticated: bool,
+    pub email: Option<String>,
+    pub scopes: Option<Vec<String>>,
 }
 
-pub struct GoogleWorkspace {
-    pub gogcli_path: String,
-    pub credentials_path: PathBuf,
-}
+pub struct GoogleWorkspace;
 
 impl GoogleWorkspace {
-    fn new(gogcli_path: String) -> Self {
-        let credentials_path = dirs::config_dir()
-            .unwrap_or_else(|| PathBuf::from("."))
-            .join("clickyx")
-            .join("google_credentials.json");
-        Self {
-            gogcli_path,
-            credentials_path,
-        }
-    }
-
-    pub fn check_available() -> bool {
-        Command::new("gogcli")
-            .arg("--version")
-            .output()
-            .map(|o| o.status.success())
-            .unwrap_or(false)
-    }
-
+    /// Google Workspace integration requires a dedicated OAuth2 setup.
+    /// The feature is not yet available in this build.
     pub fn check_auth() -> Result<WorkspaceStatus, String> {
-        let available = Self::check_available();
-        if !available {
-            return Ok(WorkspaceStatus {
-                available: false,
-                authenticated: false,
-            });
-        }
-        let output = Command::new("gogcli")
-            .arg("auth")
-            .arg("check")
-            .output()
-            .map_err(|e| format!("gogcli auth check failed: {e}"))?;
         Ok(WorkspaceStatus {
-            available: true,
-            authenticated: output.status.success(),
+            available: false,
+            authenticated: false,
+            email: None,
+            scopes: None,
         })
     }
 
-    pub fn list_emails(max_results: u32) -> Result<Vec<Email>, String> {
-        let output = Command::new("gogcli")
-            .args(["gmail", "list", "--max-results", &max_results.to_string(), "--json"])
-            .output()
-            .map_err(|e| format!("gogcli gmail list failed: {e}"))?;
-        if !output.status.success() {
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            return Err(format!("gogcli error: {stderr}"));
-        }
-        let stdout = String::from_utf8_lossy(&output.stdout);
-        serde_json::from_str::<Vec<Email>>(&stdout)
-            .map_err(|e| format!("failed to parse gogcli output: {e}"))
+    pub fn start_auth() -> Result<(), String> {
+        Err(
+            "Google Workspace integration is not yet configured. \
+             To enable Google Workspace, you need to set up OAuth2 credentials. \
+             See the documentation for setup instructions."
+                .into(),
+        )
     }
 
-    pub fn list_calendar_events(max_results: u32) -> Result<Vec<CalendarEvent>, String> {
-        let output = Command::new("gogcli")
-            .args([
-                "calendar",
-                "list",
-                "--max-results",
-                &max_results.to_string(),
-                "--json",
-            ])
-            .output()
-            .map_err(|e| format!("gogcli calendar list failed: {e}"))?;
-        if !output.status.success() {
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            return Err(format!("gogcli error: {stderr}"));
-        }
-        let stdout = String::from_utf8_lossy(&output.stdout);
-        serde_json::from_str::<Vec<CalendarEvent>>(&stdout)
-            .map_err(|e| format!("failed to parse gogcli output: {e}"))
-    }
-
-    pub fn list_drive_files(query: &str) -> Result<Vec<DriveFile>, String> {
-        let output = Command::new("gogcli")
-            .args(["drive", "list", "--query", query, "--json"])
-            .output()
-            .map_err(|e| format!("gogcli drive list failed: {e}"))?;
-        if !output.status.success() {
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            return Err(format!("gogcli error: {stderr}"));
-        }
-        let stdout = String::from_utf8_lossy(&output.stdout);
-        serde_json::from_str::<Vec<DriveFile>>(&stdout)
-            .map_err(|e| format!("failed to parse gogcli output: {e}"))
-    }
-
-    pub fn send_email(to: &str, subject: &str, body: &str) -> Result<(), String> {
-        let output = Command::new("gogcli")
-            .args(["gmail", "send", "--to", to, "--subject", subject, "--body", body])
-            .output()
-            .map_err(|e| format!("gogcli gmail send failed: {e}"))?;
-        if !output.status.success() {
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            return Err(format!("gogcli error: {stderr}"));
-        }
+    pub fn revoke_auth() -> Result<(), String> {
         Ok(())
     }
 
-    pub fn create_document(title: &str) -> Result<String, String> {
-        let output = Command::new("gogcli")
-            .args(["docs", "create", "--title", title, "--json"])
-            .output()
-            .map_err(|e| format!("gogcli docs create failed: {e}"))?;
-        if !output.status.success() {
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            return Err(format!("gogcli error: {stderr}"));
-        }
-        let stdout = String::from_utf8_lossy(&output.stdout);
-        let parsed: serde_json::Value = serde_json::from_str(&stdout)
-            .map_err(|e| format!("failed to parse gogcli output: {e}"))?;
-        parsed["id"]
-            .as_str()
-            .map(|s| s.to_string())
-            .ok_or_else(|| "no document id in response".into())
+    pub fn list_emails(_max_results: u32) -> Result<Vec<Email>, String> {
+        Err("Google Workspace not connected".into())
+    }
+
+    pub fn list_calendar_events(_max_results: u32) -> Result<Vec<CalendarEvent>, String> {
+        Err("Google Workspace not connected".into())
+    }
+
+    pub fn list_drive_files(_query: &str) -> Result<Vec<DriveFile>, String> {
+        Err("Google Workspace not connected".into())
+    }
+
+    pub fn send_email(_to: &str, _subject: &str, _body: &str) -> Result<(), String> {
+        Err("Google Workspace not connected".into())
+    }
+
+    pub fn create_document(_title: &str) -> Result<String, String> {
+        Err("Google Workspace not connected".into())
     }
 }

@@ -385,6 +385,8 @@ pub fn run() {
             commands::stop_wake_word_detection,
             commands::check_wake_word_detected,
             commands::check_google_workspace,
+            commands::google_workspace_auth_start,
+            commands::google_workspace_auth_revoke,
             commands::list_emails,
             commands::list_calendar_events,
             commands::list_automations,
