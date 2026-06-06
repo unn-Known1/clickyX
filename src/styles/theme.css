@@ -762,20 +762,22 @@ html, body, #root {
 .settings-select,
 .settings-textarea {
   width: 100%;
-  padding: 8px 10px;
-  border: 1px solid var(--border);
+  padding: 10px 14px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: var(--radius-sm);
-  background: var(--bg-primary);
+  background: rgba(0, 0, 0, 0.2);
   color: var(--text-primary);
-  font-size: 12px;
+  font-size: 13px;
   outline: none;
   font-family: inherit;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
 .settings-input:focus,
 .settings-select:focus,
 .settings-textarea:focus {
   border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(79, 195, 247, 0.25);
 }
 
 .settings-select {
@@ -788,18 +790,22 @@ html, body, #root {
 }
 
 .settings-save-btn {
-  padding: 8px 16px;
+  padding: 10px 20px;
   border: none;
-  border-radius: var(--radius-sm);
-  background: var(--accent);
+  border-radius: var(--radius);
+  background: linear-gradient(135deg, var(--accent) 0%, var(--accent-hover) 100%);
   color: #fff;
   cursor: pointer;
+  font-weight: 600;
   font-size: 13px;
   align-self: flex-start;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  transition: transform 0.2s, box-shadow 0.2s;
 }
 
 .settings-save-btn:hover {
-  background: var(--accent-hover);
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.3);
 }
 
 /* Connections Tab */

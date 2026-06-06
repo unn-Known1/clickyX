@@ -329,20 +329,38 @@ fn check_os_permission(perm: &Permission) -> PermissionStatus {
 /// Returns true if the registry key "Allow" value is "Allow".
 #[cfg(target_os = "windows")]
 fn check_windows_capability(capability: &str) -> bool {
-    let query = format!(
+    let query_global = format!(
         "(Get-ItemProperty 'HKCU:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\CapabilityAccessManager\\ConsentStore\\{}' -ErrorAction SilentlyContinue).Value",
         capability
     );
+    let query_np = format!(
+        "(Get-ItemProperty 'HKCU:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\CapabilityAccessManager\\ConsentStore\\{}\\NonPackaged' -ErrorAction SilentlyContinue).Value",
+        capability
+    );
+
+    // Combine queries so we can run them in one PowerShell execution to reduce latency
+    let combined_query = format!("$g = {}; $n = {}; \"$g|$n\"", query_global, query_np);
+
     let out = Command::new("powershell")
-        .args(["-NoProfile", "-NonInteractive", "-Command", &query])
+        .args(["-NoProfile", "-NonInteractive", "-Command", &combined_query])
         .output();
+        
     match out {
         Ok(o) => {
             let s = String::from_utf8_lossy(&o.stdout).trim().to_lowercase();
-            s == "allow"
+            let parts: Vec<&str> = s.split('|').collect();
+            let global_val = parts.get(0).unwrap_or(&"allow").trim();
+            let np_val = parts.get(1).unwrap_or(&"allow").trim();
+            
+            // If the global is Deny, it's denied. If NonPackaged is explicitly Deny, it's denied.
+            // Empty means the key doesn't exist (older Windows) so we default to allowed.
+            let global_allow = global_val.is_empty() || global_val == "allow";
+            let np_allow = np_val.is_empty() || np_val == "allow";
+            
+            global_allow && np_allow
         }
         Err(_) => {
-            // If the key doesn't exist (older Windows), assume granted
+            // If powershell fails completely, assume granted to not block features
             true
         }
     }

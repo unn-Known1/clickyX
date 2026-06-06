@@ -57,7 +57,7 @@ function PermissionsSettings() {
   };
 
   return (
-    <section className="settings-section">
+    <section className="settings-section elevated-card">
       <h3>Permissions</h3>
       {PERMISSION_LIST.map((perm) => {
         const status = statuses[perm];

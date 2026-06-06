@@ -70,7 +70,7 @@ export function CaptureSettings() {
   }, []);
 
   return (
-    <section className="settings-section">
+    <section className="settings-section elevated-card">
       <h3>Auto-Capture (Continuous Context)</h3>
       {acError && <div className="settings-error">{acError}</div>}
 

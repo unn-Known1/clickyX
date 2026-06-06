@@ -92,7 +92,7 @@ function VoiceSettings() {
 
   if (error) {
     return (
-      <section className="settings-section">
+      <section className="settings-section elevated-card">
         <h3>Voice</h3>
         <div className="settings-error">{error}</div>
       </section>
@@ -101,7 +101,7 @@ function VoiceSettings() {
 
   if (loading || !audioConfig) {
     return (
-      <section className="settings-section">
+      <section className="settings-section elevated-card">
         <h3>Voice</h3>
         <div className="skeleton-loader" />
       </section>
@@ -109,7 +109,7 @@ function VoiceSettings() {
   }
 
   return (
-    <section className="settings-section">
+    <section className="settings-section elevated-card">
       <h3>Voice</h3>
       <div className="setting-row">
         <label>STT Provider</label>

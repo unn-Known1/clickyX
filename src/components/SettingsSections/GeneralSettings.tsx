@@ -8,7 +8,7 @@ function GeneralSettings() {
 
   if (error) {
     return (
-      <section className="settings-section">
+      <section className="settings-section elevated-card">
         <h3>General</h3>
         <div className="settings-error">{error}</div>
       </section>
@@ -17,7 +17,7 @@ function GeneralSettings() {
 
   if (loading || !config) {
     return (
-      <section className="settings-section">
+      <section className="settings-section elevated-card">
         <h3>General</h3>
         <div className="skeleton-loader" />
       </section>

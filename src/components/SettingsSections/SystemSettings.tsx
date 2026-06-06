@@ -110,7 +110,7 @@ function SystemSettings({ onOpenAbout }: Props) {
   });
 
   return (
-    <section className="settings-section">
+    <section className="settings-section elevated-card">
       <h3>System & Logs</h3>
 
       <div className="setting-row">

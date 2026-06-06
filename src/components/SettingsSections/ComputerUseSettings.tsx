@@ -23,7 +23,7 @@ function ComputerUseSettings() {
 
   if (error && !config) {
     return (
-      <section className="settings-section">
+      <section className="settings-section elevated-card">
         <h3>Computer Use</h3>
         <div className="settings-error">{error}</div>
       </section>
@@ -32,7 +32,7 @@ function ComputerUseSettings() {
 
   if (loading) {
     return (
-      <section className="settings-section">
+      <section className="settings-section elevated-card">
         <h3>Computer Use</h3>
         <div className="skeleton-loader" />
       </section>
@@ -42,7 +42,7 @@ function ComputerUseSettings() {
   const cuConfig = config?.computer_use;
 
   return (
-    <section className="settings-section">
+    <section className="settings-section elevated-card">
       <h3>
         Computer Use{" "}
         {saving && <span className="saving-indicator">saving…</span>}

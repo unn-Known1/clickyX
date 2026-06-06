@@ -102,7 +102,7 @@ function AiProviderSettings() {
 
   if (error && !aiConfig) {
     return (
-      <section className="settings-section">
+      <section className="settings-section elevated-card">
         <h3>AI Providers</h3>
         <div className="settings-error">{error}</div>
       </section>
@@ -111,7 +111,7 @@ function AiProviderSettings() {
 
   if (loading) {
     return (
-      <section className="settings-section">
+      <section className="settings-section elevated-card">
         <h3>AI Providers</h3>
         <div className="skeleton-loader" />
       </section>
@@ -119,7 +119,7 @@ function AiProviderSettings() {
   }
 
   return (
-    <section className="settings-section">
+    <section className="settings-section elevated-card">
       <h3>AI Providers</h3>
       <div className="ai-settings">
         <div className="ai-provider-group">

@@ -42,7 +42,7 @@ export function OverlayPrefsSettings({ config, onConfigUpdate }: Props) {
   }, [config, onConfigUpdate]);
 
   return (
-    <section className="settings-section">
+    <section className="settings-section elevated-card">
       <h3>Overlay Preferences</h3>
 
       <div className="setting-row">

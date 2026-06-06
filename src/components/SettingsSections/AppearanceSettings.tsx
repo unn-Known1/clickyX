@@ -76,7 +76,7 @@ export function AppearanceSettings({ config, onConfigUpdate }: Props) {
   const presets = config.overlay.accent_presets ?? [];
 
   return (
-    <section className="settings-section">
+    <section className="settings-section elevated-card">
       <h3>Appearance</h3>
 
       <div className="setting-row">
