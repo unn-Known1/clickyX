@@ -6,6 +6,23 @@ All notable changes to ClickyX are documented here.
 
 ---
 
+## [0.1.3] - 2026-06-06
+
+### Added — Offline Local System TTS
+
+- **System TTS**: Added native system speech synthesis (`tts` crate integration utilizing SAPI on Windows, AVFoundation on macOS, and Speech Dispatcher on Linux) to allow 100% offline text-to-speech with no API keys or external downloads required.
+- **System Voice Discovery**: Integrated System Voice in the frontend Voice Discovery orbit and backend voice catalogs.
+- **Auto-Sync Voice Provider**: Automatically updates the active `tts_provider` configuration in `select_voice` backend command when the user selects a voice.
+
+### Fixed — Build & Onboarding
+
+- **Windows GNU Build**: Fixed `windres` preprocessing failures on GNU target when build directory path contains spaces, using compiled wrapper binaries in the system temp directory.
+- **Onboarding State Persistence**: Added the missing `onboarding_completed` field to `AppConfig` struct and parsed it in the backend config sync command, resolving the issue where the onboarding wizard would keep showing on every startup.
+- **Onboarding User Experience**: Enabled step-by-step navigation in `OnboardingWizard` without forcing the user to grant all permissions immediately, resolving stuck startup states.
+- **Frontend Mocks**: Aligned `bindings.ts` mocks to return System TTS options and voices in browser mock mode.
+
+---
+
 ## [0.1.2] - 2026-06-05
 
 ### Fixed — Cross-Platform Compilation
@@ -146,7 +163,8 @@ All notable changes to ClickyX are documented here.
 - NVIDIA NIM API support via configurable `openai_base_url`
 - Cross-platform CI/CD (Linux, Windows, macOS)
 
-[Unreleased]: https://github.com/unn-Known1/clickyX/compare/v0.1.2...HEAD
+[Unreleased]: https://github.com/unn-Known1/clickyX/compare/v0.1.3...HEAD
+[0.1.3]: https://github.com/unn-Known1/clickyX/compare/v0.1.2...v0.1.3
 [0.1.2]: https://github.com/unn-Known1/clickyX/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/unn-Known1/clickyX/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/unn-Known1/clickyX/releases/tag/v0.1.0
