@@ -1,17 +1,8 @@
 import { useState, useEffect, useCallback } from "react";
-import { invoke } from "../../bindings";
+
 import VoiceDiscovery from "../VoiceDiscovery";
 import { HotkeyInput } from "../HotkeyInput";
-
-interface AudioConfig {
-  ptt_hotkey: string;
-  stt_provider: string;
-  tts_provider: string;
-  activation_mode: string;
-  auto_submit: boolean;
-  volume: number;
-  selected_voice_id: string;
-}
+import { useAudioConfig } from "../../hooks/useAudioConfig";
 
 // F-013: PTT preset shortcuts
 const PTT_PRESETS = [
@@ -88,30 +79,16 @@ function PttShortcutSelector({
 }
 
 function VoiceSettings() {
-  const [audioConfig, setAudioConfig] = useState<AudioConfig | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    setError(null);
-    invoke<AudioConfig>("get_audio_config")
-      .then(setAudioConfig)
-      .catch((e) => {
-        console.error("Failed to load audio config:", e);
-        setError("Failed to load voice settings");
-      });
-  }, []);
+  const { config: audioConfig, updateConfig, loading, error } = useAudioConfig();
 
   const updateAudio = useCallback(async (key: string, value: unknown) => {
     if (!audioConfig) return;
     try {
-      const updated = await invoke<AudioConfig>("update_audio_config", {
-        partial: { [key]: value },
-      });
-      setAudioConfig(updated);
+      await updateConfig({ [key]: value });
     } catch (e) {
       console.error("Failed to update audio config:", e);
     }
-  }, [audioConfig]);
+  }, [audioConfig, updateConfig]);
 
   if (error) {
     return (
@@ -122,7 +99,7 @@ function VoiceSettings() {
     );
   }
 
-  if (!audioConfig) {
+  if (loading || !audioConfig) {
     return (
       <section className="settings-section">
         <h3>Voice</h3>
@@ -210,9 +187,6 @@ function VoiceSettings() {
       </p>
       <VoiceDiscovery
         audioConfig={audioConfig}
-        onSelected={() => {
-          invoke<AudioConfig>("get_audio_config").then(setAudioConfig).catch(() => {});
-        }}
       />
     </section>
   );

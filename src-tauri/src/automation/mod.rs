@@ -112,7 +112,8 @@ impl AutomationEngine {
         log::info!("Automation engine: stopped");
     }
 
-    pub fn tick(&mut self) {
+    pub fn tick(&mut self) -> Vec<Automation> {
+        let mut triggered = Vec::new();
         let now = chrono_now_rfc3339();
         let dt = chrono_datetime_now();
         for automation in &mut self.automations {
@@ -142,9 +143,13 @@ impl AutomationEngine {
                     automation.id
                 );
                 automation.last_run = Some(now.clone());
+                triggered.push(automation.clone());
             }
         }
-        let _ = self.save();
+        if !triggered.is_empty() {
+            let _ = self.save();
+        }
+        triggered
     }
 
     pub fn start_ticking(engine: Arc<Mutex<Self>>) {
@@ -165,7 +170,7 @@ impl AutomationEngine {
                 }
                 {
                     let mut eng = engine.lock().unwrap();
-                    eng.tick();
+                    let _ = eng.tick();
                 }
                 tokio::time::sleep(std::time::Duration::from_secs(1)).await;
             }
@@ -583,7 +588,7 @@ mod tests {
         engine.add(auto);
         // Tick should not update last_run for disabled automations
         // (We can't easily observe this without mocking time, but tick should not panic)
-        engine.tick();
+        let _ = engine.tick();
         // last_run should still be None since it's disabled
         assert!(engine.automations[0].last_run.is_none());
     }

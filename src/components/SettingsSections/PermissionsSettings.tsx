@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { invoke } from "../../bindings";
+import { commands } from "../../bindings";
 
 interface PermissionStatus {
   permission: string;
@@ -17,7 +17,7 @@ function PermissionsSettings() {
     const results: Record<string, PermissionStatus> = {};
     for (const perm of PERMISSION_LIST) {
       try {
-        results[perm] = await invoke<PermissionStatus>("check_permission", { permission: perm });
+        results[perm] = await commands.checkPermission(perm);
       } catch (e) {
         console.error(`Failed to check ${perm}:`, e);
       }
@@ -32,7 +32,7 @@ function PermissionsSettings() {
   const requestPerm = useCallback(async (permission: string) => {
     setRequesting(permission);
     try {
-      const granted = await invoke<boolean>("request_permission", { permission });
+      const granted = await commands.requestPermission(permission);
       setStatuses((prev) => ({
         ...prev,
         [permission]: {

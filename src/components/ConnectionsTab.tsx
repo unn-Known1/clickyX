@@ -1,5 +1,5 @@
 import { useState, useCallback } from "react";
-import { invoke } from "../bindings";
+import { commands } from "../bindings";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAppContext } from "../context/AppContext";
 import { SkeletonList } from "./SkeletonLoader";
@@ -69,7 +69,7 @@ function AppUsageLog({ showToast }: { showToast: (msg: string, type?: import("..
 
   const { data: usageLog = [], refetch } = useQuery<AppUsageEntry[]>({
     queryKey: ["app-usage-log"],
-    queryFn: () => invoke<AppUsageEntry[]>("get_app_usage_log").catch(() => []),
+    queryFn: () => commands.getAppUsageLog().catch(() => []),
     enabled: expanded,
     staleTime: 10_000,
   });
@@ -77,7 +77,7 @@ function AppUsageLog({ showToast }: { showToast: (msg: string, type?: import("..
   const clearLog = async () => {
     setClearing(true);
     try {
-      await invoke("clear_app_usage_log");
+      await commands.clearAppUsageLog();
       refetch();
       showToast("Usage log cleared", "success");
     } catch {
@@ -163,19 +163,19 @@ function ConnectionsTab() {
   // F-030: use react-query for server-fetched state — no useState+useEffect raw fetchers
   const { data: mcpServers = [], isLoading: mcpLoading } = useQuery<McpServer[]>({
     queryKey: ["mcp-servers"],
-    queryFn: () => invoke<McpServer[]>("get_mcp_servers"),
+    queryFn: () => commands.getMcpServers(),
     staleTime: 30_000,
   });
 
   const { data: automations = [], isLoading: automationsLoading } = useQuery<Automation[]>({
     queryKey: ["automations"],
-    queryFn: () => invoke<Automation[]>("list_automations"),
+    queryFn: () => commands.listAutomations(),
     staleTime: 30_000,
   });
 
   const { data: workspace } = useQuery<WorkspaceStatus>({
     queryKey: ["google-workspace"],
-    queryFn: () => invoke<WorkspaceStatus>("check_google_workspace")
+    queryFn: () => commands.checkGoogleWorkspace()
       .catch(() => ({ available: false, authenticated: false })),
     staleTime: 60_000,
   });
@@ -215,7 +215,7 @@ function ConnectionsTab() {
   const addMcpServer = async () => {
     if (!newMcp.name || !newMcp.command) return;
     try {
-      await invoke<McpServer[]>("add_mcp_server", { config: newMcp });
+      await commands.addMcpServer(newMcp);
       queryClient.invalidateQueries({ queryKey: ["mcp-servers"] });
       setNewMcp({ name: "", command: "", args: [], env: {}, enabled: true });
       setNewEnvKey(""); setNewEnvVal(""); setEditingArg("");
@@ -227,7 +227,7 @@ function ConnectionsTab() {
 
   const removeMcpServer = async (name: string) => {
     try {
-      await invoke<McpServer[]>("remove_mcp_server", { name });
+      await commands.removeMcpServer(name);
       queryClient.invalidateQueries({ queryKey: ["mcp-servers"] });
       showToast("MCP server removed", "success");
     } catch (e) {
@@ -238,7 +238,7 @@ function ConnectionsTab() {
   // F-011: MCP test button
   const testMcpServer = async (server: McpServer) => {
     try {
-      await invoke("test_mcp_server", { serverId: server.id ?? server.name });
+      await commands.testMcpServer(server.id ?? server.name);
       showToast(`${server.name}: connected`, "success");
     } catch (e) {
       showToast(`Test failed: ${e}`, "error");
@@ -278,9 +278,7 @@ function ConnectionsTab() {
       ? { type: "cron", expression: newAutomation.schedule.expression || "0 * * * *" }
       : { type: "interval", seconds: newAutomation.schedule.seconds || 3600 };
     try {
-      await invoke<Automation>("create_automation", {
-        automation: { ...newAutomation, schedule, id: "" },
-      });
+      await commands.createAutomation({ ...newAutomation, schedule, id: "" });
       queryClient.invalidateQueries({ queryKey: ["automations"] });
       setNewAutomation({ id: "", name: "", prompt: "", schedule: { type: "interval", seconds: 3600 }, agent_slug: "", enabled: true });
       showToast("Automation created", "success");
@@ -291,7 +289,7 @@ function ConnectionsTab() {
 
   const toggleAutomation = async (id: string, enabled: boolean) => {
     try {
-      await invoke<Automation>("toggle_automation", { id, enabled });
+      await commands.toggleAutomation(id, enabled);
       queryClient.invalidateQueries({ queryKey: ["automations"] });
     } catch (e) {
       console.error(e); showToast("Failed to toggle automation", "error");
@@ -300,7 +298,7 @@ function ConnectionsTab() {
 
   const deleteAutomation = async (id: string) => {
     try {
-      await invoke<boolean>("delete_automation", { id });
+      await commands.deleteAutomation(id);
       queryClient.invalidateQueries({ queryKey: ["automations"] });
       showToast("Automation deleted", "success");
     } catch (e) {
@@ -317,7 +315,7 @@ function ConnectionsTab() {
     setExpandedHistory(automationId);
     if (!runHistory[automationId]) {
       try {
-        const runs = await invoke<AutomationRun[]>("get_automation_runs", { automationId });
+        const runs = await commands.getAutomationRuns(automationId);
         setRunHistory((prev) => ({ ...prev, [automationId]: runs }));
       } catch {
         setRunHistory((prev) => ({ ...prev, [automationId]: [] }));
@@ -329,7 +327,7 @@ function ConnectionsTab() {
   const startGoogleAuth = async () => {
     setWorkspaceConnecting(true);
     try {
-      await invoke("google_workspace_auth_start");
+      await commands.googleWorkspaceAuthStart();
       queryClient.invalidateQueries({ queryKey: ["google-workspace"] });
       showToast("Google Workspace connected", "success");
     } catch (e) {
@@ -341,7 +339,7 @@ function ConnectionsTab() {
 
   const disconnectGoogle = async () => {
     try {
-      await invoke("google_workspace_auth_revoke");
+      await commands.googleWorkspaceAuthRevoke();
       queryClient.invalidateQueries({ queryKey: ["google-workspace"] });
       showToast("Google Workspace disconnected", "success");
     } catch (e) {

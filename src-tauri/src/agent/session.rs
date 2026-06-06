@@ -68,11 +68,17 @@ impl AgentStore {
         }
     }
 
-    pub fn create(&mut self, name: String, slug: String, skills: Vec<String>) -> AgentSession {
-        let session = AgentSession::new(name, slug, skills);
-        let slug = session.slug.clone();
-        self.sessions.insert(slug.clone(), session);
-        self.sessions.get(&slug).cloned().unwrap()
+    pub fn create(&mut self, name: String, mut slug: String, skills: Vec<String>) -> AgentSession {
+        let original_slug = slug.clone();
+        let mut counter = 1;
+        while self.sessions.contains_key(&slug) {
+            slug = format!("{}-{}", original_slug, counter);
+            counter += 1;
+        }
+
+        let session = AgentSession::new(name, slug.clone(), skills);
+        self.sessions.insert(slug.clone(), session.clone());
+        session
     }
 
     pub fn get(&self, slug: &str) -> Option<&AgentSession> {

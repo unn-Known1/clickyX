@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef, useEffect } from "react";
-import { invoke, listen, type UnlistenFn } from "../bindings";
+import { commands, listen, type UnlistenFn } from "../bindings";
 
 /** Generate a small random session ID to scope stream events per useChat instance */
 function newSessionId(): string {
@@ -98,7 +98,7 @@ export function useChat() {
         });
 
         unlistenRef.current = unlisten;
-        await invoke("send_chat_message_stream", { message: content, model: model ?? null, sessionId });
+        await commands.sendChatMessageStream(content, model ?? null, sessionId);
       } catch (e) {
         if (!cancelledRef.current) {
           setError(String(e));
@@ -170,21 +170,12 @@ export function useChat() {
         // Try streaming vision first; fall back to blocking invoke if backend
         // doesn't yet support vision streaming
         try {
-          await invoke("send_chat_message_stream_vision", {
-            message: content,
-            images: imageDataUrls,
-            model: model ?? null,
-            sessionId,
-          });
+          await commands.sendChatMessageStreamVision(content, imageDataUrls, model ?? null, sessionId);
         } catch {
           // Fallback: blocking vision call, manually push result
           unlisten();
           unlistenRef.current = null;
-          const response = await invoke<string>("chat_with_vision", {
-            message: content,
-            images: imageDataUrls,
-            model: model ?? null,
-          });
+          const response = await commands.chatWithVision(content, imageDataUrls, model ?? null);
           setMessages((prev) => [
             ...prev,
             { role: "assistant", content: response, timestamp: Date.now() },

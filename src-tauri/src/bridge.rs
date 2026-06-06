@@ -457,9 +457,9 @@ async fn proxy_messages(
     body: web::Json<MessagesRequest>,
 ) -> HttpResponse {
     let app = &data.app_handle;
-    let config = match app.try_state::<crate::config::AppConfig>() {
-        Some(c) => c.inner().clone(),
-        None => {
+    let config = match crate::config::load_config(app) {
+        Ok(c) => c,
+        Err(_) => {
             return HttpResponse::InternalServerError().json(ErrorResponse {
                 error: "internal_error".into(),
                 message: "config not available".into(),
@@ -553,9 +553,9 @@ async fn proxy_responses(
     body: web::Json<ResponsesRequest>,
 ) -> HttpResponse {
     let app = &data.app_handle;
-    let config = match app.try_state::<crate::config::AppConfig>() {
-        Some(c) => c.inner().clone(),
-        None => {
+    let config = match crate::config::load_config(app) {
+        Ok(c) => c,
+        Err(_) => {
             return HttpResponse::InternalServerError().json(ErrorResponse {
                 error: "internal_error".into(),
                 message: "config not available".into(),
@@ -702,10 +702,28 @@ async fn events(data: web::Data<BridgeState>) -> HttpResponse {
 }
 
 async fn click_handler(data: web::Data<BridgeState>, body: web::Json<ClickRequest>) -> HttpResponse {
-    let _app = &data.app_handle;
+    let app = &data.app_handle;
     log::info!("Click at ({}, {})", body.x, body.y);
-    emit_event(&data, "guidance_update", &format!("{{\"action\":\"click\",\"x\":{},\"y\":{}}}", body.x, body.y));
-    HttpResponse::Ok().json(OkResponse { ok: true })
+    
+    let config = crate::config::load_config(app).unwrap_or_default();
+    let backend = if config.computer_use.native_cua {
+        crate::cua::CuaBackend::Native
+    } else {
+        crate::cua::CuaBackend::Background
+    };
+    
+    let mut sim = crate::cua::InputSimulator::new(backend);
+    
+    let result = sim.click(body.x, body.y);
+    if result.success {
+        emit_event(&data, "guidance_update", &format!("{{\"action\":\"click\",\"x\":{},\"y\":{}}}", body.x, body.y));
+        HttpResponse::Ok().json(OkResponse { ok: true })
+    } else {
+        HttpResponse::InternalServerError().json(ErrorResponse {
+            error: "click_error".into(),
+            message: format!("Click failed on backend: {}", result.backend),
+        })
+    }
 }
 
 async fn notify(data: web::Data<BridgeState>, body: web::Json<NotifyRequest>) -> HttpResponse {
@@ -768,8 +786,15 @@ fn mcp_list_tools_sync(server: &crate::config::McpServerConfig) -> Vec<McpToolIn
     }
 
     // Read initialize response (one line of JSON-RPC)
-    let mut init_resp_line = String::new();
-    let _ = reader.read_line(&mut init_resp_line);
+    for _ in 0..100 {
+        let mut line = String::new();
+        if reader.read_line(&mut line).unwrap_or(0) == 0 { break; }
+        if let Ok(val) = serde_json::from_str::<serde_json::Value>(line.trim()) {
+            if val.get("id").and_then(|v| v.as_i64()) == Some(1) {
+                break;
+            }
+        }
+    }
 
     // Send tools/list
     let list_req = serde_json::json!({
@@ -786,7 +811,16 @@ fn mcp_list_tools_sync(server: &crate::config::McpServerConfig) -> Vec<McpToolIn
 
     // Read tools/list response
     let mut list_resp_line = String::new();
-    let _ = reader.read_line(&mut list_resp_line);
+    for _ in 0..100 {
+        let mut line = String::new();
+        if reader.read_line(&mut line).unwrap_or(0) == 0 { break; }
+        if let Ok(val) = serde_json::from_str::<serde_json::Value>(line.trim()) {
+            if val.get("id").and_then(|v| v.as_i64()) == Some(2) {
+                list_resp_line = line;
+                break;
+            }
+        }
+    }
     let _ = child.kill();
 
     // Parse the tools from the JSON-RPC response
@@ -1156,7 +1190,7 @@ struct ScrollRequest {
 }
 
 async fn scroll_handler(data: web::Data<BridgeState>, body: web::Json<ScrollRequest>) -> HttpResponse {
-    let _app = &data.app_handle;
+    let app = &data.app_handle;
     log::info!(
         "Scroll at ({}, {}) delta=({}, {})",
         body.x,
@@ -1165,7 +1199,14 @@ async fn scroll_handler(data: web::Data<BridgeState>, body: web::Json<ScrollRequ
         body.delta_y
     );
 
-    let mut sim = crate::cua::InputSimulator::new(crate::cua::CuaBackend::Native);
+    let config = crate::config::load_config(app).unwrap_or_default();
+    let backend = if config.computer_use.native_cua {
+        crate::cua::CuaBackend::Native
+    } else {
+        crate::cua::CuaBackend::Background
+    };
+
+    let mut sim = crate::cua::InputSimulator::new(backend);
     match sim.scroll(body.x, body.y, body.delta_x, body.delta_y) {
         Ok(()) => {
             emit_event(

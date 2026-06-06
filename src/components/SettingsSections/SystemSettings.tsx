@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { invoke } from "../../bindings";
+import { commands } from "../../bindings";
 import { useAppContext } from "../../context/AppContext";
 import { useTranslation } from "react-i18next";
 import { SUPPORTED_LOCALES } from "../../i18n/index";
@@ -25,13 +25,13 @@ function SystemSettings({ onOpenAbout }: Props) {
   const [logSearch, setLogSearch] = useState("");
 
   useEffect(() => {
-    invoke<string>("get_app_version").then(setAppVersion).catch(console.error);
+    commands.getAppVersion().then(setAppVersion).catch(console.error);
   }, []);
 
   const loadLogs = useCallback(async () => {
     setLoading(true);
     try {
-      const entries = await invoke<LogEntry[]>("get_logs", { count: 200 });
+      const entries = await commands.getLogs(200);
       setLogs(entries);
     } catch (e) {
       console.error("Failed to load logs:", e);
@@ -43,7 +43,7 @@ function SystemSettings({ onOpenAbout }: Props) {
 
   const clearLogs = useCallback(async () => {
     try {
-      await invoke("clear_logs");
+      await commands.clearLogs();
       setLogs([]);
       showToast("Logs cleared", "success");
     } catch (e) {
@@ -58,7 +58,7 @@ function SystemSettings({ onOpenAbout }: Props) {
 
   const exportConfig = useCallback(async () => {
     try {
-      const json = await invoke<string>("export_config");
+      const json = await commands.exportConfig();
       const blob = new Blob([json], { type: "application/json" });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
@@ -82,7 +82,7 @@ function SystemSettings({ onOpenAbout }: Props) {
       if (!file) return;
       try {
         const text = await file.text();
-        await invoke("import_config", { json: text });
+        await commands.importConfig(text);
         showToast("Config imported — restart to apply", "success");
       } catch (e) {
         console.error("Failed to import config:", e);
@@ -95,7 +95,7 @@ function SystemSettings({ onOpenAbout }: Props) {
   const resetConfig = useCallback(async () => {
     if (!confirm("Reset all settings to defaults? This cannot be undone.")) return;
     try {
-      await invoke("reset_config");
+      await commands.resetConfig();
       showToast("Config reset — restart to apply", "info");
     } catch (e) {
       console.error("Failed to reset config:", e);

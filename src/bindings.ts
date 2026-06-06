@@ -371,8 +371,8 @@ export const commands = {
   clearAutoCaptureCache: () => invoke<void>("clear_auto_capture_cache"),
 
   // Chat
-  sendChatMessageStream: (message: string, model: string | null) => invoke<void>("send_chat_message_stream", { message, model }),
-  sendChatMessageStreamVision: (message: string, images: string[], model: string | null) => invoke<void>("send_chat_message_stream_vision", { message, images, model }),
+  sendChatMessageStream: (message: string, model: string | null, sessionId?: string) => invoke<void>("send_chat_message_stream", { message, model, sessionId }),
+  sendChatMessageStreamVision: (message: string, images: string[], model: string | null, sessionId?: string) => invoke<void>("send_chat_message_stream_vision", { message, images, model, sessionId }),
   chatWithVision: (message: string, images: string[], model: string | null) => invoke<string>("chat_with_vision", { message, images, model }),
   saveConversation: (conversation: unknown) => invoke<void>("save_conversation", { conversation }),
 
@@ -387,6 +387,7 @@ export const commands = {
   getMcpServers: () => invoke<McpServer[]>("get_mcp_servers"),
   addMcpServer: (config: McpServer) => invoke<McpServer[]>("add_mcp_server", { config }),
   removeMcpServer: (name: string) => invoke<McpServer[]>("remove_mcp_server", { name }),
+  testMcpServer: (serverId: string) => invoke<void>("test_mcp_server", { serverId }),
 
   // Automations
   listAutomations: () => invoke<Automation[]>("list_automations"),
@@ -409,11 +410,19 @@ export const commands = {
   getAppVersion: () => invoke<string>("get_app_version"),
   getLogs: (count: number) => invoke<LogEntry[]>("get_logs", { count }),
   clearLogs: () => invoke<void>("clear_logs"),
+  getAppUsageLog: () => invoke<any[]>("get_app_usage_log"),
+  clearAppUsageLog: () => invoke<void>("clear_app_usage_log"),
+  getAutomationRuns: (automationId: string) => invoke<any[]>("get_automation_runs", { automationId }),
   checkGoogleWorkspace: () => invoke<WorkspaceStatus>("check_google_workspace"),
+  googleWorkspaceAuthStart: () => invoke<void>("google_workspace_auth_start"),
+  googleWorkspaceAuthRevoke: () => invoke<void>("google_workspace_auth_revoke"),
 
   // Overlay
   overlayShowCursor: (x: number, y: number, label?: string) => invoke<void>("overlay_show_cursor", { x, y, label }),
+  overlayShowCursors: (cursors: any[]) => invoke<void>("overlay_show_cursors", { cursors }),
   overlayShowRect: (x: number, y: number, w: number, h: number, label?: string) => invoke<void>("overlay_show_rect", { x, y, w, h, label }),
+  overlayShowScribble: (points: [number, number][], label?: string) => invoke<void>("overlay_show_scribble", { points, label }),
+  overlayShowCaption: (text: string, x: number, y: number) => invoke<void>("overlay_show_caption", { text, x, y }),
   overlayClear: () => invoke<void>("overlay_clear"),
   setOverlayVisible: (visible: boolean) => invoke<void>("set_overlay_visible", { visible }),
 

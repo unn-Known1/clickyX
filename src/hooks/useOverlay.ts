@@ -1,33 +1,33 @@
 import { useCallback } from "react";
-import { invoke } from "../bindings";
+import { commands } from "../bindings";
 
 export function useOverlay() {
   const showCursor = useCallback(async (x: number, y: number, label?: string) => {
-    return invoke("overlay_show_cursor", { x, y, label });
+    return commands.overlayShowCursor(x, y, label);
   }, []);
 
   const showCursors = useCallback(async (cursors: { x: number; y: number; label?: string }[]) => {
-    return invoke("overlay_show_cursors", { cursors });
+    return commands.overlayShowCursors(cursors);
   }, []);
 
   const showRect = useCallback(async (x: number, y: number, w: number, h: number, label?: string) => {
-    return invoke("overlay_show_rect", { x, y, w, h, label });
+    return commands.overlayShowRect(x, y, w, h, label);
   }, []);
 
   const showScribble = useCallback(async (points: [number, number][], label?: string) => {
-    return invoke("overlay_show_scribble", { points, label });
+    return commands.overlayShowScribble(points, label);
   }, []);
 
   const showCaption = useCallback(async (text: string, x: number, y: number) => {
-    return invoke("overlay_show_caption", { text, x, y });
+    return commands.overlayShowCaption(text, x, y);
   }, []);
 
   const clear = useCallback(async () => {
-    return invoke("overlay_clear");
+    return commands.overlayClear();
   }, []);
 
   const setVisible = useCallback(async (visible: boolean) => {
-    return invoke("set_overlay_visible", { visible });
+    return commands.setOverlayVisible(visible);
   }, []);
 
   return { showCursor, showCursors, showRect, showScribble, showCaption, clear, setVisible };

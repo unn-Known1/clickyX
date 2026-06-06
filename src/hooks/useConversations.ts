@@ -1,5 +1,5 @@
 import { useState, useCallback } from "react";
-import { invoke } from "../bindings";
+import { commands } from "../bindings";
 import type { ChatMessage } from "./useChat";
 
 export interface Conversation {
@@ -98,7 +98,7 @@ export function useConversations() {
 
   /** Persist conversation to Rust backend (best-effort, non-blocking) */
   const syncToBackend = useCallback((convo: Conversation) => {
-    invoke("save_conversation", { conversation: convo }).catch(() => {/* backend may not support yet */});
+    commands.saveConversation(convo).catch(() => {/* backend may not support yet */});
   }, []);
 
   return {

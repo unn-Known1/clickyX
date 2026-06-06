@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from "react";
-import { invoke } from "../bindings";
+import { commands } from "../bindings";
 
 interface VoiceInfo {
   id: string;
@@ -105,7 +105,7 @@ export default function VoiceDiscovery({ audioConfig, onSelected }: VoiceDiscove
   useEffect(() => { orbitRotRef.current = orbitRotation; }, [orbitRotation]);
 
   useEffect(() => {
-    invoke<VoiceProvider[]>("get_voice_providers")
+    commands.getVoiceProviders()
       .then((p) => {
         setProviders(p);
         if (p.length > 0 && !p.some((x) => x.id === selectedProvider)) {
@@ -117,7 +117,7 @@ export default function VoiceDiscovery({ audioConfig, onSelected }: VoiceDiscove
 
   useEffect(() => {
     if (!selectedProvider) return;
-    invoke<VoiceInfo[]>("get_voices", { provider: selectedProvider })
+    commands.getVoices(selectedProvider)
       .then(setVoices)
       .catch((e) => console.error("Failed to load voices:", e));
   }, [selectedProvider]);
@@ -125,7 +125,7 @@ export default function VoiceDiscovery({ audioConfig, onSelected }: VoiceDiscove
   const onSelect = useCallback(async (v: VoiceInfo) => {
     setSelected(v.id);
     try {
-      await invoke("select_voice", { voiceId: v.id, accentColor: v.accent_color });
+      await commands.selectVoice(v.id, v.accent_color);
       onSelected?.(v.id, v.accent_color);
     } catch (e) {
       console.error("Failed to select voice:", e);

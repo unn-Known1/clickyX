@@ -1,32 +1,17 @@
 import { useState, useEffect, useCallback } from "react";
-import { invoke } from "../../bindings";
 import { useAppContext } from "../../context/AppContext";
-
-interface AiConfig {
-  anthropic_api_key: string | null;
-  anthropic_model: string;
-  openai_api_key: string | null;
-  openai_model: string;
-  openai_base_url: string;
-  default_provider: string;
-  system_prompt: string;
-}
-
-interface AppConfig {
-  api_keys: { provider: string; key: string }[];
-  overlay: { agent_dock_position: string };
-}
+import { useAiConfig } from "../../hooks/useAiConfig";
+import { useConfig } from "../../hooks/useConfig";
 
 function AiProviderSettings() {
   const { showToast } = useAppContext();
+  const { config: aiConfig, updateConfig: updateAiConfig, loading: aiLoading, error: aiError } = useAiConfig();
+  const { config: appConfig, updateConfig: updateAppConfig, loading: appLoading, error: appError } = useConfig();
+
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [loaded, setLoaded] = useState(false);
 
   // Use refs for API keys so password fields never go blank after save.
-  // These are separate from aiConfig because the backend doesn't echo
-  // back keys (they're returned as null for security).
   const [anthropicKey, setAnthropicKey] = useState("");
   const [openaiKey, setOpenaiKey] = useState("");
   const [openaiBaseUrl, setOpenaiBaseUrl] = useState("https://api.openai.com/v1");
@@ -44,80 +29,64 @@ function AiProviderSettings() {
   const [hasAnthropicKey, setHasAnthropicKey] = useState(false);
   const [hasOpenaiKey, setHasOpenaiKey] = useState(false);
 
+  // Sync state with loaded config
   useEffect(() => {
-    setError(null);
-    Promise.all([
-      invoke<AiConfig>("get_ai_config"),
-      invoke<AppConfig>("get_config"),
-    ])
-      .then(([aiCfg, cfg]) => {
-        // Only pre-fill non-sensitive fields; never try to show the actual key
-        setAnthropicModel(aiCfg.anthropic_model || "claude-sonnet-4-20250514");
-        setOpenaiModel(aiCfg.openai_model || "gpt-4o");
-        setOpenaiBaseUrl(aiCfg.openai_base_url || "https://api.openai.com/v1");
-        setDefaultProvider(aiCfg.default_provider || "anthropic");
-        setSystemPrompt(aiCfg.system_prompt || "");
-        // Track if keys are saved (key is non-null but we won't echo it)
-        setHasAnthropicKey(!!aiCfg.anthropic_api_key);
-        setHasOpenaiKey(!!aiCfg.openai_api_key);
+    if (aiConfig) {
+      setAnthropicModel(aiConfig.anthropic_model || "claude-sonnet-4-20250514");
+      setOpenaiModel(aiConfig.openai_model || "gpt-4o");
+      setOpenaiBaseUrl(aiConfig.openai_base_url || "https://api.openai.com/v1");
+      setDefaultProvider(aiConfig.default_provider || "anthropic");
+      setSystemPrompt(aiConfig.system_prompt || "");
+      setHasAnthropicKey(!!aiConfig.anthropic_api_key);
+      setHasOpenaiKey(!!aiConfig.openai_api_key);
+    }
+  }, [aiConfig]);
 
-        const keys = cfg.api_keys || [];
-        const getKey = (provider: string) =>
-          keys.find((k) => k.provider === provider)?.key || "";
-        setElevenlabsKey(getKey("elevenlabs"));
-        setCartesiaKey(getKey("cartesia"));
-        setDeepgramKey(getKey("deepgram"));
-        setAssemblyaiKey(getKey("assemblyai"));
-        setLoaded(true);
-      })
-      .catch((e) => {
-        console.error("Failed to load AI config:", e);
-        setError("Failed to load AI provider settings");
-        setLoaded(true);
-      });
-  }, []);
+  useEffect(() => {
+    if (appConfig) {
+      const keys = appConfig.api_keys || [];
+      const getKey = (provider: string) => keys.find((k) => k.provider === provider)?.key || "";
+      setElevenlabsKey(getKey("elevenlabs"));
+      setCartesiaKey(getKey("cartesia"));
+      setDeepgramKey(getKey("deepgram"));
+      setAssemblyaiKey(getKey("assemblyai"));
+    }
+  }, [appConfig]);
 
   const saveAiConfig = useCallback(async () => {
     setSaving(true);
-    setError(null);
     try {
-      // Only send the key if the user actually typed something new
-      await invoke<AiConfig>("update_ai_config", {
-        partial: {
-          ...(anthropicKey ? { anthropic_api_key: anthropicKey } : {}),
-          anthropic_model: anthropicModel,
-          ...(openaiKey ? { openai_api_key: openaiKey } : {}),
-          openai_model: openaiModel,
-          openai_base_url: openaiBaseUrl,
-          default_provider: defaultProvider,
-          system_prompt: systemPrompt,
-        },
+      // Update AI config
+      await updateAiConfig({
+        ...(anthropicKey ? { anthropic_api_key: anthropicKey } : {}),
+        anthropic_model: anthropicModel,
+        ...(openaiKey ? { openai_api_key: openaiKey } : {}),
+        openai_model: openaiModel,
+        openai_base_url: openaiBaseUrl,
+        default_provider: defaultProvider,
+        system_prompt: systemPrompt,
       });
 
-      // Update "has key" status if user typed a new one
       if (anthropicKey) setHasAnthropicKey(true);
       if (openaiKey) setHasOpenaiKey(true);
-
-      // Clear the typed key fields (they've been saved — don't echo back)
       setAnthropicKey("");
       setOpenaiKey("");
 
+      // Update App config keys
       const newApiKeys = [
         elevenlabsKey && { provider: "elevenlabs", key: elevenlabsKey },
         cartesiaKey && { provider: "cartesia", key: cartesiaKey },
         deepgramKey && { provider: "deepgram", key: deepgramKey },
         assemblyaiKey && { provider: "assemblyai", key: assemblyaiKey },
       ].filter(Boolean) as { provider: string; key: string }[];
-      await invoke("update_config", {
-        partial: { api_keys: newApiKeys },
-      });
+      
+      await updateAppConfig({ api_keys: newApiKeys });
 
       setSaved(true);
       showToast("Settings saved", "success");
       setTimeout(() => setSaved(false), 2000);
     } catch (e) {
       console.error("Failed to save AI config:", e);
-      setError("Failed to save settings");
       showToast("Failed to save settings", "error");
     } finally {
       setSaving(false);
@@ -125,9 +94,13 @@ function AiProviderSettings() {
   }, [
     anthropicKey, anthropicModel, openaiKey, openaiModel, openaiBaseUrl,
     defaultProvider, systemPrompt, elevenlabsKey, cartesiaKey, deepgramKey, assemblyaiKey,
+    updateAiConfig, updateAppConfig, showToast
   ]);
 
-  if (error && !loaded) {
+  const error = aiError || appError;
+  const loading = aiLoading || appLoading;
+
+  if (error && !aiConfig) {
     return (
       <section className="settings-section">
         <h3>AI Providers</h3>
@@ -136,7 +109,7 @@ function AiProviderSettings() {
     );
   }
 
-  if (!loaded) {
+  if (loading) {
     return (
       <section className="settings-section">
         <h3>AI Providers</h3>

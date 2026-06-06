@@ -127,6 +127,13 @@ pub fn update_config(app: AppHandle, partial: serde_json::Value) -> Result<AppCo
     }
     config::save_config(&app, &config)?;
     crate::register_hotkeys(&app)?;
+    
+    if let Some(pipeline) = app.try_state::<Mutex<VoicePipeline>>() {
+        if let Ok(pipe) = pipeline.lock() {
+            let _ = pipe.update_api_keys(&config.api_keys);
+        }
+    }
+
     Ok(config)
 }
 
@@ -198,7 +205,7 @@ pub async fn send_chat_message(
     message: String,
     model: Option<String>,
 ) -> Result<String, String> {
-    let config = app.state::<AppConfig>();
+    let config = config::load_config(&app).unwrap_or_default();
     let msg = ai::ChatMessage {
         role: "user".into(),
         content: message,
@@ -221,7 +228,7 @@ pub async fn send_chat_message_stream(
     message: String,
     model: Option<String>,
 ) -> Result<(), String> {
-    let config = app.state::<AppConfig>().inner().clone();
+    let config = config::load_config(&app).unwrap_or_default();
     let msg = ai::ChatMessage {
         role: "user".into(),
         content: message,
@@ -262,7 +269,7 @@ pub async fn send_chat_message_stream(
 #[tauri::command]
 pub async fn get_models(app: AppHandle, provider: Option<String>) -> Result<Vec<ai::catalog::ModelInfo>, String> {
     let mut catalog = ModelCatalog::new();
-    let config = app.state::<AppConfig>().inner().clone();
+    let config = config::load_config(&app).unwrap_or_default();
     let ai_cfg = &config.ai;
     if ai_cfg.openai_api_key.as_ref().map_or(false, |k| !k.is_empty()) {
         let remote = ModelCatalog::fetch_openai_compatible(&ai_cfg.openai_base_url, ai_cfg.openai_api_key.as_deref().unwrap_or("")).await;
@@ -280,7 +287,7 @@ pub async fn get_models(app: AppHandle, provider: Option<String>) -> Result<Vec<
 
 #[tauri::command]
 pub fn get_ai_config(app: AppHandle) -> Result<ai::AiConfig, String> {
-    let config = app.state::<AppConfig>();
+    let config = config::load_config(&app).unwrap_or_default();
     Ok(config.ai.clone())
 }
 
@@ -289,12 +296,10 @@ pub fn update_ai_config(
     app: AppHandle,
     partial: serde_json::Value,
 ) -> Result<ai::AiConfig, String> {
-    let mut config = app.state::<AppConfig>().inner().clone();
+    let mut config = config::load_config(&app).unwrap_or_default();
     config.ai = ai::merge_ai_config(&config.ai, &partial);
     config::save_config(&app, &config)?;
-    app.manage(config);
-    let updated = app.state::<AppConfig>();
-    Ok(updated.ai.clone())
+    Ok(config.ai)
 }
 
 #[tauri::command]
@@ -304,7 +309,7 @@ pub async fn chat_with_vision(
     images: Vec<String>,
     model: Option<String>,
 ) -> Result<String, String> {
-    let config = app.state::<AppConfig>().inner().clone();
+    let config = config::load_config(&app).unwrap_or_default();
     let msg = ai::ChatMessage {
         role: "user".into(),
         content: message,
@@ -772,7 +777,7 @@ pub fn update_audio_config(
     config::save_config(&app, &config)?;
 
     let pipe = pipeline.lock().map_err(|e| format!("lock error: {e}"))?;
-    pipe.update_config(&config.audio)?;
+    pipe.update_config(&config.audio, &config.api_keys)?;
 
     Ok(config.audio)
 }
@@ -1072,7 +1077,7 @@ pub fn request_permission(permission: String) -> Result<bool, String> {
 
 #[tauri::command]
 pub async fn check_for_updates(app: AppHandle) -> Result<UpdateInfo, String> {
-    let config = app.state::<AppConfig>();
+    let config = config::load_config(&app).unwrap_or_default();
     updater::check_for_updates(&config.version).await
 }
 
@@ -1163,7 +1168,6 @@ pub fn import_config(app: AppHandle, json: String) -> Result<AppConfig, String> 
     let config: AppConfig = serde_json::from_str(&json)
         .map_err(|e| format!("invalid config JSON: {e}"))?;
     config::save_config(&app, &config)?;
-    app.manage(config.clone());
     Ok(config)
 }
 
@@ -1171,7 +1175,6 @@ pub fn import_config(app: AppHandle, json: String) -> Result<AppConfig, String> 
 pub fn reset_config(app: AppHandle) -> Result<AppConfig, String> {
     let config = AppConfig::default();
     config::save_config(&app, &config)?;
-    app.manage(config.clone());
     Ok(config)
 }
 
@@ -1186,7 +1189,6 @@ pub fn toggle_tutor_mode(app: AppHandle) -> Result<bool, String> {
     config.overlay.tutor_mode = !config.overlay.tutor_mode;
     let new_state = config.overlay.tutor_mode;
     config::save_config(&app, &config)?;
-    app.manage(config);
     Ok(new_state)
 }
 
@@ -1195,7 +1197,6 @@ pub fn set_cursor_accent(app: AppHandle, color: String) -> Result<(), String> {
     let mut config = config::load_config(&app)?;
     config.overlay.cursor_accent = color;
     config::save_config(&app, &config)?;
-    app.manage(config);
     Ok(())
 }
 
@@ -1226,7 +1227,6 @@ pub fn select_voice(
         config.overlay.cursor_accent = ac;
     }
     config::save_config(&app, &config)?;
-    app.manage(config);
     if let Some(ac) = accent_color {
         let _ = app.emit("accent-changed", ac);
     }
@@ -1256,7 +1256,6 @@ pub fn set_accent_preset(
     let mut config = config::load_config(&app)?;
     config.overlay.cursor_accent = color.clone();
     config::save_config(&app, &config)?;
-    app.manage(config);
     let _ = app.emit("accent-changed", color.clone());
     Ok(color)
 }
@@ -1278,7 +1277,6 @@ pub fn push_accent_preset(
     }
     config.overlay.cursor_accent = color;
     config::save_config(&app, &config)?;
-    app.manage(config.clone());
     let _ = app.emit("accent-changed", config.overlay.cursor_accent.clone());
     Ok(config.overlay.accent_presets)
 }
@@ -1442,7 +1440,7 @@ pub fn start_codex(
     if state.is_some() {
         return Err("Codex already running".into());
     }
-    let config = app.state::<AppConfig>();
+    let config = config::load_config(&app).unwrap_or_default();
     let mut process = CodexProcess::new(&config.agent);
     process.start(&config.agent)?;
     *state = Some(process);
@@ -1471,8 +1469,8 @@ pub fn get_codex_status(
 
 #[tauri::command]
 pub fn get_agent_config(app: tauri::AppHandle) -> Result<AgentConfig, String> {
-    let config = app.state::<AppConfig>();
-    Ok(config.agent.clone())
+    let config = config::load_config(&app).unwrap_or_default();
+    Ok(config.agent)
 }
 
 #[tauri::command]
@@ -1480,7 +1478,7 @@ pub fn update_agent_config(
     app: tauri::AppHandle,
     partial: serde_json::Value,
 ) -> Result<AgentConfig, String> {
-    let mut config = app.state::<AppConfig>().inner().clone();
+    let mut config = config::load_config(&app).unwrap_or_default();
     if let Some(obj) = partial.as_object() {
         if let Some(path) = obj.get("codex_path").and_then(|v| v.as_str()) {
             config.agent.codex_path = Some(path.to_string());
@@ -1502,21 +1500,26 @@ pub fn update_agent_config(
         }
     }
     config::save_config(&app, &config)?;
-    app.manage(config);
-    let updated = app.state::<AppConfig>();
-    Ok(updated.agent.clone())
+    Ok(config.agent)
 }
 
 // --- CUA Scroll Command (B-008) ---
 
 #[tauri::command]
 pub async fn cua_scroll(
+    app: tauri::AppHandle,
     x: f64,
     y: f64,
     delta_x: f64,
     delta_y: f64,
 ) -> Result<(), String> {
-    let mut sim = crate::cua::InputSimulator::new(crate::cua::CuaBackend::Native);
+    let config = crate::config::load_config(&app).unwrap_or_default();
+    let backend = if config.computer_use.native_cua {
+        crate::cua::CuaBackend::Native
+    } else {
+        crate::cua::CuaBackend::Background
+    };
+    let mut sim = crate::cua::InputSimulator::new(backend);
     sim.scroll(x, y, delta_x, delta_y)
 }
 

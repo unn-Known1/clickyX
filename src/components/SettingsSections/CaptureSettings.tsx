@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { invoke, listen } from "../../bindings";
+import { commands, listen } from "../../bindings";
 
 interface AutoCaptureConfig {
   enabled: boolean;
@@ -22,7 +22,7 @@ export function CaptureSettings() {
 
   useEffect(() => {
     // Initial fetch
-    invoke<AutoCaptureStatus>("get_auto_capture_status")
+    commands.getAutoCaptureStatus()
       .then(setAcStatus)
       .catch((e) => setAcError(String(e)));
 
@@ -34,7 +34,7 @@ export function CaptureSettings() {
 
     // Lightweight poll every 5s as fallback
     const id = setInterval(() => {
-      invoke<AutoCaptureStatus>("get_auto_capture_status")
+      commands.getAutoCaptureStatus()
         .then(setAcStatus)
         .catch(() => {});
     }, 5000);
@@ -47,7 +47,7 @@ export function CaptureSettings() {
 
   const startAutoCapture = useCallback(async (mode?: string, intervalMs?: number) => {
     try {
-      await invoke("start_auto_capture", { captureMode: mode, intervalMs });
+      await commands.startAutoCapture(mode, intervalMs);
     } catch (e) {
       setAcError(String(e));
     }
@@ -55,7 +55,7 @@ export function CaptureSettings() {
 
   const stopAutoCapture = useCallback(async () => {
     try {
-      await invoke("stop_auto_capture");
+      await commands.stopAutoCapture();
     } catch (e) {
       setAcError(String(e));
     }
@@ -63,7 +63,7 @@ export function CaptureSettings() {
 
   const clearAutoCapture = useCallback(async () => {
     try {
-      await invoke("clear_auto_capture_cache");
+      await commands.clearAutoCaptureCache();
     } catch (e) {
       setAcError(String(e));
     }

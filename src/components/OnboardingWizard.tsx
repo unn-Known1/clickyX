@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { invoke } from "../bindings";
+import { commands } from "../bindings";
 import { OnboardingIntro } from "./OnboardingMedia";
 
 interface PermissionStep {
@@ -72,7 +72,7 @@ export default function OnboardingWizard({ onComplete, onSkip }: OnboardingWizar
     const results: Record<string, boolean> = {};
     for (const step of STEPS) {
       try {
-        results[step.id] = await invoke<boolean>("check_permission", { permission: step.id });
+        results[step.id] = (await commands.checkPermission(step.id)).granted;
       } catch {
         results[step.id] = false;
       }
@@ -83,9 +83,9 @@ export default function OnboardingWizard({ onComplete, onSkip }: OnboardingWizar
   async function requestCurrentPermission() {
     const step = STEPS[currentStep];
     try {
-      await invoke("request_permission", { permission: step.id });
-      const result = await invoke<boolean>("check_permission", { permission: step.id });
-      setPermissions(prev => ({ ...prev, [step.id]: result }));
+      await commands.requestPermission(step.id);
+      const result = await commands.checkPermission(step.id);
+      setPermissions(prev => ({ ...prev, [step.id]: result.granted }));
     } catch (e) {
       console.error(`Permission request failed for ${step.id}:`, e);
     }
@@ -94,9 +94,7 @@ export default function OnboardingWizard({ onComplete, onSkip }: OnboardingWizar
   async function handleFinish() {
     setCompleting(true);
     try {
-      await invoke("update_config", {
-        partial: { onboarding_completed: true },
-      });
+      await commands.updateConfig({ onboarding_completed: true });
     } catch (e) {
       console.error("Failed to save onboarding state:", e);
     }

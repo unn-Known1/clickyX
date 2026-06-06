@@ -46,9 +46,9 @@ pub struct ClickResult {
 }
 
 pub struct InputSimulator {
-    backend: CuaBackend,
-    min_interval_ms: u64,
-    last_click_ms: u64,
+    pub backend: CuaBackend,
+    pub min_interval_ms: u64,
+    pub last_click_ms: u64,
 }
 
 impl Default for InputSimulator {

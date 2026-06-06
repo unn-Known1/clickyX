@@ -628,13 +628,42 @@ impl VoicePipeline {
         Ok(())
     }
 
-    pub fn update_config(&self, config: &crate::config::AudioConfig) -> Result<(), String> {
+    pub fn update_api_keys(&self, api_keys: &[crate::config::ApiKey]) -> Result<(), String> {
+        let mut stt_cfg = self
+            .stt_config
+            .lock()
+            .map_err(|e| format!("STT config lock error: {e}"))?;
+        stt_cfg.api_key = api_keys
+            .iter()
+            .find(|k| k.provider == stt_cfg.provider.name())
+            .map(|k| k.key.clone())
+            .unwrap_or_default();
+
+        let mut tts_cfg = self
+            .tts_config
+            .lock()
+            .map_err(|e| format!("TTS config lock error: {e}"))?;
+        tts_cfg.api_key = api_keys
+            .iter()
+            .find(|k| k.provider == tts_cfg.provider.name())
+            .map(|k| k.key.clone())
+            .unwrap_or_default();
+
+        Ok(())
+    }
+
+    pub fn update_config(&self, config: &crate::config::AudioConfig, api_keys: &[crate::config::ApiKey]) -> Result<(), String> {
         let mut stt_cfg = self
             .stt_config
             .lock()
             .map_err(|e| format!("STT config lock error: {e}"))?;
         if let Some(provider) = SttProvider::from_name(&config.stt_provider) {
             stt_cfg.provider = provider;
+            stt_cfg.api_key = api_keys
+                .iter()
+                .find(|k| k.provider == provider.name())
+                .map(|k| k.key.clone())
+                .unwrap_or_default();
         }
 
         let mut tts_cfg = self
@@ -643,6 +672,11 @@ impl VoicePipeline {
             .map_err(|e| format!("TTS config lock error: {e}"))?;
         if let Some(provider) = TtsProvider::from_name(&config.tts_provider) {
             tts_cfg.provider = provider;
+            tts_cfg.api_key = api_keys
+                .iter()
+                .find(|k| k.provider == provider.name())
+                .map(|k| k.key.clone())
+                .unwrap_or_default();
         }
 
         if let Ok(mut ao_cfg) = self.always_on_config.lock() {

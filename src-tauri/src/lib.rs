@@ -165,8 +165,6 @@ pub fn run() {
 
             // Load config
             let config = config::load_config(&handle)?;
-            let managed_config = config.clone();
-            handle.manage(managed_config);
 
             // Register default global hotkeys. Previously skipped on Windows
             // because invalid persisted shortcuts could crash the app. Now handled
@@ -249,11 +247,37 @@ pub fn run() {
                     let mut interval = tokio::time::interval(Duration::from_secs(1));
                     loop {
                         interval.tick().await;
+                        let mut triggered = Vec::new();
                         if let Some(engine) =
                             handle.try_state::<Mutex<automation::AutomationEngine>>()
                         {
                             if let Ok(mut eng) = engine.lock() {
-                                eng.tick();
+                                triggered = eng.tick();
+                            }
+                        }
+                        for auto in triggered {
+                            if let Some(slug) = &auto.agent_slug {
+                                log::info!("Triggering agent: {} for automation: {}", slug, auto.name);
+                                if let Some(store_mutex) = handle.try_state::<Mutex<crate::agent::session::AgentStore>>() {
+                                    if let Ok(mut store) = store_mutex.lock() {
+                                        if let Some(session) = store.get_mut(slug) {
+                                            session.state = crate::agent::session::SessionState::Running;
+                                            session.transcript.push(crate::agent::session::ChatMessage {
+                                                role: "user".into(),
+                                                content: format!("[Automation Trigger: {}]\n{}", auto.name, auto.prompt),
+                                            });
+                                            let now_secs = std::time::SystemTime::now()
+                                                .duration_since(std::time::UNIX_EPOCH)
+                                                .unwrap_or_default()
+                                                .as_secs()
+                                                .to_string();
+                                            session.updated_at = now_secs;
+                                            let _ = handle.emit("agent-state-changed", slug.clone());
+                                        } else {
+                                            log::warn!("Agent {} not found for automation {}", slug, auto.name);
+                                        }
+                                    }
+                                }
                             }
                         }
                     }
@@ -462,7 +486,7 @@ pub fn run() {
         ])
         .build(tauri::generate_context!())
         .expect("error while building ClickyX")
-        .run(|app_handle, event| {
+        .run(|_app_handle, event| {
             if let tauri::RunEvent::ExitRequested { code, api, .. } = event {
                 if code.is_none() {
                     log::info!("Preventing implicit exit while ClickyX is running in the tray");
@@ -471,9 +495,6 @@ pub fn run() {
                 }
 
                 log::info!("Exit requested, shutting down ClickyX");
-                if let Some(config) = app_handle.try_state::<config::AppConfig>() {
-                    let _ = config::save_config(app_handle, &config);
-                }
             }
         });
 }

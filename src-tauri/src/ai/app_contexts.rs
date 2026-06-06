@@ -1,6 +1,5 @@
 /// Per-application CUA context — provides app-specific system prompt injections
 /// and tool hints so the AI knows the keyboard shortcuts and idioms for common apps.
-
 pub struct AppCuaContext {
     pub app_name: String,
     /// Bundle IDs or process names to match (case-insensitive substring match)

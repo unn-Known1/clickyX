@@ -86,13 +86,27 @@ impl CodexProcess {
             .ok_or_else(|| "no stdout on codex process".to_string())?;
 
         let mut reader = BufReader::new(stdout);
-        let mut line = String::new();
-        reader
-            .read_line(&mut line)
-            .map_err(|e| format!("read error: {e}"))?;
+        let mut response: Option<Value> = None;
+        
+        for _ in 0..100 {
+            let mut line = String::new();
+            let bytes_read = reader
+                .read_line(&mut line)
+                .map_err(|e| format!("read error: {e}"))?;
+                
+            if bytes_read == 0 { break; }
+            let line = line.trim();
+            if line.is_empty() { continue; }
+            
+            if let Ok(val) = serde_json::from_str::<Value>(line) {
+                if val.get("id").and_then(|v| v.as_i64()) == Some(1) {
+                    response = Some(val);
+                    break;
+                }
+            }
+        }
 
-        let response: Value =
-            serde_json::from_str(&line).map_err(|e| format!("parse error: {e}"))?;
+        let response = response.ok_or_else(|| "failed to find valid JSON-RPC response".to_string())?;
 
         if let Some(error) = response.get("error") {
             return Err(format!(
