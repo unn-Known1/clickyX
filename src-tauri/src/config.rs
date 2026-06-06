@@ -237,6 +237,7 @@ pub struct AppConfig {
     pub computer_use: ComputerUseConfig,
     pub type_mode: TypeModeConfig,
     pub bridge_token: Option<String>,
+    pub onboarding_completed: bool,
 }
 
 impl Default for AppConfig {
@@ -261,6 +262,7 @@ impl Default for AppConfig {
             computer_use: ComputerUseConfig::default(),
             type_mode: TypeModeConfig::default(),
             bridge_token: None,
+            onboarding_completed: false,
         }
     }
 }

@@ -76,10 +76,17 @@ export function invoke<T>(cmd: string, args?: any): Promise<T> {
       return Promise.resolve([
         { id: "elevenlabs", name: "ElevenLabs", tier: "paid", requires_key: true },
         { id: "cartesia", name: "Cartesia", tier: "paid", requires_key: true },
-        { id: "openai", name: "OpenAI TTS", tier: "paid", requires_key: true }
+        { id: "openai", name: "OpenAI TTS", tier: "paid", requires_key: true },
+        { id: "system", name: "System (Offline)", tier: "free", requires_key: false }
       ]) as any;
     }
     if (cmd === "get_voices") {
+      const provider = args?.provider || "elevenlabs";
+      if (provider === "system") {
+        return Promise.resolve([
+          { id: "system_default", provider: "system", name: "System Voice", description: "Built-in operating system voice", accent_color: "#66bb6a", gender: "neutral", style: "default", language: "en-US", tier: "free" }
+        ]) as any;
+      }
       return Promise.resolve([
         { id: "voice-1", provider: "elevenlabs", name: "Rachel", description: "Rachel voice", accent_color: "#4fc3f7", gender: "female", style: "conversational", language: "en", tier: "free" },
         { id: "voice-2", provider: "elevenlabs", name: "Domi", description: "Domi voice", accent_color: "#e91e63", gender: "female", style: "expressive", language: "en", tier: "free" }

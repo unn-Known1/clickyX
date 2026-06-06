@@ -53,6 +53,7 @@ image = { version = "0.25", default-features = false, features = ["jpeg"] }
 actix-cors = "0.7"
 subtle = "2"
 enigo = { version = "0.2", features = ["serde"] }
+tts = "0.26"
 lazy_static = "1"
 specta = { version = "2.0.0-rc.22", features = ["export"], optional = true }
 specta-typescript = { version = "0.0.9", optional = true }

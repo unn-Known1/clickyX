@@ -292,7 +292,7 @@ pub fn run() {
             let ann_mgr_arc = std::sync::Arc::new(ann_manager);
             handle.manage(ann_mgr_arc.clone());
             overlay::start_lifecycle_sweep(handle.clone(), ann_mgr_arc);
-            overlay::start_hotplug_poll(handle.clone(), "overlay.html");
+            overlay::start_hotplug_poll(handle.clone(), "src/overlay/index.html");
 
             // Start bridge server on separate thread
             let bridge_token = config.bridge_token.clone();

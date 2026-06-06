@@ -5,6 +5,7 @@ pub enum TtsProvider {
     MicrosoftEdge,
     DeepgramAura,
     OpenAIRealtime,
+    System,
 }
 
 impl TtsProvider {
@@ -15,6 +16,7 @@ impl TtsProvider {
             "edge" | "microsoftedge" => Some(Self::MicrosoftEdge),
             "aura" | "deepgramaura" => Some(Self::DeepgramAura),
             "openai_realtime" | "realtime" => Some(Self::OpenAIRealtime),
+            "system" => Some(Self::System),
             _ => None,
         }
     }
@@ -26,11 +28,12 @@ impl TtsProvider {
             Self::MicrosoftEdge => "edge",
             Self::DeepgramAura => "aura",
             Self::OpenAIRealtime => "openai_realtime",
+            Self::System => "system",
         }
     }
 
     pub fn requires_api_key(&self) -> bool {
-        !matches!(self, Self::MicrosoftEdge)
+        !matches!(self, Self::MicrosoftEdge | Self::System)
     }
 }
 
@@ -69,6 +72,7 @@ pub async fn speak(text: &str, config: &TtsConfig) -> Result<Vec<u8>, String> {
         TtsProvider::Cartesia => speak_cartesia(text, config).await,
         TtsProvider::MicrosoftEdge => speak_edge(text, config).await,
         TtsProvider::DeepgramAura => speak_deepgram_aura(text, config).await,
+        TtsProvider::System => speak_system(text).await,
         TtsProvider::OpenAIRealtime => {
             Err("OpenAI Realtime TTS requires WebSocket (deferred to Phase 5)".into())
         }
@@ -185,4 +189,22 @@ async fn speak_deepgram_aura(text: &str, config: &TtsConfig) -> Result<Vec<u8>, 
         .to_vec();
 
     Ok(audio_bytes)
+}
+
+async fn speak_system(text: &str) -> Result<Vec<u8>, String> {
+    let text = text.to_string();
+    tokio::task::spawn_blocking(move || {
+        let mut tts = tts::Tts::default()
+            .map_err(|e| format!("Failed to initialize System TTS: {e}"))?;
+        
+        tts.speak(&text, true)
+            .map_err(|e| format!("System TTS speech error: {e}"))?;
+            
+        while tts.is_speaking().unwrap_or(false) {
+            std::thread::sleep(std::time::Duration::from_millis(50));
+        }
+        Ok::<Vec<u8>, String>(vec![])
+    })
+    .await
+    .map_err(|e| format!("Thread join error: {e}"))?
 }

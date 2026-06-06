@@ -85,6 +85,9 @@ pub fn update_config(app: AppHandle, partial: serde_json::Value) -> Result<AppCo
         if let Some(theme) = obj.get("theme").and_then(|v| v.as_str()) {
             config.theme = theme.to_string();
         }
+        if let Some(onboarding_completed) = obj.get("onboarding_completed").and_then(|v| v.as_bool()) {
+            config.onboarding_completed = onboarding_completed;
+        }
         if let Some(window) = obj.get("window") {
             if let Ok(w) = serde_json::from_value(window.clone()) {
                 config.window = w;
@@ -1206,6 +1209,9 @@ pub fn select_voice(
 ) -> Result<(), String> {
     let mut config = config::load_config(&app)?;
     config.audio.selected_voice_id = voice_id.clone();
+    if let Some(voice_info) = crate::audio::get_voice_by_id(&voice_id) {
+        config.audio.tts_provider = voice_info.provider;
+    }
     if let Some(ac) = accent_color.clone() {
         config.overlay.cursor_accent = ac;
     }
@@ -1226,6 +1232,7 @@ pub fn get_voice_providers() -> Vec<serde_json::Value> {
         serde_json::json!({ "id": "aura", "name": "Deepgram Aura", "tier": "premium", "requires_key": true }),
         serde_json::json!({ "id": "openai_realtime", "name": "OpenAI Realtime", "tier": "premium", "requires_key": true }),
         serde_json::json!({ "id": "edge", "name": "Microsoft Edge", "tier": "free", "requires_key": false }),
+        serde_json::json!({ "id": "system", "name": "System (Offline)", "tier": "free", "requires_key": false }),
     ]
 }
 

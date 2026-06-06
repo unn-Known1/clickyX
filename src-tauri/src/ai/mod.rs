@@ -111,13 +111,8 @@ pub fn create_provider(config: &AiConfig) -> Result<Box<dyn AiProvider>, AiError
 pub fn resolve_provider_for_model(model: &str) -> &str {
     if model.contains("claude") || model.contains("anthropic") {
         "anthropic"
-    } else if model.contains("gpt") || model.contains("o1") || model.contains("o3")
-        || model.contains("llama") || model.contains("mistral") || model.contains("nemotron")
-        || model.contains("nvidia") || model.contains("nvcf")
-    {
-        "openai"
     } else {
-        "anthropic"
+        "openai"
     }
 }
 

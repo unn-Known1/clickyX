@@ -60,6 +60,12 @@ export default function OnboardingWizard({ onComplete, onSkip }: OnboardingWizar
 
   useEffect(() => {
     checkAllPermissions();
+
+    // Recheck permissions when the window gains focus (e.g., after the user toggles privacy settings)
+    window.addEventListener("focus", checkAllPermissions);
+    return () => {
+      window.removeEventListener("focus", checkAllPermissions);
+    };
   }, []);
 
   async function checkAllPermissions() {
@@ -89,7 +95,7 @@ export default function OnboardingWizard({ onComplete, onSkip }: OnboardingWizar
     setCompleting(true);
     try {
       await invoke("update_config", {
-        config: { onboarding_completed: true },
+        partial: { onboarding_completed: true },
       });
     } catch (e) {
       console.error("Failed to save onboarding state:", e);
@@ -98,8 +104,7 @@ export default function OnboardingWizard({ onComplete, onSkip }: OnboardingWizar
   }
 
   function isStepAccessible(idx: number) {
-    if (idx === 0) return true;
-    return permissions[STEPS[idx - 1].id] === true;
+    return true;
   }
 
   const step = STEPS[currentStep];

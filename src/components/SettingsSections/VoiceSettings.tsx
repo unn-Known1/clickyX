@@ -156,6 +156,7 @@ function VoiceSettings() {
           <option value="elevenlabs">ElevenLabs</option>
           <option value="cartesia">Cartesia</option>
           <option value="openai">OpenAI TTS</option>
+          <option value="system">System (Offline)</option>
         </select>
       </div>
       <div className="setting-row">
