@@ -103,7 +103,7 @@ export default function OnboardingWizard({ onComplete, onSkip }: OnboardingWizar
     onComplete();
   }
 
-  function isStepAccessible(idx: number) {
+  function isStepAccessible(_idx: number) {
     return true;
   }
 
