@@ -82,7 +82,16 @@ pub trait AiProvider: Send + Sync {
     ) -> Result<String, AiError>;
 }
 
+pub const CUA_SYSTEM_PROMPT: &str = r#"
+You have Computer Use capabilities. You can interact with the user's screen by outputting specific text tags in your response. 
+- To click the mouse at specific coordinates, output: [POINT:x,y]
+- To highlight an area on the screen, output: [HIGHLIGHT:x,y,w,h:optional_label]
+- To draw an arrow or curve, output: [SHAPE:arrow:x1,y1:x2,y2:optional_label]
+Only use these tags when you explicitly need to interact with the screen.
+"#;
+
 pub fn create_provider(config: &AiConfig) -> Result<Box<dyn AiProvider>, AiError> {
+    let full_prompt = format!("{}\n{}", config.system_prompt, CUA_SYSTEM_PROMPT);
     match config.default_provider.as_str() {
         "anthropic" => {
             let api_key = config
@@ -91,7 +100,7 @@ pub fn create_provider(config: &AiConfig) -> Result<Box<dyn AiProvider>, AiError
                 .ok_or_else(|| AiError::Config("Anthropic API key not configured".into()))?;
             Ok(Box::new(anthropic::AnthropicProvider::new(
                 api_key,
-                config.system_prompt.clone(),
+                full_prompt,
             )))
         }
         "openai" => {
@@ -101,7 +110,7 @@ pub fn create_provider(config: &AiConfig) -> Result<Box<dyn AiProvider>, AiError
                 .ok_or_else(|| AiError::Config("OpenAI API key not configured".into()))?;
             Ok(Box::new(openai::OpenAIProvider::new(
                 api_key,
-                config.system_prompt.clone(),
+                full_prompt,
                 config.openai_base_url.clone(),
             )))
         }
@@ -119,6 +128,7 @@ pub fn resolve_provider_for_model(model: &str) -> &str {
 
 pub fn create_provider_for_model(config: &AiConfig, model: &str) -> Result<Box<dyn AiProvider>, AiError> {
     let provider_name = resolve_provider_for_model(model);
+    let full_prompt = format!("{}\n{}", config.system_prompt, CUA_SYSTEM_PROMPT);
     match provider_name {
         "anthropic" => {
             let api_key = config
@@ -127,7 +137,7 @@ pub fn create_provider_for_model(config: &AiConfig, model: &str) -> Result<Box<d
                 .ok_or_else(|| AiError::Config("Anthropic API key not configured".into()))?;
             Ok(Box::new(anthropic::AnthropicProvider::new(
                 api_key,
-                config.system_prompt.clone(),
+                full_prompt,
             )))
         }
         "openai" => {
@@ -137,13 +147,14 @@ pub fn create_provider_for_model(config: &AiConfig, model: &str) -> Result<Box<d
                 .ok_or_else(|| AiError::Config("OpenAI API key not configured".into()))?;
             Ok(Box::new(openai::OpenAIProvider::new(
                 api_key,
-                config.system_prompt.clone(),
+                full_prompt,
                 config.openai_base_url.clone(),
             )))
         }
         p => Err(AiError::Config(format!("Unknown provider for model: {p}"))),
     }
 }
+
 
 pub fn get_default_model(config: &AiConfig, provider: &str) -> String {
     match provider {

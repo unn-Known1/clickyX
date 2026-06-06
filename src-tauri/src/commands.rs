@@ -255,7 +255,45 @@ pub async fn send_chat_message(
         .chat(&[msg], &model)
         .await
         .map_err(|e| format!("{e}"))?;
+        
+    execute_guidance_tags(&app, &response);
     Ok(response)
+}
+
+fn execute_guidance_tags(app: &AppHandle, text: &str) {
+    let tags = crate::ai::guidance::parse_guidance_tags(text);
+    if tags.is_empty() { return; }
+    
+    let config = crate::config::load_config(app).unwrap_or_default();
+    let backend = if config.computer_use.native_cua {
+        crate::cua::CuaBackend::Native
+    } else {
+        crate::cua::CuaBackend::Background
+    };
+    let mut sim = crate::cua::InputSimulator::new(backend);
+    
+    for tag in tags {
+        match tag {
+            crate::ai::guidance::GuidanceTag::Point { x, y, label } => {
+                let _ = sim.click(x, y);
+                let _ = crate::overlay::show_cursor(app, x, y, label);
+            }
+            crate::ai::guidance::GuidanceTag::Rect { x, y, w, h, label } => {
+                let _ = crate::overlay::show_rect(app, x, y, w, h, label);
+            }
+            crate::ai::guidance::GuidanceTag::Highlight { x, y, w, h, label } => {
+                let _ = crate::overlay::show_rect(app, x, y, w, h, label);
+            }
+            crate::ai::guidance::GuidanceTag::Shape { shape_type: _, x1, y1, x2, y2, label } => {
+                let _ = crate::overlay::show_scribble(app, vec![[x1, y1], [x2, y2]], label);
+            }
+            crate::ai::guidance::GuidanceTag::Scribble { points, label } => {
+                let p = points.into_iter().map(|(x, y)| [x, y]).collect();
+                let _ = crate::overlay::show_scribble(app, p, label);
+            }
+            _ => {}
+        }
+    }
 }
 
 #[tauri::command]
@@ -295,7 +333,10 @@ pub async fn send_chat_message_stream(
         while let Some(mut event) = receiver.recv().await {
             match &mut event {
                 StreamEvent::TextDelta { session_id: s, .. } => *s = session_id.clone(),
-                StreamEvent::TextDone { session_id: s, .. } => *s = session_id.clone(),
+                StreamEvent::TextDone { text, session_id: s } => {
+                    *s = session_id.clone();
+                    execute_guidance_tags(&app_clone, text);
+                }
                 StreamEvent::Error { session_id: s, .. } => *s = session_id.clone(),
                 StreamEvent::Done { session_id: s } => *s = session_id.clone(),
             }
@@ -391,6 +432,8 @@ pub async fn chat_with_vision(
         .chat_with_vision(&[msg], &model, &image_inputs)
         .await
         .map_err(|e| format!("{e}"))?;
+        
+    execute_guidance_tags(&app, &response);
     Ok(response)
 }
 
