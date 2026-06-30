@@ -6,8 +6,11 @@ use serde::{Deserialize, Serialize};
 use crate::config::TypeModeConfig;
 #[cfg(target_os = "windows")]
 use crate::cua::ensure_com;
+
 #[cfg(target_os = "linux")]
-use crate::platform::display_server;
+fn is_wayland() -> bool {
+    crate::platform::display_server() == "wayland"
+}
 #[cfg(target_os = "linux")]
 use crate::platform::display_server;
 
@@ -117,7 +120,7 @@ impl TypeModeEngine {
         #[cfg(target_os = "windows")]
         ensure_com();
         #[cfg(target_os = "linux")]
-        if display_server() == "wayland" {
+        if is_wayland() {
             let escaped = text.replace('\\', "\\\\").replace('"', "\\\"");
             return std::process::Command::new("wtype")
                 .args(["-k", "--", &escaped])
@@ -136,7 +139,7 @@ impl TypeModeEngine {
         #[cfg(target_os = "windows")]
         ensure_com();
         #[cfg(target_os = "linux")]
-        if display_server() == "wayland" {
+        if is_wayland() {
             return Err(format!(
                 "key_press not supported on Wayland. Install wtype and use type_text instead."
             ));

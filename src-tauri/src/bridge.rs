@@ -5,7 +5,7 @@ use crate::bridge_auth::{Auth, BridgeAuthConfig};
 use futures_util::stream::Stream;
 use futures_util::StreamExt;
 use serde::{Deserialize, Serialize};
-use tauri::{AppHandle, Manager};
+use tauri::{AppHandle, Emitter, Manager};
 
 use crate::screen::capture;
 
@@ -684,15 +684,13 @@ struct McpCallRequest {
 async fn events(data: web::Data<BridgeState>) -> HttpResponse {
     let rx = data.event_tx.subscribe();
     let stream: Box<dyn Stream<Item = Result<actix_web::web::Bytes, actix_web::Error>> + Unpin> =
-        Box::new(tokio_stream::wrappers::BroadcastStream::new(rx).filter_map(|result| {
+        Box::new(tokio_stream::wrappers::BroadcastStream::new(rx).map(|result| {
             match result {
-                Ok(msg) => Some(Ok(actix_web::web::Bytes::from(msg))),
-                Err(tokio::sync::broadcast::error::RecvError::Lagged(n)) => {
-                    log::warn!("SSE client lagged by {} messages, sending heartbeat", n);
-                    // Send a heartbeat instead of dropping — client knows connection is alive
-                    Some(Ok(actix_web::web::Bytes::from("event: heartbeat\ndata: {}\n\n")))
+                Ok(msg) => Ok(actix_web::web::Bytes::from(msg)),
+                Err(e) => {
+                    log::warn!("SSE client issue: {e}, sending heartbeat");
+                    Ok(actix_web::web::Bytes::from("event: heartbeat\ndata: {}\n\n"))
                 }
-                Err(tokio::sync::broadcast::error::RecvError::Closed) => None,
             }
         }));
     HttpResponse::Ok()
@@ -729,6 +727,7 @@ async fn click_handler(data: web::Data<BridgeState>, body: web::Json<ClickReques
 
 async fn notify(data: web::Data<BridgeState>, body: web::Json<NotifyRequest>) -> HttpResponse {
     let app = &data.app_handle;
+    use tauri::Emitter;
     // Emit a Tauri event so the frontend can show a notification
     let _ = app.emit("bridge-notification", serde_json::json!({
         "title": body.title,
@@ -1357,7 +1356,7 @@ async fn run_bridge_server(
                     .allowed_origin("http://localhost:1420")
                     .allowed_origin("http://127.0.0.1:1420")
                     .allowed_methods(vec!["GET", "POST", "OPTIONS"])
-                    .allowed_headers(actix_web::http::header::CONTENT_TYPE)
+                    .allowed_headers(vec![actix_web::http::header::CONTENT_TYPE])
                     .max_age(3600),
             )
             .wrap(Auth)

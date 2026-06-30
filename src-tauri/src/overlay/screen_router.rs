@@ -35,7 +35,7 @@ impl ScreenManager {
         {
             if let Ok(all) = xcap::Monitor::all() {
                 for m in &all {
-                    let scale_factor = m.scale_factor().unwrap_or(1.0);
+                    let scale_factor = m.scale_factor().unwrap_or(1.0) as f64;
                     monitors.push(MonitorInfo {
                         name: m.name().unwrap_or_else(|_| "unknown".into()),
                         x: m.x().unwrap_or(0),

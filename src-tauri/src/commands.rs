@@ -1470,29 +1470,30 @@ pub async fn run_agent(
 
         // Build messages from transcript
         let messages: Vec<ai::ChatMessage> = {
-            let store = match app_clone.try_state::<Mutex<AgentStore>>() {
+            let state_ref = match app_clone.try_state::<Mutex<AgentStore>>() {
                 Some(s) => s,
                 None => {
                     log::error!("Agent {}: could not access agent store", slug_clone);
                     return;
                 }
             };
-            match store.lock() {
-                Ok(s) => {
-                    if let Some(session) = s.get(&slug_clone) {
-                        session.transcript.iter().map(|m| ai::ChatMessage {
-                            role: m.role.clone(),
-                            content: m.content.clone(),
-                        }).collect()
-                    } else {
-                        log::error!("Agent {} disappeared during execution", slug_clone);
-                        return;
-                    }
-                }
+            let guard = match state_ref.lock() {
+                Ok(g) => g,
                 Err(e) => {
                     log::error!("Agent {}: lock error: {e}", slug_clone);
                     return;
                 }
+            };
+            if let Some(session) = guard.get(&slug_clone) {
+                let msgs: Vec<ai::ChatMessage> = session.transcript.iter().map(|m| ai::ChatMessage {
+                    role: m.role.clone(),
+                    content: m.content.clone(),
+                }).collect();
+                drop(guard);
+                msgs
+            } else {
+                log::error!("Agent {} disappeared during execution", slug_clone);
+                return;
             }
         };
 

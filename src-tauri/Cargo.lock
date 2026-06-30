@@ -908,7 +908,6 @@ dependencies = [
  "hex",
  "hound",
  "image 0.25.10",
- "lazy_static",
  "log",
  "rand 0.8.6",
  "regex",

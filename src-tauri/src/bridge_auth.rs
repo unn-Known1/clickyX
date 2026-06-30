@@ -1,5 +1,5 @@
 use actix_web::{
-    body::BoxBody,
+    body::EitherBody,
     dev::{forward_ready, ServiceRequest, ServiceResponse, Service, Transform},
     http::header,
     Error, HttpResponse,
@@ -17,10 +17,10 @@ pub struct Auth;
 
 impl<S> Transform<S, ServiceRequest> for Auth
 where
-    S: Service<ServiceRequest, Response = ServiceResponse<BoxBody>, Error = Error> + 'static,
+    S: Service<ServiceRequest, Response = ServiceResponse<EitherBody<actix_web::body::BoxBody>>, Error = Error> + 'static,
     S::Future: 'static,
 {
-    type Response = ServiceResponse<BoxBody>;
+    type Response = ServiceResponse<EitherBody<actix_web::body::BoxBody>>;
     type Error = Error;
     type Transform = AuthMiddleware<S>;
     type InitError = ();
@@ -37,10 +37,10 @@ pub struct AuthMiddleware<S> {
 
 impl<S> Service<ServiceRequest> for AuthMiddleware<S>
 where
-    S: Service<ServiceRequest, Response = ServiceResponse<BoxBody>, Error = Error> + 'static,
+    S: Service<ServiceRequest, Response = ServiceResponse<EitherBody<actix_web::body::BoxBody>>, Error = Error> + 'static,
     S::Future: 'static,
 {
-    type Response = ServiceResponse<BoxBody>;
+    type Response = ServiceResponse<EitherBody<actix_web::body::BoxBody>>;
     type Error = Error;
     type Future = LocalBoxFuture<'static, Result<Self::Response, Self::Error>>;
 
@@ -80,7 +80,9 @@ where
                 "error": "unauthorized",
                 "message": "Invalid or missing authentication token"
             }));
-            return Box::pin(async move { Ok(ServiceResponse::new(http_req, response)) });
+            return Box::pin(async move {
+                Ok(ServiceResponse::new(http_req, response.map_into_boxed_body().map_into_right_body()))
+            });
         }
 
         let fut = self.service.call(req);
