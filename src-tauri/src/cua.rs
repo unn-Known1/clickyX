@@ -4,21 +4,7 @@ use enigo::{
 use serde::{Deserialize, Serialize};
 
 #[cfg(target_os = "linux")]
-fn display_server() -> &'static str {
-    let sess = std::env::var("XDG_SESSION_TYPE").unwrap_or_default();
-    if sess == "wayland" || std::env::var("WAYLAND_DISPLAY").is_ok() {
-        "wayland"
-    } else if sess == "x11" || std::env::var("DISPLAY").is_ok() {
-        "x11"
-    } else {
-        "unknown"
-    }
-}
-
-#[cfg(not(target_os = "linux"))]
-fn display_server() -> &'static str {
-    "x11"
-}
+use crate::platform::display_server;
 
 #[cfg(target_os = "windows")]
 pub fn ensure_com() {

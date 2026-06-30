@@ -17,8 +17,7 @@ use manager::AnnotationManager;
 /// transparency / input-passthrough limitations.
 #[cfg(target_os = "linux")]
 fn warn_compositor_quirks() {
-    let sess = std::env::var("XDG_SESSION_TYPE").unwrap_or_default();
-    if sess == "wayland" || sess.is_empty() && std::env::var("WAYLAND_DISPLAY").is_ok() {
+    if crate::platform::display_server() == "wayland" {
         let de = std::env::var("XDG_CURRENT_DESKTOP").unwrap_or_default();
         let known_good = ["GNOME", "KDE", "Unity", "Budgie", "POP"];
         if !known_good.iter().any(|k| de.contains(k)) {

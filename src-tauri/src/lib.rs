@@ -15,6 +15,7 @@ mod permissions;
 mod cua;
 mod accessibility;
 mod type_mode;
+pub mod platform;
 
 use std::path::PathBuf;
 use std::sync::Mutex;

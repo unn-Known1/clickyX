@@ -3,22 +3,13 @@
 use super::{AccessibilityElement, AccessibilityTree, AccessibilityApi};
 use std::process::Command;
 
+use crate::platform::display_server;
+
 pub struct LinuxAccessibility;
 
 impl LinuxAccessibility {
     pub fn new() -> Self {
         Self
-    }
-}
-
-fn display_server() -> &'static str {
-    let sess = std::env::var("XDG_SESSION_TYPE").unwrap_or_default();
-    if sess == "wayland" || std::env::var("WAYLAND_DISPLAY").is_ok() {
-        "wayland"
-    } else if sess == "x11" || std::env::var("DISPLAY").is_ok() {
-        "x11"
-    } else {
-        "unknown"
     }
 }
 

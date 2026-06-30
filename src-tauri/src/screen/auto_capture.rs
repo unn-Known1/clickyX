@@ -283,15 +283,16 @@ fn capture_all_jpeg() -> Result<(Vec<u8>, u32, u32), String> {
     let width = monitor.width().map_err(|e| format!("monitor width: {e}"))?;
     let height = monitor.height().map_err(|e| format!("monitor height: {e}"))?;
     let mut img = image::RgbaImage::new(width, height);
+    use image::GenericImage;
     for m in &monitors {
         if let Ok(cap) = m.capture_image() {
             let ox = (m.x().unwrap_or(0).max(0) as u32).min(width.saturating_sub(1));
             let oy = (m.y().unwrap_or(0).max(0) as u32).min(height.saturating_sub(1));
-            for py in 0..cap.height().min(height.saturating_sub(oy)) {
-                for px in 0..cap.width().min(width.saturating_sub(ox)) {
-                    let dp = cap.get_pixel(px, py);
-                    img.put_pixel(ox + px, oy + py, *dp);
-                }
+            let copy_w = cap.width().min(width.saturating_sub(ox));
+            let copy_h = cap.height().min(height.saturating_sub(oy));
+            // Use bulk copy instead of pixel-by-pixel
+            if copy_w > 0 && copy_h > 0 {
+                let _ = img.copy_from(&cap, ox, oy);
             }
         }
     }

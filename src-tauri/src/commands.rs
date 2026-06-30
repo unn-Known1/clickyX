@@ -1733,12 +1733,37 @@ pub fn agent_attach_files(
 ) -> Result<(), String> {
     let mut store = store.lock().map_err(|e| format!("lock: {e}"))?;
     if let Some(session) = store.sessions.get_mut(&slug) {
-        // Store attached file paths in the session context
         for path in &paths {
-            session.transcript.push(ChatMessage {
-                role: "system".to_string(),
-                content: format!("[File attached: {}]", path),
-            });
+            let path_obj = std::path::Path::new(path);
+            if path_obj.exists() {
+                // Read file content and store as a message
+                match std::fs::read_to_string(path_obj) {
+                    Ok(content) => {
+                        let truncated = if content.len() > 10000 {
+                            format!("{}... [truncated]", &content[..10000])
+                        } else {
+                            content
+                        };
+                        session.transcript.push(ChatMessage {
+                            role: "system".to_string(),
+                            content: format!("[File: {}]\n{}", path, truncated),
+                        });
+                    }
+                    Err(_) => {
+                        // Binary file or unreadable — store path reference
+                        session.transcript.push(ChatMessage {
+                            role: "system".to_string(),
+                            content: format!("[File attached: {}]", path),
+                        });
+                    }
+                }
+            } else {
+                log::warn!("[agent-attach] File not found: {}", path);
+                session.transcript.push(ChatMessage {
+                    role: "system".to_string(),
+                    content: format!("[File not found: {}]", path),
+                });
+            }
         }
         log::info!("[agent-attach] {} files attached to agent '{}'", paths.len(), slug);
     }

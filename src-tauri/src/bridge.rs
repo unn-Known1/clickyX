@@ -722,12 +722,18 @@ async fn click_handler(data: web::Data<BridgeState>, body: web::Json<ClickReques
 }
 
 async fn notify(data: web::Data<BridgeState>, body: web::Json<NotifyRequest>) -> HttpResponse {
-    let _app = &data.app_handle;
-    log::info!("Notification: {} - {}", body.title, body.body);
-    if let Some(window) = _app.get_webview_window("main") {
+    let app = &data.app_handle;
+    // Emit a Tauri event so the frontend can show a notification
+    let _ = app.emit("bridge-notification", serde_json::json!({
+        "title": body.title,
+        "body": body.body,
+        "icon": body.icon,
+    }));
+    if let Some(window) = app.get_webview_window("main") {
         let _ = window.show();
         let _ = window.set_focus();
     }
+    log::info!("Notification: {} - {}", body.title, body.body);
     HttpResponse::Ok().json(OkResponse { ok: true })
 }
 

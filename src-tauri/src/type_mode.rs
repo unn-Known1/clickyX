@@ -6,6 +6,10 @@ use serde::{Deserialize, Serialize};
 use crate::config::TypeModeConfig;
 #[cfg(target_os = "windows")]
 use crate::cua::ensure_com;
+#[cfg(target_os = "linux")]
+use crate::platform::display_server;
+#[cfg(target_os = "linux")]
+use crate::platform::display_server;
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub enum TypeModeState {
@@ -113,9 +117,7 @@ impl TypeModeEngine {
         #[cfg(target_os = "windows")]
         ensure_com();
         #[cfg(target_os = "linux")]
-        if std::env::var("XDG_SESSION_TYPE").unwrap_or_default() == "wayland"
-            || std::env::var("WAYLAND_DISPLAY").is_ok()
-        {
+        if display_server() == "wayland" {
             let escaped = text.replace('\\', "\\\\").replace('"', "\\\"");
             return std::process::Command::new("wtype")
                 .args(["-k", "--", &escaped])
@@ -134,9 +136,7 @@ impl TypeModeEngine {
         #[cfg(target_os = "windows")]
         ensure_com();
         #[cfg(target_os = "linux")]
-        if std::env::var("XDG_SESSION_TYPE").unwrap_or_default() == "wayland"
-            || std::env::var("WAYLAND_DISPLAY").is_ok()
-        {
+        if display_server() == "wayland" {
             return Err(format!(
                 "key_press not supported on Wayland. Install wtype and use type_text instead."
             ));

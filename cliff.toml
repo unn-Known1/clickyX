@@ -31,5 +31,6 @@ sort_groups = ["Features", "Bug Fixes", "Refactoring", "CI/CD", "Chores", "Other
 
 skip_commits = [
     { message = "^chore\\(release\\)" },
+    { message = "^chore\\(deps\\)" },
     { message = "^updated dependencies" },
 ]

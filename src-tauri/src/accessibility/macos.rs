@@ -15,9 +15,17 @@ impl MacAccessibility {
 }
 
 /// Escape a string for safe embedding in AppleScript string literals.
-/// Escapes backslashes and double quotes.
+/// Escapes backslashes, double quotes, and newlines. Also strips null bytes
+/// and other control characters that could break AppleScript parsing.
 fn escape_applescript(s: &str) -> String {
-    s.replace('\\', "\\\\").replace('"', "\\\"")
+    s.replace('\\', "\\\\")
+        .replace('"', "\\\"")
+        .replace('\n', "\\n")
+        .replace('\r', "\\r")
+        .replace('\0', "")
+        .chars()
+        .filter(|c| !c.is_control() || *c == '\n' || *c == '\r')
+        .collect()
 }
 
 /// Log a one-time warning if cliclick is not installed.

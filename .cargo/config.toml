@@ -1,2 +1,5 @@
+# Windows GNU target linker flags (only applies to x86_64-pc-windows-gnu)
+# Note: CI builds use x86_64-pc-windows-msvc, so this config is unused in production.
+# Kept for developers building locally with the GNU toolchain.
 [target.x86_64-pc-windows-gnu]
 rustflags = ["-C", "link-arg=-Wl,--exclude-all-symbols"]

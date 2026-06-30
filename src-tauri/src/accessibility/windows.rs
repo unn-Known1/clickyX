@@ -385,9 +385,34 @@ if ($el -ne $null) {{
         match action {
             "focus" => {
                 if let Some(pid) = element.pid {
+                    // Use SetForegroundWindow via P/Invoke to actually focus the window
                     let script = format!(
-                        "(Get-Process -Id {} -ErrorAction SilentlyContinue).MainWindowHandle | \
-                         ForEach-Object {{ [void][System.Windows.Forms.Form]::new().Invoke([Action]{{  }}) }}",
+                        r#"
+Add-Type @"
+using System;
+using System.Runtime.InteropServices;
+public class WinFocus {{
+    [DllImport("user32.dll")]
+    public static extern IntPtr GetForegroundWindow();
+    [DllImport("user32.dll")]
+    public static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint processId);
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool SetForegroundWindow(IntPtr hWnd);
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool BringWindowToTop(IntPtr hWnd);
+}}
+"@
+$procs = Get-Process -Id {} -ErrorAction SilentlyContinue
+foreach ($p in $procs) {{
+    $hwnd = $p.MainWindowHandle
+    if ($hwnd -ne [IntPtr]::Zero) {{
+        [WinFocus]::SetForegroundWindow($hwnd) | Out-Null
+        [WinFocus]::BringWindowToTop($hwnd) | Out-Null
+    }}
+}}
+"#,
                         pid
                     );
                     let _ = powershell(&script);
