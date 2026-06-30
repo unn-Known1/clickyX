@@ -5,6 +5,12 @@ use std::process::Command;
 
 use crate::platform::display_server;
 
+/// Linux accessibility implementation.
+///
+/// **Wayland limitation**: On Wayland, window enumeration and manipulation via xdotool
+/// is not supported. Most functions return empty results or stub data on Wayland.
+/// A production implementation should use xdg-desktop-portal's
+/// `org.freedesktop.portal.Accessibility` interface for Wayland support.
 pub struct LinuxAccessibility;
 
 impl LinuxAccessibility {

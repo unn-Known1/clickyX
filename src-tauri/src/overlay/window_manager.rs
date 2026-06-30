@@ -15,6 +15,16 @@ pub struct OverlayWindowInfo {
     pub url: String,
 }
 
+/// Per-screen overlay window manager.
+///
+/// Creates and manages one transparent WebviewWindow per monitor for overlay
+/// annotations (cursors, rectangles, scribbles, captions). Handles monitor
+/// hotplug events by refreshing window positions and sizes, and closing
+/// windows for disconnected monitors.
+///
+/// **Note**: This manager is used by the hotplug poller (`start_hotplug_poll`)
+/// for display configuration changes. The initial overlay windows are created
+/// elsewhere in the setup path.
 pub struct OverlayWindowManager<R: Runtime> {
     windows: HashMap<String, WebviewWindow<R>>,
     screen_mgr: ScreenManager,

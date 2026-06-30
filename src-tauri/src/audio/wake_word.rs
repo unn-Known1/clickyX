@@ -1,5 +1,12 @@
 use crate::config::WakeWordConfig;
 
+/// Energy-based wake word detector.
+///
+/// **Known limitation**: This detector uses audio energy levels only — it does NOT
+/// perform actual speech recognition. Any loud sound above the threshold will trigger
+/// the wake word. The `phrase` config field is stored for display purposes but is not
+/// compared against recognized speech. A production implementation should integrate
+/// a proper wake word engine (e.g., Porcupine, Picovoice, or onnx-based model).
 pub struct WakeWordDetector {
     pub config: WakeWordConfig,
     pub listening: bool,

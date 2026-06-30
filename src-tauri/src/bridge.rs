@@ -1316,6 +1316,12 @@ mod tests {
     }
 }
 
+/// Start the HTTP bridge server on `127.0.0.1:32123`.
+///
+/// **Security note**: This server binds to localhost only. When `bridge_token` is
+/// configured, all endpoints require Bearer token auth. Rate limiting is not
+/// currently implemented — a malicious localhost process could flood the bridge.
+/// Consider adding actix-rate-limiter in production.
 pub fn start_bridge(app_handle: AppHandle, bridge_token: Option<String>) {
     log::info!("Starting bridge server thread");
     std::thread::spawn(move || {

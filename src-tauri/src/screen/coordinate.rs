@@ -8,6 +8,11 @@ pub struct NormalizedPoint {
     pub display_id: u32,
 }
 
+/// Convert screenshot pixel coordinates to virtual display coordinates.
+///
+/// On macOS, the Y-axis is flipped because Core Graphics uses a bottom-left
+/// origin while the rest of the system uses top-left. On Windows and Linux,
+/// coordinates are 1:1 mapped.
 pub fn screenshot_to_display(
     screen_x: u32,
     screen_y: u32,

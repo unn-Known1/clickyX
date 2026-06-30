@@ -29,6 +29,14 @@ pub struct AccessibilityTree {
     pub timestamp: u64,
 }
 
+/// Cross-platform accessibility API.
+///
+/// **Performance note**: Each call to `get_element_at_point`, `get_focused_element`,
+/// `snapshot`, etc. spawns an OS process (`osascript` on macOS, `powershell` on Windows,
+/// `xdotool` on Linux). This adds 50-500ms latency per call. Callers should cache
+/// results where possible and avoid frequent polling. A production implementation
+/// should use native accessibility APIs (AT-SPI2, UIAutomation, NSAccessibility)
+/// via FFI bindings instead of process spawning.
 pub trait AccessibilityApi: Send {
     fn get_element_at_point(&self, x: i32, y: i32) -> Result<AccessibilityElement, String>;
     fn get_focused_element(&self) -> Result<Option<AccessibilityElement>, String>;

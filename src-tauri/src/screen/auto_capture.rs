@@ -37,6 +37,11 @@ pub struct CapturedFrame {
     pub height: u32,
 }
 
+/// Auto-capture engine with diff-based filtering.
+///
+/// Memory note: Each CapturedFrame stores raw JPEG bytes (~100-300KB per 1080p frame).
+/// With default `max_cache: 10`, peak memory is ~1-3MB. For long-running sessions,
+/// consider reducing `max_cache` or implementing disk spillover.
 pub struct AutoCaptureEngine {
     captures: Arc<Mutex<Vec<CapturedFrame>>>,
     previous_frame: Arc<Mutex<Option<Vec<u8>>>>,
