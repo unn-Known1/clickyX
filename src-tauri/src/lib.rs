@@ -255,30 +255,41 @@ pub fn run() {
                         if let Some(engine) =
                             handle.try_state::<Mutex<automation::AutomationEngine>>()
                         {
-                            if let Ok(mut eng) = engine.lock() {
-                                triggered = eng.tick();
+                            // Use try_lock to avoid blocking; skip tick if lock is held
+                            match engine.try_lock() {
+                                Ok(mut eng) => {
+                                    triggered = eng.tick();
+                                }
+                                Err(e) => {
+                                    log::warn!("Automation tick: could not acquire lock (skipping): {e}");
+                                }
                             }
                         }
                         for auto in triggered {
                             if let Some(slug) = &auto.agent_slug {
                                 log::info!("Triggering agent: {} for automation: {}", slug, auto.name);
                                 if let Some(store_mutex) = handle.try_state::<Mutex<crate::agent::session::AgentStore>>() {
-                                    if let Ok(mut store) = store_mutex.lock() {
-                                        if let Some(session) = store.get_mut(slug) {
-                                            session.state = crate::agent::session::SessionState::Running;
-                                            session.transcript.push(crate::agent::session::ChatMessage {
-                                                role: "user".into(),
-                                                content: format!("[Automation Trigger: {}]\n{}", auto.name, auto.prompt),
-                                            });
-                                            let now_secs = std::time::SystemTime::now()
-                                                .duration_since(std::time::UNIX_EPOCH)
-                                                .unwrap_or_default()
-                                                .as_secs()
-                                                .to_string();
-                                            session.updated_at = now_secs;
-                                            let _ = handle.emit("agent-state-changed", slug.clone());
-                                        } else {
-                                            log::warn!("Agent {} not found for automation {}", slug, auto.name);
+                                    match store_mutex.try_lock() {
+                                        Ok(mut store) => {
+                                            if let Some(session) = store.get_mut(slug) {
+                                                session.state = crate::agent::session::SessionState::Running;
+                                                session.transcript.push(crate::agent::session::ChatMessage {
+                                                    role: "user".into(),
+                                                    content: format!("[Automation Trigger: {}]\n{}", auto.name, auto.prompt),
+                                                });
+                                                let now_secs = std::time::SystemTime::now()
+                                                    .duration_since(std::time::UNIX_EPOCH)
+                                                    .unwrap_or_default()
+                                                    .as_secs()
+                                                    .to_string();
+                                                session.updated_at = now_secs;
+                                                let _ = handle.emit("agent-state-changed", slug.clone());
+                                            } else {
+                                                log::warn!("Agent {} not found for automation {}", slug, auto.name);
+                                            }
+                                        }
+                                        Err(e) => {
+                                            log::warn!("Automation trigger: could not acquire agent store lock: {e}");
                                         }
                                     }
                                 }

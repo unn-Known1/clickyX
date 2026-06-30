@@ -95,7 +95,7 @@ impl AnnotationManager {
         }
     }
 
-    pub fn get_expired(&self) -> Vec<String> {
+    pub fn get_expired(&mut self) -> Vec<String> {
         let now = now_ms();
         let mut expired = Vec::new();
         for id in &self.kind_order {
@@ -106,6 +106,13 @@ impl AnnotationManager {
             if is_expired {
                 expired.push(id.clone());
             }
+        }
+        // Clean up expired entries to prevent memory growth
+        for id in &expired {
+            self.cursors.remove(id);
+            self.rectangles.remove(id);
+            self.scribbles.remove(id);
+            self.captions.remove(id);
         }
         expired
     }

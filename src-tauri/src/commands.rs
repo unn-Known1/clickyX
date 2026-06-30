@@ -1519,6 +1519,7 @@ pub fn enable_skill(
     slug: String,
     skill_name: String,
     state: tauri::State<'_, Mutex<AgentStore>>,
+    app: AppHandle,
 ) -> Result<(), String> {
     let mut store = state.lock().map_err(|e| format!("lock error: {e}"))?;
     let session = store
@@ -1527,6 +1528,8 @@ pub fn enable_skill(
     if !session.skills.contains(&skill_name) {
         session.skills.push(skill_name);
     }
+    let config = config::load_config(&app).unwrap_or_default();
+    let _ = store.save(&config.agent.encryption_key);
     Ok(())
 }
 
@@ -1535,12 +1538,15 @@ pub fn disable_skill(
     slug: String,
     skill_name: String,
     state: tauri::State<'_, Mutex<AgentStore>>,
+    app: AppHandle,
 ) -> Result<(), String> {
     let mut store = state.lock().map_err(|e| format!("lock error: {e}"))?;
     let session = store
         .get_mut(&slug)
         .ok_or_else(|| format!("agent '{slug}' not found"))?;
     session.skills.retain(|s| s != &skill_name);
+    let config = config::load_config(&app).unwrap_or_default();
+    let _ = store.save(&config.agent.encryption_key);
     Ok(())
 }
 

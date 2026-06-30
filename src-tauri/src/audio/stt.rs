@@ -254,8 +254,11 @@ async fn transcribe_assemblyai(wav_data: &[u8], config: &SttConfig) -> Result<St
 
                 let polling_url =
                     format!("https://api.assemblyai.com/v2/transcript/{transcript_id}");
+                let max_polls = config.timeout_secs * 2; // poll every 500ms, so 2 polls/sec
+                let mut poll_count = 0u64;
                 loop {
                     tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+                    poll_count += 1;
                     let poll_resp = client
                         .get(&polling_url)
                         .header("authorization", config.api_key.clone())
@@ -275,6 +278,12 @@ async fn transcribe_assemblyai(wav_data: &[u8], config: &SttConfig) -> Result<St
                         "error" => {
                             let error = poll_json["error"].as_str().unwrap_or("unknown error");
                             return Err(format!("AssemblyAI transcription error: {error}"));
+                        }
+                        _ if poll_count >= max_polls => {
+                            return Err(format!(
+                                "AssemblyAI transcription timed out after {} seconds",
+                                config.timeout_secs
+                            ));
                         }
                         _ => {}
                     }

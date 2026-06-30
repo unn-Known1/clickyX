@@ -110,10 +110,13 @@ impl AgentStore {
         let json = serde_json::to_string(self).map_err(|e| format!("Serialization error: {e}"))?;
         let encrypted = encrypt_data(&json, encryption_key)?;
         let path = agents_file_path();
+        let tmp_path = path.with_extension("enc.tmp");
         if let Some(parent) = path.parent() {
             std::fs::create_dir_all(parent).unwrap_or_default();
         }
-        std::fs::write(path, encrypted).map_err(|e| format!("Failed to write agents file: {e}"))?;
+        // Write to temp file first, then atomically rename
+        std::fs::write(&tmp_path, &encrypted).map_err(|e| format!("Failed to write temp agents file: {e}"))?;
+        std::fs::rename(&tmp_path, &path).map_err(|e| format!("Failed to rename agents file: {e}"))?;
         Ok(())
     }
 

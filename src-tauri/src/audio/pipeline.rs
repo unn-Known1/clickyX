@@ -210,6 +210,18 @@ impl VoicePipeline {
         // Activate audio ducking: suppress VAD input while TTS is playing
         self.set_ducking(true);
 
+        // Ensure ducking is always deactivated, even on panic
+        struct DuckingGuard<'a> { pipeline: &'a VoicePipeline }
+        impl<'a> Drop for DuckingGuard<'a> {
+            fn drop(&mut self) {
+                self.pipeline.set_ducking(false);
+                if let Ok(mut state) = self.pipeline.state.lock() {
+                    *state = PipelineState::Idle;
+                }
+            }
+        }
+        let _guard = DuckingGuard { pipeline: self };
+
         let tts_cfg = self
             .tts_config
             .lock()
@@ -231,12 +243,6 @@ impl VoicePipeline {
             }
         }
 
-        // Deactivate audio ducking after TTS playback
-        self.set_ducking(false);
-
-        if let Ok(mut state) = self.state.lock() {
-            *state = PipelineState::Idle;
-        }
         result
     }
 
