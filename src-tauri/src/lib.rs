@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-
 mod agent;
 mod audio;
 mod config;
@@ -309,7 +307,6 @@ pub fn run() {
             });
             handle.manage(Mutex::new(auto_capture_engine));
 
-            let config = config::load_config(&handle).unwrap_or_default();
             let agent_store = match agent::session::AgentStore::load(&config.agent.encryption_key) {
                 Ok(store) => store,
                 Err(e) => {

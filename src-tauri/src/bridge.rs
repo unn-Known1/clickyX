@@ -1,7 +1,7 @@
 use std::io::Cursor;
 
 use actix_web::{web, App, HttpServer, HttpResponse, middleware};
-use crate::bridge_auth::BridgeAuthConfig;
+use crate::bridge_auth::{Auth, BridgeAuthConfig};
 use futures_util::stream::Stream;
 use futures_util::StreamExt;
 use serde::{Deserialize, Serialize};
@@ -106,7 +106,7 @@ struct ClickRequest {
 async fn health() -> HttpResponse {
     HttpResponse::Ok().json(HealthResponse {
         status: "ok".into(),
-        version: "0.1.1".into(),
+        version: env!("CARGO_PKG_VERSION").into(),
     })
 }
 
@@ -220,11 +220,6 @@ async fn show_caption(data: web::Data<BridgeState>, body: web::Json<CaptionReque
     }
 }
 
-async fn click(data: web::Data<BridgeState>, body: web::Json<ClickRequest>) -> HttpResponse {
-    let _app = &data.app_handle;
-    log::info!("Click requested at ({}, {})", body.x, body.y);
-    HttpResponse::Ok().json(OkResponse { ok: true })
-}
 
 #[derive(Deserialize)]
 struct ClearRequest {
@@ -935,12 +930,12 @@ fn mcp_call_tool_sync(
 
 async fn mcp_tools(data: web::Data<BridgeState>) -> HttpResponse {
     let app = &data.app_handle;
-    let config = match app.try_state::<crate::config::AppConfig>() {
-        Some(c) => c.inner().clone(),
-        None => {
+    let config = match crate::config::load_config(app) {
+        Ok(c) => c,
+        Err(e) => {
             return HttpResponse::InternalServerError().json(ErrorResponse {
                 error: "internal_error".into(),
-                message: "config not available".into(),
+                message: format!("config not available: {e}"),
             });
         }
     };
@@ -971,12 +966,12 @@ async fn mcp_tools(data: web::Data<BridgeState>) -> HttpResponse {
 
 async fn mcp_call(data: web::Data<BridgeState>, body: web::Json<McpCallRequest>) -> HttpResponse {
     let app = &data.app_handle;
-    let config = match app.try_state::<crate::config::AppConfig>() {
-        Some(c) => c.inner().clone(),
-        None => {
+    let config = match crate::config::load_config(app) {
+        Ok(c) => c,
+        Err(e) => {
             return HttpResponse::InternalServerError().json(ErrorResponse {
                 error: "internal_error".into(),
-                message: "config not available".into(),
+                message: format!("config not available: {e}"),
             });
         }
     };
@@ -1315,7 +1310,15 @@ async fn run_bridge_server(
 ) {
     let server = HttpServer::new(move || {
         App::new()
-            .wrap(actix_cors::Cors::permissive())
+            .wrap(
+                actix_cors::Cors::default()
+                    .allowed_origin("http://localhost:1420")
+                    .allowed_origin("http://127.0.0.1:1420")
+                    .allowed_methods(vec!["GET", "POST", "OPTIONS"])
+                    .allowed_headers(actix_web::http::header::CONTENT_TYPE)
+                    .max_age(3600),
+            )
+            .wrap(Auth)
             .wrap(middleware::Logger::default())
             .app_data(data.clone())
             .app_data(auth_config.clone())
@@ -1330,7 +1333,7 @@ async fn run_bridge_server(
             .route("/rectangle", web::post().to(show_rectangle))
             .route("/scribble", web::post().to(show_scribble))
             .route("/caption", web::post().to(show_caption))
-            .route("/click", web::post().to(click))
+            .route("/click", web::post().to(click_handler))
             .route("/clear", web::post().to(clear_overlays))
             .route("/speak", web::post().to(speak))
             .route("/transcribe", web::post().to(transcribe))

@@ -21,7 +21,7 @@ fn display_server() -> &'static str {
 }
 
 #[cfg(target_os = "windows")]
-fn ensure_com() {
+pub fn ensure_com() {
     extern "system" {
         fn CoInitializeEx(pvReserved: *const std::ffi::c_void, dwCoInit: u32) -> i32;
     }

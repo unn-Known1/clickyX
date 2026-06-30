@@ -266,7 +266,7 @@ impl Default for AppConfig {
             theme: "system".into(),
             api_keys: vec![],
             window: WindowPrefs::default(),
-            version: "1.0".into(),
+            version: env!("CARGO_PKG_VERSION").into(),
             ai: AiConfig::default(),
             screen: ScreenConfig::default(),
             overlay: OverlayPrefs::default(),
@@ -370,7 +370,7 @@ mod tests {
     fn test_app_config_default_values() {
         let cfg = AppConfig::default();
         assert_eq!(cfg.theme, "system");
-        assert_eq!(cfg.version, "1.0");
+        assert_eq!(cfg.version, env!("CARGO_PKG_VERSION"));
         assert!(cfg.api_keys.is_empty());
         assert!(cfg.mcp_servers.is_empty());
         assert_eq!(cfg.automations_file, "automations.json");

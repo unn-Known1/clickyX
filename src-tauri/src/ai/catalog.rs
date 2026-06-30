@@ -97,18 +97,9 @@ impl ModelCatalog {
             .into_iter()
             .map(|m| {
                 let model_id = m.id;
-                let model_provider = if model_id.contains("nvidia")
-                    || model_id.contains("llama")
-                    || model_id.contains("mistral")
-                    || model_id.contains("nemotron")
-                {
-                    "openai"
-                } else {
-                    "openai"
-                };
                 ModelInfo {
                     id: model_id.clone(),
-                    provider: model_provider.into(),
+                    provider: "openai".into(),
                     name: model_id,
                     capabilities: vec!["chat".into(), "streaming".into()],
                 }

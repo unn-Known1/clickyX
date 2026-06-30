@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::sync::LazyLock;
 
 use regex::Regex;
 
@@ -72,13 +73,14 @@ impl Default for VoiceAgentHandoff {
     }
 }
 
+static AGENT_PATTERN: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(
+        r"(?i)(?:hey|ask|tell|wake up)\s+(\w[\w\s]{0,20}?)(?:[,.:]|\s+to|\s+about|\s+can you|\s*$)"
+    )
+    .expect("invalid agent trigger regex")
+});
+
 pub fn extract_agent_name(text: &str) -> Option<(String, String)> {
-    lazy_static::lazy_static! {
-        static ref AGENT_PATTERN: Regex = Regex::new(
-            r"(?i)(?:hey|ask|tell|wake up)\s+(\w[\w\s]{0,20}?)(?:[,.:]|\s+to|\s+about|\s+can you|\s*$)"
-        )
-        .expect("invalid agent trigger regex");
-    }
     if let Some(caps) = AGENT_PATTERN.captures(text) {
         let name = caps.get(1)?.as_str().trim().to_string();
         let remainder = text.replacen(caps.get(0)?.as_str(), "", 1).trim().to_string();

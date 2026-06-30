@@ -4,17 +4,8 @@ use std::sync::Mutex;
 use serde::{Deserialize, Serialize};
 
 use crate::config::TypeModeConfig;
-
 #[cfg(target_os = "windows")]
-fn ensure_com() {
-    extern "system" {
-        fn CoInitializeEx(pvReserved: *const std::ffi::c_void, dwCoInit: u32) -> i32;
-    }
-    const COINIT_MULTITHREADED: u32 = 0x0;
-    unsafe {
-        CoInitializeEx(std::ptr::null(), COINIT_MULTITHREADED);
-    }
-}
+use crate::cua::ensure_com;
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub enum TypeModeState {
