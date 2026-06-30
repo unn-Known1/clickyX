@@ -3,7 +3,7 @@
 **Date**: 2026-06-30
 **Version**: 0.1.3
 **Analyst**: MiMoCode Agent
-**Last Updated**: 2026-06-30 (All phases complete — 50 issues resolved)
+**Last Updated**: 2026-06-30 (All phases + build fixes complete — 56 issues resolved)
 **Last Updated**: 2026-06-30 (Phase 2 fixes applied — 19 issues resolved)
 
 ---
@@ -787,8 +787,8 @@ The codebase uses three different error patterns:
 | High priority gaps | 12 |
 | Medium priority gaps | 22 |
 | Low priority gaps | 16 |
-| **Total issues found** | **69** |
-| **Issues fixed** | **50** |
+| **Total issues found** | **75** |
+| **Issues fixed** | **56** |
 | **Issues remaining** | **19** |
 
 ---
@@ -889,5 +889,11 @@ The codebase uses three different error patterns:
 | G-66 | P4 | Config save uses temp-file-then-rename | `05a4151` |
 | G-67 | P2 | Atomic agent store saves (temp-file-rename) | `f944255` |
 | G-68 | P4 | Bridge broadcast channel size increased to 1024 | `05a4151` |
+| B-01 | Build | CI cache keys use Cargo.toml hash (Cargo.lock gitignored) | `fc12003` |
+| B-02 | Build | Clippy lint shows warnings instead of silent swallow | `fc12003` |
+| B-03 | Build | Linux deps unified across CI and release workflows | `fc12003` |
+| B-04 | Build | Frontend test step added to CI check job | `fc12003` |
+| B-07 | Build | agent-hud-* added to Tauri capabilities with deep-link | `fc12003` |
+| B-09 | Build | Windows signing finds both .exe and .msi files | `fc12003` |
 
-### Remaining (19 issues — documented, accepted by-design or need platform testing)
+### Remaining (13 issues — documented, accepted by-design or need platform testing)
