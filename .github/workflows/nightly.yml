@@ -44,7 +44,7 @@ jobs:
             src-tauri/target
             ~/.cargo/registry
             ~/.cargo/git
-          key: ${{ matrix.os }}-cargo-${{ hashFiles('src-tauri/Cargo.lock') }}
+          key: ${{ matrix.os }}-cargo-${{ hashFiles('src-tauri/Cargo.toml') }}
 
       - name: Install sccache (Rust compile cache)
         uses: mozilla-actions/sccache-action@v0.0.9

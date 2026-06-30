@@ -41,7 +41,7 @@ jobs:
             src-tauri/target
             ~/.cargo/registry
             ~/.cargo/git
-          key: ${{ matrix.os }}-cargo-${{ hashFiles('src-tauri/Cargo.lock') }}
+          key: ${{ matrix.os }}-cargo-${{ hashFiles('src-tauri/Cargo.toml') }}
 
       - name: Install sccache (Rust compile cache)
         uses: mozilla-actions/sccache-action@v0.0.9
@@ -57,7 +57,7 @@ jobs:
         if: matrix.os == 'ubuntu-22.04'
         run: |
           sudo apt-get update -y
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf libxdo-dev libasound2-dev libspeechd-dev
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libxdo-dev libasound2-dev libspeechd-dev
 
       - name: Install npm dependencies
         run: npm ci

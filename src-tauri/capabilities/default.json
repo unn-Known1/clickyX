@@ -1,7 +1,7 @@
 {
   "identifier": "default",
   "description": "Capability for the main window",
-  "windows": ["main", "overlay"],
+  "windows": ["main", "overlay", "agent-hud-*"],
   "permissions": [
     "core:default",
     "core:window:allow-show",
@@ -11,6 +11,7 @@
     "core:window:allow-center",
     "core:window:allow-close",
     "shell:allow-open",
-    "global-shortcut:default"
+    "global-shortcut:default",
+    "deep-link:default"
   ]
 }

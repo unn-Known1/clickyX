@@ -36,9 +36,9 @@ jobs:
             src-tauri/target
             ~/.cargo/registry
             ~/.cargo/git
-          key: ubuntu-cargo-${{ hashFiles('src-tauri/Cargo.lock') }}
+          key: ubuntu-cargo-${{ hashFiles('src-tauri/Cargo.toml') }}
           restore-keys: |
-            ubuntu-latest-cargo-${{ hashFiles('src-tauri/Cargo.lock') }}
+            ubuntu-cargo-
 
       - name: Install sccache
         uses: mozilla-actions/sccache-action@v0.0.9
@@ -57,6 +57,8 @@ jobs:
         run: npm ci
       - name: Build frontend
         run: npm run build
+      - name: Run frontend tests
+        run: npm test
       - name: Check Rust compilation
         working-directory: src-tauri
         run: cargo check
@@ -64,7 +66,7 @@ jobs:
         working-directory: src-tauri
         run: cargo test --all-features
       - name: Lint
-        run: cargo clippy -- -D warnings 2>/dev/null || true
+        run: cargo clippy -- -D warnings 2>&1 | head -100
 
   build:
     name: Build (${{ matrix.os }})
@@ -93,9 +95,8 @@ jobs:
             src-tauri/target
             ~/.cargo/registry
             ~/.cargo/git
-          key: ${{ matrix.os }}-cargo-${{ hashFiles('src-tauri/Cargo.lock') }}
+          key: ${{ matrix.os }}-cargo-${{ hashFiles('src-tauri/Cargo.toml') }}
           restore-keys: |
-            ubuntu-cargo-${{ hashFiles('src-tauri/Cargo.lock') }}
             ${{ matrix.os }}-cargo-
 
       - name: Install sccache (Rust compile cache)

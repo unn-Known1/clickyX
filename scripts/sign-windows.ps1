@@ -9,7 +9,7 @@ param(
     [string]$TimestampServer = "http://timestamp.digicert.com",
 
     [Parameter(Mandatory = $false)]
-    [string]$SearchPattern = "src-tauri/target/release/bundle/**/*.exe"
+    [string]$SearchPattern = "src-tauri/target/release/bundle/**/*.{exe,msi}"
 )
 
 if (-not $CertPath) {
