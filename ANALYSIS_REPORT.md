@@ -3,6 +3,8 @@
 **Date**: 2026-06-30
 **Version**: 0.1.3
 **Analyst**: MiMoCode Agent
+**Last Updated**: 2026-06-30 (Phase 2 fixes applied — 19 issues resolved)
+**Last Updated**: 2026-06-30 (Phase 2 fixes applied — 19 issues resolved)
 
 ---
 
@@ -828,3 +830,33 @@ The codebase uses three different error patterns:
 
 *Report expanded by MiMoCode deep analysis (Phase 2). Total files analyzed: ~130. Total issues found: 69.*
 *Original analysis: 23 issues. Expanded analysis: 46 additional issues discovered through deep code review.*
+
+---
+
+## 17. Fix Progress Tracker
+
+### Fixed (19 issues)
+
+| ID | Phase | Fix Description | Commit |
+|----|-------|----------------|--------|
+| G-01 | P1 | Bridge auth middleware applied to all routes | `82ec97e` |
+| G-02 | P1 | Bridge CORS restricted to localhost origins | `82ec97e` |
+| G-03 | P1 | `/click` route now uses `click_handler` | `82ec97e` |
+| G-04 | P1 | Health endpoint uses `CARGO_PKG_VERSION` | `82ec97e` |
+| G-08 | P1 | Config version default uses `CARGO_PKG_VERSION` | `82ec97e` |
+| G-09 | P1 | Dead code branch removed from model catalog | `82ec97e` |
+| G-10 | P1 | Bridge MCP uses `config::load_config()` | `82ec97e` |
+| G-18 | P2 | Replaced `lazy_static!` with `LazyLock` | `82ec97e` |
+| G-19 | P2 | Removed global `#![allow(dead_code)]` | `82ec97e` |
+| G-20 | P2 | Deduplicated `ensure_com()` | `82ec97e` |
+| G-21 | P2 | Removed redundant config reload in setup | `82ec97e` |
+| G-26 | P2 | Expired annotations cleaned from HashMap | `f944255` |
+| G-41 | P1 | Removed no-op click handler | `82ec97e` |
+| G-44 | P2 | AssemblyAI polling timeout added | `f944255` |
+| G-46 | P2 | RAII DuckingGuard for TTS error safety | `f944255` |
+| G-48 | P2 | Skill mutations now persist to store | `f944255` |
+| G-58 | P1 | Complete browser mock config in bindings.ts | `82ec97e` |
+| G-65 | P2 | try_lock in automation tick loop | `f944255` |
+| G-67 | P2 | Atomic agent store saves (temp-file-rename) | `f944255` |
+
+### Remaining (50 issues — to be addressed in future phases)
