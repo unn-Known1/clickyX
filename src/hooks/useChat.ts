@@ -171,8 +171,9 @@ export function useChat() {
         // doesn't yet support vision streaming
         try {
           await commands.sendChatMessageStreamVision(content, imageDataUrls, model ?? null, sessionId);
-        } catch {
+        } catch (streamErr) {
           // Fallback: blocking vision call, manually push result
+          console.warn("[useChat] Vision streaming not available, falling back to blocking call:", streamErr);
           unlisten();
           unlistenRef.current = null;
           const response = await commands.chatWithVision(content, imageDataUrls, model ?? null);

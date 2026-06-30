@@ -628,7 +628,7 @@ function OverlayAppInner() {
       window.removeEventListener("resize", onResize);
       unlisten.forEach(fn => fn());
     };
-  }, [startStreamingCaption]);
+  }, []);
 
   return (
     <div

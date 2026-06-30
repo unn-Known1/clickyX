@@ -475,3 +475,13 @@ pub fn get_screen_for_point(x: f64, y: f64) -> usize {
     }
     0
 }
+
+/// Get the screen index for a point using cached ScreenManager.
+pub fn get_screen_for_point_cached(x: f64, y: f64, manager: &crate::overlay::screen_router::ScreenManager) -> usize {
+    manager.monitors().iter().position(|m| {
+        x >= m.x as f64
+            && x < (m.x + m.width as i32) as f64
+            && y >= m.y as f64
+            && y < (m.y + m.height as i32) as f64
+    }).unwrap_or(0)
+}

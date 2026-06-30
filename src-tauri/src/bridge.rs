@@ -684,10 +684,16 @@ struct McpCallRequest {
 async fn events(data: web::Data<BridgeState>) -> HttpResponse {
     let rx = data.event_tx.subscribe();
     let stream: Box<dyn Stream<Item = Result<actix_web::web::Bytes, actix_web::Error>> + Unpin> =
-        Box::new(tokio_stream::wrappers::BroadcastStream::new(rx).map(|result| {
-            result
-                .map(|msg| actix_web::web::Bytes::from(msg))
-                .map_err(|_| actix_web::error::ErrorGone("channel closed"))
+        Box::new(tokio_stream::wrappers::BroadcastStream::new(rx).filter_map(|result| {
+            match result {
+                Ok(msg) => Some(Ok(actix_web::web::Bytes::from(msg))),
+                Err(tokio::sync::broadcast::error::RecvError::Lagged(n)) => {
+                    log::warn!("SSE client lagged by {} messages, sending heartbeat", n);
+                    // Send a heartbeat instead of dropping — client knows connection is alive
+                    Some(Ok(actix_web::web::Bytes::from("event: heartbeat\ndata: {}\n\n")))
+                }
+                Err(tokio::sync::broadcast::error::RecvError::Closed) => None,
+            }
         }));
     HttpResponse::Ok()
         .insert_header(("Content-Type", "text/event-stream"))
