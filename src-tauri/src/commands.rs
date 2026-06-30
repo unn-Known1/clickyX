@@ -676,6 +676,45 @@ pub fn get_audio_level(
     })
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AudioStatusResponse {
+    pub listening: bool,
+    pub mode: String,
+}
+
+#[tauri::command]
+pub fn get_audio_status(
+    state: State<'_, Mutex<AppState>>,
+    pipeline: State<'_, Mutex<VoicePipeline>>,
+) -> Result<AudioStatusResponse, String> {
+    let s = state.lock().map_err(|e| format!("lock error: {e}"))?;
+    let pipe = pipeline.lock().map_err(|e| format!("lock error: {e}"))?;
+    let is_running = pipe.is_always_on_running()
+        || matches!(pipe.get_state().ok(), Some(crate::audio::PipelineState::Listening));
+    Ok(AudioStatusResponse {
+        listening: is_running,
+        mode: s.app_mode.clone(),
+    })
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TodayStatsResponse {
+    pub agents_run: u32,
+    pub voice_commands: u32,
+    pub items_for_review: u32,
+}
+
+#[tauri::command]
+pub fn get_today_stats() -> Result<TodayStatsResponse, String> {
+    // Stats are derived from session data; return zeros for now
+    // TODO: Track actual session stats across restarts
+    Ok(TodayStatsResponse {
+        agents_run: 0,
+        voice_commands: 0,
+        items_for_review: 0,
+    })
+}
+
 #[tauri::command]
 pub fn transcribe_audio(
     audio_data: Vec<f32>,

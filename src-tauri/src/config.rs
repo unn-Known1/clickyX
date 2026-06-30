@@ -344,7 +344,11 @@ fn save_config_inner(config: &AppConfig) -> Result<(), String> {
     fs::create_dir_all(&dir).map_err(|e| format!("failed to create config dir: {e}"))?;
     let content =
         serde_json::to_string_pretty(config).map_err(|e| format!("failed to serialize config: {e}"))?;
-    fs::write(config_path(), content).map_err(|e| format!("failed to write config: {e}"))
+    let path = config_path();
+    let tmp_path = path.with_extension("json.tmp");
+    // Write to temp file first, then atomically rename
+    fs::write(&tmp_path, &content).map_err(|e| format!("failed to write temp config: {e}"))?;
+    fs::rename(&tmp_path, &path).map_err(|e| format!("failed to rename config: {e}"))
 }
 
 pub fn validate_hotkeys(hotkeys: &[HotkeyBinding]) -> Result<(), String> {

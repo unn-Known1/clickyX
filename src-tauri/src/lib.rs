@@ -422,6 +422,8 @@ pub fn run() {
             commands::start_recording,
             commands::stop_recording,
             commands::get_audio_level,
+            commands::get_audio_status,
+            commands::get_today_stats,
             commands::transcribe_audio,
             commands::speak_text,
             commands::set_ptt_hotkey,

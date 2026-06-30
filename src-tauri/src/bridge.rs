@@ -17,7 +17,7 @@ pub struct BridgeState {
 
 impl BridgeState {
     pub fn new(app_handle: AppHandle) -> Self {
-        let (event_tx, _) = tokio::sync::broadcast::channel(256);
+        let (event_tx, _) = tokio::sync::broadcast::channel(1024);
         Self {
             app_handle,
             event_tx,

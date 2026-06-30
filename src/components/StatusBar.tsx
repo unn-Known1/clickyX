@@ -109,7 +109,8 @@ export default function StatusBar() {
 
 function AudioMeter({ level, active }: { level: number; active: boolean }) {
   const bars = 5;
-  const filled = active ? Math.round(level * bars) : 0;
+  const clampedLevel = Math.max(0, Math.min(1, level));
+  const filled = active ? Math.round(clampedLevel * bars) : 0;
   return (
     <div className="audio-meter" aria-hidden="true">
       {Array.from({ length: bars }, (_, i) => (
