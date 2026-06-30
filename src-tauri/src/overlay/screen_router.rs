@@ -35,13 +35,14 @@ impl ScreenManager {
         {
             if let Ok(all) = xcap::Monitor::all() {
                 for m in &all {
+                    let scale_factor = m.scale_factor().unwrap_or(1.0);
                     monitors.push(MonitorInfo {
                         name: m.name().unwrap_or_else(|_| "unknown".into()),
                         x: m.x().unwrap_or(0),
                         y: m.y().unwrap_or(0),
                         width: m.width().unwrap_or(0),
                         height: m.height().unwrap_or(0),
-                        scale_factor: 1.0,
+                        scale_factor,
                         is_primary: m.is_primary().unwrap_or(false),
                     });
                 }

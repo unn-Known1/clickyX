@@ -69,8 +69,13 @@ function HomeTab() {
     queryKey: ["home-suggestions"],
     queryFn: async (): Promise<string[]> => {
       try {
-        const recent = JSON.parse(sessionStorage.getItem("recent_prompts") || "[]") as string[];
-        return recent.length > 0 ? recent.slice(0, 4) : DEFAULT_SUGGESTIONS;
+        const raw = sessionStorage.getItem("recent_prompts");
+        if (!raw) return DEFAULT_SUGGESTIONS;
+        const recent = JSON.parse(raw);
+        if (!Array.isArray(recent) || recent.length === 0) return DEFAULT_SUGGESTIONS;
+        return recent
+          .filter((s: unknown): s is string => typeof s === "string" && s.length > 0)
+          .slice(0, 4);
       } catch {
         return DEFAULT_SUGGESTIONS;
       }

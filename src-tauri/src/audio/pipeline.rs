@@ -460,7 +460,9 @@ impl VoicePipeline {
         let app_handle_arc = self.app_handle.clone();
 
         let on_transcript = std::sync::Arc::new(std::sync::Mutex::new(on_transcript));
-        std::thread::spawn(move || {
+        std::thread::Builder::new()
+            .name("vad-loop".into())
+            .spawn(move || {
             let mut vad = VadState::Silence;
             let mut speech_start: Option<Instant> = None;
             let mut silence_start: Option<Instant> = None;
@@ -604,7 +606,8 @@ impl VoicePipeline {
                 }
             }
             log::info!("Always-on VAD loop exited");
-        });
+        })
+        .map_err(|e| format!("Failed to spawn VAD loop thread: {e}"))?;
 
         Ok(())
     }

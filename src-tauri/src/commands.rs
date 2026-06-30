@@ -1437,24 +1437,123 @@ pub async fn run_agent(
     prompt: String,
     state: tauri::State<'_, Mutex<AgentStore>>,
 ) -> Result<(), String> {
-    let mut store = state.lock().map_err(|e| format!("lock error: {e}"))?;
-    let session = store
-        .get_mut(&slug)
-        .ok_or_else(|| format!("agent '{slug}' not found"))?;
-    session.state = SessionState::Running;
-    session.transcript.push(ChatMessage {
-        role: "user".into(),
-        content: prompt,
-    });
-    let now =
-        std::time::SystemTime::now()
+    // Set agent to running state and save transcript
+    {
+        let mut store = state.lock().map_err(|e| format!("lock error: {e}"))?;
+        let session = store
+            .get_mut(&slug)
+            .ok_or_else(|| format!("agent '{slug}' not found"))?;
+        session.state = SessionState::Running;
+        session.transcript.push(ChatMessage {
+            role: "user".into(),
+            content: prompt.clone(),
+        });
+        let now = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap_or_default()
             .as_secs()
             .to_string();
-    session.updated_at = now;
-    let config = config::load_config(&app).unwrap_or_default();
-    let _ = store.save(&config.agent.encryption_key);
+        session.updated_at = now;
+        let config = config::load_config(&app).unwrap_or_default();
+        let _ = store.save(&config.agent.encryption_key);
+    }
+
+    // Emit state change so frontend updates
+    let _ = app.emit("agent-state-changed", slug.clone());
+
+    // Spawn AI execution in background
+    let app_clone = app.clone();
+    let slug_clone = slug.clone();
+    tokio::spawn(async move {
+        let config = config::load_config(&app_clone).unwrap_or_default();
+        let model = ai::get_default_model(&config.ai, &config.ai.default_provider);
+
+        // Build messages from transcript
+        let messages: Vec<ai::ChatMessage> = {
+            let store = match app_clone.try_state::<Mutex<AgentStore>>() {
+                Some(s) => s,
+                None => {
+                    log::error!("Agent {}: could not access agent store", slug_clone);
+                    return;
+                }
+            };
+            match store.lock() {
+                Ok(s) => {
+                    if let Some(session) = s.get(&slug_clone) {
+                        session.transcript.iter().map(|m| ai::ChatMessage {
+                            role: m.role.clone(),
+                            content: m.content.clone(),
+                        }).collect()
+                    } else {
+                        log::error!("Agent {} disappeared during execution", slug_clone);
+                        return;
+                    }
+                }
+                Err(e) => {
+                    log::error!("Agent {}: lock error: {e}", slug_clone);
+                    return;
+                }
+            }
+        };
+
+        // Call AI provider
+        let provider = match ai::create_provider_for_model(&config.ai, &model) {
+            Ok(p) => p,
+            Err(e) => {
+                log::error!("Agent {}: provider error: {e}", slug_clone);
+                let _ = app_clone.emit("agent-state-changed", slug_clone);
+                return;
+            }
+        };
+
+        match provider.chat(&messages, &model).await {
+            Ok(response) => {
+                // Append assistant response to transcript
+                if let Some(store_mutex) = app_clone.try_state::<Mutex<AgentStore>>() {
+                    if let Ok(mut store) = store_mutex.lock() {
+                        if let Some(session) = store.get_mut(&slug_clone) {
+                            session.transcript.push(ChatMessage {
+                                role: "assistant".into(),
+                                content: response,
+                            });
+                            session.state = SessionState::Completed {
+                                result: "completed".into(),
+                            };
+                            let now = std::time::SystemTime::now()
+                                .duration_since(std::time::UNIX_EPOCH)
+                                .unwrap_or_default()
+                                .as_secs()
+                                .to_string();
+                            session.updated_at = now;
+                            let _ = store.save(&config.agent.encryption_key);
+                        }
+                    }
+                }
+                let _ = app_clone.emit("agent-state-changed", slug_clone);
+            }
+            Err(e) => {
+                log::error!("Agent {}: AI error: {e}", slug_clone);
+                if let Some(store_mutex) = app_clone.try_state::<Mutex<AgentStore>>() {
+                    if let Ok(mut store) = store_mutex.lock() {
+                        if let Some(session) = store.get_mut(&slug_clone) {
+                            session.state = SessionState::Failed {
+                                error: e.to_string(),
+                            };
+                            let now = std::time::SystemTime::now()
+                                .duration_since(std::time::UNIX_EPOCH)
+                                .unwrap_or_default()
+                                .as_secs()
+                                .to_string();
+                            session.updated_at = now;
+                            let _ = store.save(&config.agent.encryption_key);
+                        }
+                    }
+                }
+                let _ = app_clone.emit("agent-state-changed", slug_clone);
+            }
+        }
+    });
+
     Ok(())
 }
 

@@ -79,7 +79,8 @@
   "plugins": {
     "updater": {
       "endpoints": [],
-      "pubkey": ""
+      "pubkey": "",
+      "_note": "Custom updater implemented in updater.rs using GitHub releases API. These fields are unused."
     },
     "deep-link": {
       "desktop": {

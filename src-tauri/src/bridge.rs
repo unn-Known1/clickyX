@@ -962,16 +962,32 @@ async fn mcp_tools(data: web::Data<BridgeState>) -> HttpResponse {
         });
     }
 
-    let mut all_tools: Vec<McpToolInfo> = Vec::new();
-    for server in config.mcp_servers.iter().filter(|s| s.enabled) {
-        let tools = mcp_list_tools_sync(server);
-        log::info!(
-            "MCP: listed {} tools from server '{}'",
-            tools.len(),
-            server.name
-        );
-        all_tools.extend(tools);
-    }
+    let enabled_servers: Vec<crate::config::McpServerConfig> = config
+        .mcp_servers
+        .iter()
+        .filter(|s| s.enabled)
+        .cloned()
+        .collect();
+
+    // Run MCP tool listing in blocking task to avoid blocking actix worker
+    let all_tools = tokio::task::spawn_blocking(move || {
+        let mut tools = Vec::new();
+        for server in &enabled_servers {
+            let server_tools = mcp_list_tools_sync(server);
+            log::info!(
+                "MCP: listed {} tools from server '{}'",
+                server_tools.len(),
+                server.name
+            );
+            tools.extend(server_tools);
+        }
+        tools
+    })
+    .await
+    .unwrap_or_else(|e| {
+        log::error!("MCP tools listing failed: {e}");
+        Vec::new()
+    });
 
     HttpResponse::Ok().json(McpToolsResponse { tools: all_tools })
 }
@@ -1004,11 +1020,19 @@ async fn mcp_call(data: web::Data<BridgeState>, body: web::Json<McpCallRequest>)
 
     log::info!("MCP call: server={}, tool={}", body.server, body.tool);
 
-    match mcp_call_tool_sync(&server, &body.tool, &body.args) {
-        Ok(result) => HttpResponse::Ok().json(serde_json::json!({ "result": result })),
-        Err(e) => HttpResponse::InternalServerError().json(ErrorResponse {
+    let tool = body.tool.clone();
+    let args = body.args.clone();
+
+    // Run MCP tool call in blocking task to avoid blocking actix worker
+    match tokio::task::spawn_blocking(move || mcp_call_tool_sync(&server, &tool, &args)).await {
+        Ok(Ok(result)) => HttpResponse::Ok().json(serde_json::json!({ "result": result })),
+        Ok(Err(e)) => HttpResponse::InternalServerError().json(ErrorResponse {
             error: "mcp_error".into(),
             message: e,
+        }),
+        Err(e) => HttpResponse::InternalServerError().json(ErrorResponse {
+            error: "internal_error".into(),
+            message: format!("MCP task failed: {e}"),
         }),
     }
 }

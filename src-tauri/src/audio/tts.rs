@@ -192,6 +192,10 @@ async fn speak_deepgram_aura(text: &str, config: &TtsConfig) -> Result<Vec<u8>, 
 }
 
 async fn speak_system(text: &str) -> Result<Vec<u8>, String> {
+    // NOTE: System TTS (via `tts` crate) speaks directly through OS audio devices.
+    // It does not return WAV bytes — audio plays through the speakers immediately.
+    // For the bridge `/speak` endpoint, callers must handle empty bytes.
+    // The Tauri command path works correctly since audio plays locally.
     let text = text.to_string();
     tokio::task::spawn_blocking(move || {
         let mut tts = tts::Tts::default()
@@ -203,6 +207,7 @@ async fn speak_system(text: &str) -> Result<Vec<u8>, String> {
         while tts.is_speaking().unwrap_or(false) {
             std::thread::sleep(std::time::Duration::from_millis(50));
         }
+        // Return empty bytes — system TTS plays audio directly via OS
         Ok::<Vec<u8>, String>(vec![])
     })
     .await
