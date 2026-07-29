@@ -1,7 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { renderHook, act } from "@testing-library/react";
 import { invoke } from "@tauri-apps/api/core";
-import { useScreenCapture, ScreenImage } from "./useScreenCapture";
+import { useScreenCapture } from "./useScreenCapture";
+import type { ScreenImage } from "../bindings";
 
 const mockedInvoke = vi.mocked(invoke);
 

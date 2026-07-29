@@ -1,43 +1,55 @@
-import { useState, useEffect } from "react";
-import { invoke, listen } from "../bindings";
+import { useEffect } from "react";
+import { listen } from "../bindings";
 import { useStore } from "../store/appStore";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { commands } from "../bindings";
 import type { AutoCaptureStatus, TodayStats } from "../bindings";
 
-export default function StatusBar() {
+export default function StatusBar({ typeModeActive }: { typeModeActive?: boolean }) {
+  const queryClient = useQueryClient();
   const { audioStatus, audioLevel, attentionItems, setAudioStatus, setAudioLevel, setAttentionItems, todayStats, setTodayStats } = useStore();
-  const [acStatus, setAcStatus] = useState<AutoCaptureStatus | null>(null);
 
-  // Auto-capture: event-driven + fallback poll
+  // Auto-capture: react-query with refetchInterval + event-driven cache update
+  const { data: acStatus } = useQuery<AutoCaptureStatus>({
+    queryKey: ["auto-capture-status"],
+    queryFn: () => commands.getAutoCaptureStatus(),
+    refetchInterval: 5000,
+    staleTime: 4000,
+  });
+
   useEffect(() => {
-    invoke<AutoCaptureStatus>("get_auto_capture_status").then(setAcStatus).catch(() => {});
     let unlisten: (() => void) | null = null;
-    listen<AutoCaptureStatus>("auto-capture-status", (e) => setAcStatus(e.payload))
-      .then((fn) => { unlisten = fn; });
-    const id = setInterval(() => {
-      invoke<AutoCaptureStatus>("get_auto_capture_status").then(setAcStatus).catch(() => {});
-    }, 5000);
-    return () => { if (unlisten) unlisten(); clearInterval(id); };
-  }, []);
+    listen<AutoCaptureStatus>("auto-capture-status", (e) => {
+      queryClient.setQueryData(["auto-capture-status"], e.payload);
+    }).then((fn) => { unlisten = fn; });
+    return () => { if (unlisten) unlisten(); };
+  }, [queryClient]);
 
-  // Audio status + level
-  useEffect(() => {
-    const refresh = () => {
-      invoke<{ listening: boolean; mode: string }>("get_audio_status").then(setAudioStatus).catch(() => {});
-      invoke<number>("get_audio_level").then(setAudioLevel).catch(() => {});
-    };
-    refresh();
-    const id = setInterval(refresh, 2000);
-    return () => clearInterval(id);
-  }, [setAudioStatus, setAudioLevel]);
+  // Audio status + level: react-query with refetchInterval → sync to Zustand
+  const { data: fetchedAudioStatus } = useQuery<{ listening: boolean; mode: string }>({
+    queryKey: ["audio-status"],
+    queryFn: () => commands.getAudioStatus(),
+    refetchInterval: 2000,
+    staleTime: 1000,
+  });
 
-  // Today stats
-  useEffect(() => {
-    invoke<TodayStats>("get_today_stats").then(setTodayStats).catch(() => {});
-    const id = setInterval(() => {
-      invoke<TodayStats>("get_today_stats").then(setTodayStats).catch(() => {});
-    }, 30000);
-    return () => clearInterval(id);
-  }, [setTodayStats]);
+  const { data: fetchedAudioLevel } = useQuery<number>({
+    queryKey: ["audio-level"],
+    queryFn: () => commands.getAudioLevel(),
+    refetchInterval: 2000,
+    staleTime: 1000,
+  });
+
+  const { data: fetchedTodayStats } = useQuery<TodayStats>({
+    queryKey: ["today-stats"],
+    queryFn: () => commands.getTodayStats(),
+    refetchInterval: 30000,
+    staleTime: 25000,
+  });
+
+  useEffect(() => { if (fetchedAudioStatus) setAudioStatus(fetchedAudioStatus); }, [fetchedAudioStatus, setAudioStatus]);
+  useEffect(() => { if (fetchedAudioLevel !== undefined) setAudioLevel(fetchedAudioLevel); }, [fetchedAudioLevel, setAudioLevel]);
+  useEffect(() => { if (fetchedTodayStats) setTodayStats(fetchedTodayStats); }, [fetchedTodayStats, setTodayStats]);
 
   const lastCapture = acStatus?.last_capture
     ? new Date(acStatus.last_capture.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })
@@ -85,6 +97,16 @@ export default function StatusBar() {
           <div className="status-bar-divider" />
           <div className="status-bar-item" title={`Today: ${todayStats.agents_run} agents, ${todayStats.voice_commands} voice`}>
             <span className="status-bar-label">{todayStats.agents_run}A · {todayStats.voice_commands}V</span>
+          </div>
+        </>
+      )}
+
+      {/* Type Mode indicator */}
+      {typeModeActive && (
+        <>
+          <div className="status-bar-divider" />
+          <div className="status-bar-item" title="Type mode active — keyboard input will be simulated">
+            <span className="status-bar-label type-mode-label">⌨ Type</span>
           </div>
         </>
       )}

@@ -10,7 +10,7 @@ import type { ChatMessage } from "../hooks/useChat";
 import ModelSelector from "./ModelSelector";
 import { useAppContext } from "../context/AppContext";
 import { useQuery } from "@tanstack/react-query";
-import { invoke } from "../bindings";
+import { commands } from "../bindings";
 import type { AiConfig } from "../bindings";
 
 const DRAFT_KEY = "clickyx_chat_draft";
@@ -187,7 +187,7 @@ function ChatTab({ initialText }: { initialText?: string }) {
   // Load AI config to derive default model
   const { data: aiConfig } = useQuery<AiConfig>({
     queryKey: ["ai-config"],
-    queryFn: () => invoke<AiConfig>("get_ai_config"),
+    queryFn: () => commands.getAiConfig(),
     staleTime: 30_000,
   });
 

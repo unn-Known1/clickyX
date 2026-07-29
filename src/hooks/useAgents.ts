@@ -24,7 +24,7 @@ export function useAgents() {
     retry: 2,
   });
 
-  const { data: skills = [], isLoading: skillsLoading } = useQuery<SkillInfo[], Error>({
+  const { data: skills = [], isLoading: skillsLoading, error: skillsError } = useQuery<SkillInfo[], Error>({
     queryKey: SKILLS_KEY,
     queryFn: () => commands.listSkills(),
     staleTime: 60_000,
@@ -111,6 +111,7 @@ export function useAgents() {
     skills,
     loading: agentsLoading || skillsLoading,
     error: agentsError?.message ?? null,
+    skillsError: skillsError?.message ?? null,
     fetchAgents,
     createAgent,
     runAgent,

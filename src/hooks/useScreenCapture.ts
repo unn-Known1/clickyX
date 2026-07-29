@@ -1,12 +1,8 @@
 import { useCallback, useState } from "react";
-import { invoke } from "../bindings";
+import { commands } from "../bindings";
+import type { ScreenImage } from "../bindings";
 
-export interface ScreenImage {
-  id: number;
-  data: string;
-  width: number;
-  height: number;
-}
+export type { ScreenImage };
 
 export function useScreenCapture() {
   const [capturing, setCapturing] = useState(false);
@@ -16,7 +12,7 @@ export function useScreenCapture() {
     setCapturing(true);
     setError(null);
     try {
-      const result = await invoke<ScreenImage[]>("capture_screens");
+      const result = await commands.captureScreens();
       return result;
     } catch (e) {
       setError(String(e));
@@ -30,7 +26,7 @@ export function useScreenCapture() {
     setCapturing(true);
     setError(null);
     try {
-      return await invoke<ScreenImage>("capture_cursor_screen");
+      return await commands.captureCursorScreen();
     } catch (e) {
       setError(String(e));
       return null;
@@ -43,7 +39,7 @@ export function useScreenCapture() {
     setCapturing(true);
     setError(null);
     try {
-      return await invoke<ScreenImage | null>("capture_focused_window");
+      return await commands.captureFocusedWindow();
     } catch (e) {
       setError(String(e));
       return null;

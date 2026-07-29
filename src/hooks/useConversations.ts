@@ -87,10 +87,6 @@ export function useConversations() {
     persist(updated);
   }, [conversations, persist]);
 
-  const syncToBackend = useCallback((_convo: Conversation) => {
-    // Legacy mapping, handled by persist now.
-  }, []);
-
   return {
     conversations,
     activeId,
@@ -100,7 +96,6 @@ export function useConversations() {
     deleteConversation,
     updateMessages,
     renameConversation,
-    syncToBackend,
     isLoaded,
   };
 }

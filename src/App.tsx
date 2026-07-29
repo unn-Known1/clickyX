@@ -171,6 +171,42 @@ function AppInner() {
     return () => window.removeEventListener("keydown", handler);
   }, []);
 
+  // Listen for voice-transcript events from always-on VAD
+  useEffect(() => {
+    let unlisten: (() => void) | null = null;
+    listen("voice-transcript", (e) => {
+      const payload = e.payload as { type: string; text: string };
+      if (payload.type === "auto_transcript" && payload.text) {
+        showToast(`Voice: ${payload.text.slice(0, 80)}${payload.text.length > 80 ? "…" : ""}`, "info");
+      }
+    }).then((fn) => { unlisten = fn; });
+    return () => { if (unlisten) unlisten(); };
+  }, [showToast]);
+
+  // Listen for type-mode-changed events — used to show indicator in status bar
+  const [typeModeActive, setTypeModeActive] = useState(false);
+  useEffect(() => {
+    let unlisten: (() => void) | null = null;
+    listen<string>("type-mode-changed", (e) => {
+      const state = e.payload;
+      setTypeModeActive(state === "active");
+      if (state === "active") {
+        showToast("Type mode activated — typing will be simulated", "info");
+      }
+    }).then((fn) => { unlisten = fn; });
+    return () => { if (unlisten) unlisten(); };
+  }, [showToast]);
+
+  // Listen for voice-selected events
+  useEffect(() => {
+    let unlisten: (() => void) | null = null;
+    listen("voice-selected", (e) => {
+      const voiceId = e.payload as string;
+      console.log("[voice] Selected voice:", voiceId);
+    }).then((fn) => { unlisten = fn; });
+    return () => { if (unlisten) unlisten(); };
+  }, []);
+
   // F-015: Deep-link handler for openclicky:// URLs
   useEffect(() => {
     const unlisten = listen("deep-link-opened", (e) => {
@@ -378,7 +414,7 @@ function AppInner() {
           {renderTabContent()}
         </main>
 
-        <StatusBar />
+        <StatusBar typeModeActive={typeModeActive} />
 
         <div className="toast-container" aria-live="polite" aria-atomic="false">
           {toasts.map((t) => (

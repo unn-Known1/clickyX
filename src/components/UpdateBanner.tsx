@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { check } from "@tauri-apps/plugin-updater";
+import { message } from "@tauri-apps/plugin-dialog";
 
 export default function UpdateBanner() {
   const [available, setAvailable] = useState(false);
@@ -28,8 +29,7 @@ export default function UpdateBanner() {
       const update = await check();
       if (update?.available) {
         await update.downloadAndInstall();
-        // Prompt user to restart since plugin-process not available
-        alert("Update installed! Please restart the app.");
+        await message("Update installed! Please restart the app.", { title: "ClickyX Update", kind: "info" });
       }
     } catch (e) {
       console.error("Update failed:", e);
