@@ -60,6 +60,25 @@ interface IconProps {
 }
 
 export function Icon({ name, size = 16, className, style, title }: IconProps) {
+  const svgContent = paths[name];
+  if (!svgContent) {
+    return (
+      <svg
+        width={size}
+        height={size}
+        viewBox="0 0 24 24"
+        className={className}
+        style={style}
+        aria-hidden={!title}
+        aria-label={title ?? `Missing icon: ${name}`}
+        role={title ? "img" : undefined}
+      >
+        <circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" strokeWidth="2" opacity="0.3" />
+        <line x1="8" y1="8" x2="16" y2="16" stroke="currentColor" strokeWidth="2" opacity="0.3" />
+        <line x1="16" y1="8" x2="8" y2="16" stroke="currentColor" strokeWidth="2" opacity="0.3" />
+      </svg>
+    );
+  }
   return (
     <svg
       width={size}
@@ -75,7 +94,7 @@ export function Icon({ name, size = 16, className, style, title }: IconProps) {
       aria-hidden={!title}
       aria-label={title}
       role={title ? "img" : undefined}
-      dangerouslySetInnerHTML={{ __html: paths[name] }}
+      dangerouslySetInnerHTML={{ __html: svgContent }}
     />
   );
 }

@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef } from "react";
 import { commands } from "../bindings";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAppContext } from "../context/AppContext";
@@ -306,6 +306,9 @@ function ConnectionsTab() {
     }
   };
 
+  const runHistoryRef = useRef(runHistory);
+  runHistoryRef.current = runHistory;
+
   // F-023: Toggle and fetch run history
   const toggleRunHistory = useCallback(async (automationId: string) => {
     if (expandedHistory === automationId) {
@@ -313,7 +316,7 @@ function ConnectionsTab() {
       return;
     }
     setExpandedHistory(automationId);
-    if (!runHistory[automationId]) {
+    if (!runHistoryRef.current[automationId]) {
       try {
         const runs = await commands.getAutomationRuns(automationId);
         setRunHistory((prev) => ({ ...prev, [automationId]: runs }));
@@ -321,7 +324,7 @@ function ConnectionsTab() {
         setRunHistory((prev) => ({ ...prev, [automationId]: [] }));
       }
     }
-  }, [expandedHistory, runHistory]);
+  }, [expandedHistory]);
 
   /* ── F-012: Google Workspace auth ────────────────────────────────────────── */
   const startGoogleAuth = async () => {

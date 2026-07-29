@@ -21,25 +21,25 @@ export function CaptureSettings() {
   const [acError, setAcError] = useState<string | null>(null);
 
   useEffect(() => {
-    // Initial fetch
-    commands.getAutoCaptureStatus()
-      .then(setAcStatus)
-      .catch((e) => setAcError(String(e)));
+    let cancelled = false;
 
-    // Event-driven updates
+    commands.getAutoCaptureStatus()
+      .then((status) => { if (!cancelled) setAcStatus(status); })
+      .catch((e) => { if (!cancelled) setAcError(String(e)); });
+
     let unlisten: (() => void) | null = null;
     listen<AutoCaptureStatus>("auto-capture-status", (e) => {
-      setAcStatus(e.payload);
+      if (!cancelled) setAcStatus(e.payload);
     }).then((fn) => { unlisten = fn; });
 
-    // Lightweight poll every 5s as fallback
     const id = setInterval(() => {
       commands.getAutoCaptureStatus()
-        .then(setAcStatus)
+        .then((status) => { if (!cancelled) setAcStatus(status); })
         .catch(() => {});
     }, 5000);
 
     return () => {
+      cancelled = true;
       if (unlisten) unlisten();
       clearInterval(id);
     };

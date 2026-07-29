@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { invoke } from "../bindings";
+import { commands } from "../bindings";
 
 interface Props {
   onClose: () => void;
@@ -9,7 +9,9 @@ export default function AboutDialog({ onClose }: Props) {
   const [version, setVersion] = useState("…");
 
   useEffect(() => {
-    invoke<string>("get_app_version").then(setVersion).catch(() => setVersion("unknown"));
+    let cancelled = false;
+    commands.getAppVersion().then((v) => { if (!cancelled) setVersion(v); }).catch(() => { if (!cancelled) setVersion("unknown"); });
+    return () => { cancelled = true; };
   }, []);
 
   // Close on Escape

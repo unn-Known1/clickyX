@@ -364,9 +364,6 @@ function OverlayAppInner() {
   const petRafRef = useRef<number>(0);
   const streamTimers = useRef<Record<string, number>>({});
 
-  // F-019: streaming caption stale-closure fix
-  const streamingRef = useRef<StreamingCaption | null>(null);
-
   // F-020: RAF-based pet animation with visibility pause
   // Only animate when the pet is actually shown (active state) to save CPU across all monitors
   const isPetActive = processing || waveformActive || cursors.length > 0 || rects.length > 0 || alwaysListening;
@@ -403,21 +400,17 @@ function OverlayAppInner() {
     return () => document.removeEventListener("visibilitychange", handleVisibility);
   }, [scheduleNextPetFrame, isPetActive]);
 
-  // F-019: startStreamingCaption uses ref to avoid stale closure
   const startStreamingCaption = useCallback((cap: CaptionState) => {
     const id = `stream-${Date.now()}-${Math.random()}`;
     const entry: StreamingCaption = { ...cap, revealedChars: 0, done: false };
-    streamingRef.current = entry;
+    const textLen = cap.text.length;
     setStreamingCaptions(prev => [...prev.slice(-10), entry]);
     let charIndex = 0;
 
     function revealNext() {
-      // Use the ref to get updated text length rather than captured cap
-      const currentCap = streamingRef.current;
-      const textLen = currentCap?.text.length ?? cap.text.length;
       setStreamingCaptions(prev =>
         prev.map(s =>
-          s === entry ? { ...s, revealedChars: Math.min(s.revealedChars + 1, cap.text.length) } : s,
+          s === entry ? { ...s, revealedChars: Math.min(s.revealedChars + 1, textLen) } : s,
         ),
       );
       charIndex++;
@@ -606,7 +599,7 @@ function OverlayAppInner() {
         setShapes(prev => prev.filter(s => s.id !== e.payload.id));
       });
       if (!cancelled) unlisten.push(u22);
-    })();
+    })().catch((err) => console.error("[OverlayApp] listen setup failed:", err));
 
     const onMouseMove = (e: MouseEvent) => { petTarget.current = { x: e.clientX, y: e.clientY }; };
     window.addEventListener("mousemove", onMouseMove);

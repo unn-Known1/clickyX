@@ -1,5 +1,7 @@
-import { createContext, useContext, useState, useCallback } from "react";
+import { createContext, useContext, useState, useCallback, useRef } from "react";
 import type { ReactNode } from "react";
+
+const MAX_TOASTS = 10;
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 export type ToastType = "success" | "error" | "info";
@@ -31,16 +33,19 @@ export function useAppContext(): AppCtx {
 }
 
 // ── Provider ──────────────────────────────────────────────────────────────────
-let _toastCounter = 0;
 
 export function AppProvider({ children }: { children: ReactNode }) {
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
   const [activeTab, setActiveTabState] = useState<Tab>("home");
   const [tabTransition, setTabTransition] = useState(false);
+  const toastCounterRef = useRef(0);
 
   const showToast = useCallback((text: string, type: ToastType = "info") => {
-    const id = ++_toastCounter;
-    setToasts((prev) => [...prev, { id, text, type }]);
+    const id = ++toastCounterRef.current;
+    setToasts((prev) => {
+      const next = [...prev, { id, text, type }];
+      return next.length > MAX_TOASTS ? next.slice(next.length - MAX_TOASTS) : next;
+    });
   }, []);
 
   const dismissToast = useCallback((id: number) => {

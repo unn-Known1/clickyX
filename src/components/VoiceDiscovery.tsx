@@ -100,9 +100,11 @@ export default function VoiceDiscovery({ audioConfig, onSelected }: VoiceDiscove
   const orbitRotRef = useRef(0);
   const dragStartRef = useRef<{ x: number; rot: number } | null>(null);
   const selectCooldownRef = useRef(false);
+  const selectedRef = useRef(selected);
 
   useEffect(() => { voicesRef.current = voices; }, [voices]);
   useEffect(() => { orbitRotRef.current = orbitRotation; }, [orbitRotation]);
+  useEffect(() => { selectedRef.current = selected; }, [selected]);
 
   useEffect(() => {
     commands.getVoiceProviders()
@@ -157,10 +159,10 @@ export default function VoiceDiscovery({ audioConfig, onSelected }: VoiceDiscove
     // Orbit is displayed with nodes going CCW as we drag right, so invert
     const focusedIdx = (currentVoices.length - idx) % currentVoices.length;
     const focused = currentVoices[focusedIdx];
-    if (focused && focused.id !== selected) {
+    if (focused && focused.id !== selectedRef.current) {
       onSelect(focused);
     }
-  }, [selected, onSelect]);
+  }, [onSelect]);
 
   const onPointerUp = useCallback((e: React.PointerEvent) => {
     setDragging(false);

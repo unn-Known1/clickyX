@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
-import { invoke } from "../bindings";
+import { commands } from "../bindings";
 import type { ModelInfo, AiConfig } from "../bindings";
+import { useAppContext } from "../context/AppContext";
 
 interface ModelSelectorProps {
   selectedModel: string;
@@ -8,20 +9,21 @@ interface ModelSelectorProps {
 }
 
 function ModelSelector({ selectedModel, onModelChange }: ModelSelectorProps) {
+  const { setActiveTab } = useAppContext();
+
   // Load current AI config to know which providers have keys configured
   const { data: aiConfig } = useQuery<AiConfig>({
     queryKey: ["ai_config"],
-    queryFn: () => invoke<AiConfig>("get_ai_config"),
+    queryFn: () => commands.getAiConfig(),
     staleTime: 30_000,
   });
 
-  // Load model catalog from backend (which already filters by configured providers
-  // and fetches remote models for OpenAI-compatible endpoints)
+  // Load model catalog from backend
   const { data: allModels = [], isLoading, isError } = useQuery<ModelInfo[]>({
     queryKey: ["models", aiConfig?.anthropic_api_key, aiConfig?.openai_api_key, aiConfig?.openai_base_url],
-    queryFn: () => invoke<ModelInfo[]>("get_models"),
+    queryFn: () => commands.getModels(),
     staleTime: 60_000,
-    enabled: !!aiConfig, // wait until we know the config
+    enabled: !!aiConfig,
   });
 
   const hasAnthropicKey = !!aiConfig?.anthropic_api_key;
@@ -50,11 +52,7 @@ function ModelSelector({ selectedModel, onModelChange }: ModelSelectorProps) {
           No AI provider configured —{" "}
           <span
             style={{ textDecoration: "underline", cursor: "pointer" }}
-            onClick={() => {
-              // Navigate to Settings → AI Providers via AppContext
-              const evt = new CustomEvent("clickyx:navigate", { detail: { tab: "settings", section: "ai" } });
-              window.dispatchEvent(evt);
-            }}
+            onClick={() => setActiveTab("settings")}
           >
             set up in Settings
           </span>

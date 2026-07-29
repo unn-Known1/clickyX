@@ -42,8 +42,7 @@ export function useConversations() {
 
   const activeConversation = conversations.find(c => c.id === activeId) ?? null;
 
-  const persist = useCallback((convos: Conversation[]) => {
-    setConversations(convos);
+  const saveSnapshot = useCallback((convos: Conversation[]) => {
     const trimmed = convos.slice(-50).map(c => ({
       ...c,
       messages: c.messages.slice(-200),
@@ -53,39 +52,50 @@ export function useConversations() {
 
   const createConversation = useCallback((): string => {
     const id = generateId();
-    const newConvo: Conversation = {
-      id,
-      title: "New conversation",
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
-      messages: [],
-    };
-    persist([...conversations, newConvo]);
+    setConversations(prev => {
+      const newConvo: Conversation = {
+        id,
+        title: "New conversation",
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+        messages: [],
+      };
+      const updated = [...prev, newConvo];
+      saveSnapshot(updated);
+      return updated;
+    });
     setActiveId(id);
     return id;
-  }, [conversations, persist]);
+  }, [saveSnapshot]);
 
   const deleteConversation = useCallback((id: string) => {
-    const updated = conversations.filter(c => c.id !== id);
-    persist(updated);
-    if (activeId === id) {
-      setActiveId(updated.length > 0 ? updated[updated.length - 1].id : null);
-    }
-  }, [conversations, persist, activeId]);
+    setConversations(prev => {
+      const updated = prev.filter(c => c.id !== id);
+      saveSnapshot(updated);
+      return updated;
+    });
+    setActiveId(prev => prev === id ? null : prev);
+  }, [saveSnapshot]);
 
   const updateMessages = useCallback((id: string, messages: ChatMessage[]) => {
-    const updated = conversations.map(c =>
-      c.id === id
-        ? { ...c, messages, title: deriveTitle(messages), updatedAt: Date.now() }
-        : c,
-    );
-    persist(updated);
-  }, [conversations, persist]);
+    setConversations(prev => {
+      const updated = prev.map(c =>
+        c.id === id
+          ? { ...c, messages, title: deriveTitle(messages), updatedAt: Date.now() }
+          : c,
+      );
+      saveSnapshot(updated);
+      return updated;
+    });
+  }, [saveSnapshot]);
 
   const renameConversation = useCallback((id: string, title: string) => {
-    const updated = conversations.map(c => c.id === id ? { ...c, title } : c);
-    persist(updated);
-  }, [conversations, persist]);
+    setConversations(prev => {
+      const updated = prev.map(c => c.id === id ? { ...c, title } : c);
+      saveSnapshot(updated);
+      return updated;
+    });
+  }, [saveSnapshot]);
 
   return {
     conversations,
