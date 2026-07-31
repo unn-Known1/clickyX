@@ -11,8 +11,6 @@ use crate::cua::ensure_com;
 fn is_wayland() -> bool {
     crate::platform::display_server() == "wayland"
 }
-#[cfg(target_os = "linux")]
-use crate::platform::display_server;
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub enum TypeModeState {
