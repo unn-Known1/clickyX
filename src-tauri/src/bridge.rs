@@ -533,11 +533,11 @@ async fn proxy_messages(
 
     match serde_json::from_str::<serde_json::Value>(&text) {
         Ok(json) => HttpResponse::build(
-            actix_web::http::StatusCode::from_u16(status.as_u16()).unwrap(),
+            actix_web::http::StatusCode::from_u16(status.as_u16()).unwrap_or(actix_web::http::StatusCode::OK),
         )
         .json(json),
         Err(_) => HttpResponse::build(
-            actix_web::http::StatusCode::from_u16(status.as_u16()).unwrap(),
+            actix_web::http::StatusCode::from_u16(status.as_u16()).unwrap_or(actix_web::http::StatusCode::BadGateway),
         )
         .body(text),
     }
@@ -627,11 +627,11 @@ async fn proxy_responses(
 
     match serde_json::from_str::<serde_json::Value>(&text) {
         Ok(json) => HttpResponse::build(
-            actix_web::http::StatusCode::from_u16(status.as_u16()).unwrap(),
+            actix_web::http::StatusCode::from_u16(status.as_u16()).unwrap_or(actix_web::http::StatusCode::OK),
         )
         .json(json),
         Err(_) => HttpResponse::build(
-            actix_web::http::StatusCode::from_u16(status.as_u16()).unwrap(),
+            actix_web::http::StatusCode::from_u16(status.as_u16()).unwrap_or(actix_web::http::StatusCode::BadGateway),
         )
         .body(text),
     }
@@ -788,6 +788,7 @@ fn mcp_list_tools_sync(server: &crate::config::McpServerConfig) -> Vec<McpToolIn
     let init_str = format!("{}\n", serde_json::to_string(&init_req).unwrap_or_default());
     if stdin.write_all(init_str.as_bytes()).is_err() {
         let _ = child.kill();
+        let _ = child.wait();
         return Vec::new();
     }
 
@@ -812,6 +813,7 @@ fn mcp_list_tools_sync(server: &crate::config::McpServerConfig) -> Vec<McpToolIn
     let list_str = format!("{}\n", serde_json::to_string(&list_req).unwrap_or_default());
     if stdin.write_all(list_str.as_bytes()).is_err() {
         let _ = child.kill();
+        let _ = child.wait();
         return Vec::new();
     }
 
@@ -828,6 +830,7 @@ fn mcp_list_tools_sync(server: &crate::config::McpServerConfig) -> Vec<McpToolIn
         }
     }
     let _ = child.kill();
+    let _ = child.wait();
 
     // Parse the tools from the JSON-RPC response
     let tools: Vec<McpToolInfo> = match serde_json::from_str::<serde_json::Value>(&list_resp_line) {
@@ -928,6 +931,7 @@ fn mcp_call_tool_sync(
     let mut resp_line = String::new();
     let _ = reader.read_line(&mut resp_line);
     let _ = child.kill();
+    let _ = child.wait();
 
     let resp: serde_json::Value = serde_json::from_str(&resp_line)
         .map_err(|e| format!("invalid JSON-RPC response: {e}"))?;

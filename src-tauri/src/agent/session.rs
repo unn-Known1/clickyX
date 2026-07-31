@@ -136,7 +136,9 @@ fn now_utc() -> String {
 }
 
 fn agents_file_path() -> std::path::PathBuf {
-    let base = dirs::config_dir().expect("could not find config directory");
+    let base = dirs::config_dir().unwrap_or_else(|| {
+        std::path::PathBuf::from(".").join(".clickyx")
+    });
     base.join("clickyx").join("agents.enc")
 }
 

@@ -705,13 +705,30 @@ pub struct TodayStatsResponse {
 }
 
 #[tauri::command]
-pub fn get_today_stats() -> Result<TodayStatsResponse, String> {
-    // Stats are derived from session data; return zeros for now
-    // TODO: Track actual session stats across restarts
+pub fn get_today_stats(
+    store: State<'_, Mutex<AgentStore>>,
+) -> Result<TodayStatsResponse, String> {
+    let store = store.lock().map_err(|e| format!("lock error: {e}"))?;
+    let mut agents_run = 0;
+    let mut voice_commands = 0;
+    let mut items_for_review = 0;
+    for session in store.sessions.values() {
+        if matches!(session.state, SessionState::Completed { .. }) {
+            agents_run += 1;
+        }
+        for msg in &session.transcript {
+            if msg.role == "user" {
+                voice_commands += 1;
+            }
+        }
+        if matches!(session.state, SessionState::Failed { .. }) {
+            items_for_review += 1;
+        }
+    }
     Ok(TodayStatsResponse {
-        agents_run: 0,
-        voice_commands: 0,
-        items_for_review: 0,
+        agents_run,
+        voice_commands,
+        items_for_review,
     })
 }
 

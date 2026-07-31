@@ -3,7 +3,7 @@ import { listen } from "../bindings";
 import { useStore } from "../store/appStore";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { commands } from "../bindings";
-import type { AutoCaptureStatus, TodayStats } from "../bindings";
+import type { AutoCaptureStatus, AudioLevelResponse, TodayStats } from "../bindings";
 
 export default function StatusBar({ typeModeActive }: { typeModeActive?: boolean }) {
   const queryClient = useQueryClient();
@@ -33,7 +33,7 @@ export default function StatusBar({ typeModeActive }: { typeModeActive?: boolean
     staleTime: 1000,
   });
 
-  const { data: fetchedAudioLevel } = useQuery<number>({
+  const { data: fetchedAudioLevel } = useQuery<AudioLevelResponse>({
     queryKey: ["audio-level"],
     queryFn: () => commands.getAudioLevel(),
     refetchInterval: 2000,
@@ -48,7 +48,12 @@ export default function StatusBar({ typeModeActive }: { typeModeActive?: boolean
   });
 
   useEffect(() => { if (fetchedAudioStatus) setAudioStatus(fetchedAudioStatus); }, [fetchedAudioStatus, setAudioStatus]);
-  useEffect(() => { if (fetchedAudioLevel !== undefined) setAudioLevel(fetchedAudioLevel); }, [fetchedAudioLevel, setAudioLevel]);
+  useEffect(() => {
+    if (fetchedAudioLevel !== undefined) {
+      const level = Math.max(0, Math.min(1, fetchedAudioLevel.rms / 100));
+      setAudioLevel(level);
+    }
+  }, [fetchedAudioLevel, setAudioLevel]);
   useEffect(() => { if (fetchedTodayStats) setTodayStats(fetchedTodayStats); }, [fetchedTodayStats, setTodayStats]);
 
   const lastCapture = acStatus?.last_capture

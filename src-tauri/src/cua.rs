@@ -7,14 +7,22 @@ use serde::{Deserialize, Serialize};
 use crate::platform::display_server;
 
 #[cfg(target_os = "windows")]
+use std::sync::Once;
+
+#[cfg(target_os = "windows")]
+static COM_INIT: Once = Once::new();
+
+#[cfg(target_os = "windows")]
 pub fn ensure_com() {
     extern "system" {
         fn CoInitializeEx(pvReserved: *const std::ffi::c_void, dwCoInit: u32) -> i32;
     }
     const COINIT_MULTITHREADED: u32 = 0x0;
-    unsafe {
-        CoInitializeEx(std::ptr::null(), COINIT_MULTITHREADED);
-    }
+    COM_INIT.call_once(|| {
+        unsafe {
+            CoInitializeEx(std::ptr::null(), COINIT_MULTITHREADED);
+        }
+    });
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -325,8 +333,6 @@ public class Input {{
                 .args([
                     "search",
                     "--onlyvisible",
-                    "--class",
-                    "",
                 ])
                 .output()
                 .map_err(|e| format!("xdotool search failed: {e}"))?;
@@ -472,9 +478,10 @@ public class Input {{
 
 #[cfg(target_os = "linux")]
 fn wtype_text(text: &str) -> Result<(), String> {
-    let escaped = text.replace('\\', "\\\\").replace('"', "\\\"");
-    std::process::Command::new("wtype")
-        .args(["-k", "--", &escaped])
+    let safe = text.replace('\'', "'\\''");
+    let wrapped = format!("'{}'", safe);
+    std::process::Command::new("sh")
+        .args(["-c", &format!("wtype -k -- {}", wrapped)])
         .output()
         .map(|_| ())
         .map_err(|e| format!("wtype failed: {e}"))

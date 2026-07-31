@@ -175,13 +175,12 @@ impl VoicePipeline {
             .map_err(|e| format!("STT config lock error: {e}"))?
             .clone();
 
-        let rt = tokio::runtime::Handle::try_current()
-            .map_err(|e| format!("No tokio runtime: {e}"))?;
-
         let sample_rate = self.sample_rate;
-        let result = rt.block_on(async {
-            stt::transcribe(&audio_data, &stt_cfg, sample_rate).await
-        });
+        let result = tokio::runtime::Runtime::new()
+            .unwrap()
+            .block_on(async {
+                stt::transcribe(&audio_data, &stt_cfg, sample_rate).await
+            });
 
         match &result {
             Ok(_) => {
@@ -228,11 +227,10 @@ impl VoicePipeline {
             .map_err(|e| format!("TTS config lock error: {e}"))?
             .clone();
 
-        let rt = tokio::runtime::Handle::try_current()
-            .map_err(|e| format!("No tokio runtime: {e}"))?;
-
         let text_owned = text.to_string();
-        let result = rt.block_on(async { tts::speak(&text_owned, &tts_cfg).await });
+        let result = tokio::runtime::Runtime::new()
+            .unwrap()
+            .block_on(async { tts::speak(&text_owned, &tts_cfg).await });
 
         match &result {
             Ok(_) => {
@@ -481,11 +479,6 @@ impl VoicePipeline {
                     vad = VadState::Silence;
                     speech_start = None;
                     silence_start = None;
-                    if let Ok(mut state) = state_arc.lock() {
-                        if *state == PipelineState::Listening {
-                            *state = PipelineState::Speaking;
-                        }
-                    }
                     continue;
                 }
 

@@ -72,26 +72,52 @@ impl AnnotationManager {
     }
 
     pub fn complete(&mut self, id: &str) {
-        if let Some(ann) = self.cursors.get_mut(id) {
+        let completed = if let Some(ann) = self.cursors.get_mut(id) {
             ann.state = AnnotationState::Completed;
+            true
         } else if let Some(ann) = self.rectangles.get_mut(id) {
             ann.state = AnnotationState::Completed;
+            true
         } else if let Some(ann) = self.scribbles.get_mut(id) {
             ann.state = AnnotationState::Completed;
+            true
         } else if let Some(ann) = self.captions.get_mut(id) {
             ann.state = AnnotationState::Completed;
+            true
+        } else {
+            false
+        };
+        if completed {
+            self.cursors.remove(id);
+            self.rectangles.remove(id);
+            self.scribbles.remove(id);
+            self.captions.remove(id);
+            self.kind_order.retain(|k| k != id);
         }
     }
 
     pub fn miss(&mut self, id: &str) {
-        if let Some(ann) = self.cursors.get_mut(id) {
+        let missed = if let Some(ann) = self.cursors.get_mut(id) {
             ann.state = AnnotationState::Missed;
+            true
         } else if let Some(ann) = self.rectangles.get_mut(id) {
             ann.state = AnnotationState::Missed;
+            true
         } else if let Some(ann) = self.scribbles.get_mut(id) {
             ann.state = AnnotationState::Missed;
+            true
         } else if let Some(ann) = self.captions.get_mut(id) {
             ann.state = AnnotationState::Missed;
+            true
+        } else {
+            false
+        };
+        if missed {
+            self.cursors.remove(id);
+            self.rectangles.remove(id);
+            self.scribbles.remove(id);
+            self.captions.remove(id);
+            self.kind_order.retain(|k| k != id);
         }
     }
 
@@ -106,13 +132,6 @@ impl AnnotationManager {
             if is_expired {
                 expired.push(id.clone());
             }
-        }
-        // Clean up expired entries to prevent memory growth
-        for id in &expired {
-            self.cursors.remove(id);
-            self.rectangles.remove(id);
-            self.scribbles.remove(id);
-            self.captions.remove(id);
         }
         expired
     }

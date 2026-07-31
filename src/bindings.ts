@@ -95,7 +95,7 @@ export function invoke<T>(cmd: string, args?: any): Promise<T> {
         anthropic_model: "claude-3-5-sonnet",
         openai_api_key: null,
         openai_model: "gpt-4o",
-        openai_base_url: "https://api.openai.com/v1",
+        openai_base_url: "https://api.openai.com",
         default_provider: "anthropic",
         system_prompt: "",
       }) as any;
@@ -106,9 +106,9 @@ export function invoke<T>(cmd: string, args?: any): Promise<T> {
     }
     if (cmd === "get_voice_providers") {
       return Promise.resolve([
-        { id: "elevenlabs", name: "ElevenLabs", tier: "paid", requires_key: true },
-        { id: "cartesia", name: "Cartesia", tier: "paid", requires_key: true },
-        { id: "openai", name: "OpenAI TTS", tier: "paid", requires_key: true },
+        { id: "elevenlabs", name: "ElevenLabs", tier: "premium", requires_key: true },
+        { id: "cartesia", name: "Cartesia", tier: "premium", requires_key: true },
+        { id: "openai_realtime", name: "OpenAI Realtime", tier: "premium", requires_key: true },
         { id: "system", name: "System (Offline)", tier: "free", requires_key: false }
       ]) as any;
     }
@@ -138,9 +138,9 @@ export function invoke<T>(cmd: string, args?: any): Promise<T> {
     if (cmd === "get_audio_status") {
       return Promise.resolve({ listening: false, mode: "" }) as any;
     }
-    if (cmd === "get_audio_level") {
-      return Promise.resolve(0) as any;
-    }
+        if (cmd === "get_audio_level") {
+          return Promise.resolve({ rms: 0, peak: 0, clipping: false }) as any;
+        }
     if (cmd === "get_today_stats") {
       return Promise.resolve({ agents_run: 0, voice_commands: 0, items_for_review: 0 }) as any;
     }
@@ -365,6 +365,12 @@ export interface AudioStatus {
   mode: string;
 }
 
+export interface AudioLevelResponse {
+  rms: number;
+  peak: number;
+  clipping: boolean;
+}
+
 // ── Typed invoke wrappers ─────────────────────────────────────────────────────
 export const commands = {
   // Config
@@ -383,7 +389,7 @@ export const commands = {
   getAudioConfig: () => invoke<AudioConfig>("get_audio_config"),
   updateAudioConfig: (partial: Partial<AudioConfig>) => invoke<AudioConfig>("update_audio_config", { partial }),
   getAudioStatus: () => invoke<AudioStatus>("get_audio_status"),
-  getAudioLevel: () => invoke<number>("get_audio_level"),
+  getAudioLevel: () => invoke<AudioLevelResponse>("get_audio_level"),
 
   // Agents
   listAgents: () => invoke<AgentInfo[]>("list_agents"),
@@ -407,7 +413,6 @@ export const commands = {
 
   // Chat
   sendChatMessageStream: (message: string, model: string | null, sessionId?: string) => invoke<void>("send_chat_message_stream", { message, model, sessionId }),
-  sendChatMessageStreamVision: (message: string, images: string[], model: string | null, sessionId?: string) => invoke<void>("send_chat_message_stream_vision", { message, images, model, sessionId }),
   chatWithVision: (message: string, images: string[], model: string | null) => invoke<string>("chat_with_vision", { message, images, model }),
   loadConversations: () => invoke<unknown[]>("load_conversations"),
   saveConversations: (conversations: unknown[]) => invoke<void>("save_conversations", { conversations }),

@@ -2,7 +2,7 @@
 /// Consolidates duplicated platform detection functions.
 
 /// Detect the current display server on Linux (Wayland vs X11 vs unknown).
-/// On non-Linux platforms, always returns "x11" as a safe default.
+/// On non-Linux platforms, returns a platform-specific default.
 #[cfg(target_os = "linux")]
 pub fn display_server() -> &'static str {
     let sess = std::env::var("XDG_SESSION_TYPE").unwrap_or_default();
@@ -15,7 +15,17 @@ pub fn display_server() -> &'static str {
     }
 }
 
-#[cfg(not(target_os = "linux"))]
+#[cfg(target_os = "macos")]
 pub fn display_server() -> &'static str {
-    "x11"
+    "core-graphics"
+}
+
+#[cfg(target_os = "windows")]
+pub fn display_server() -> &'static str {
+    "gdi"
+}
+
+#[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows")))]
+pub fn display_server() -> &'static str {
+    "unknown"
 }
