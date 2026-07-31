@@ -152,12 +152,13 @@ npm run test:visual           # Playwright visual regression
 
 ## Build Status
 
-- `cargo check` — passes
+- `cargo check` — passes (with `#[allow(dead_code)]` for Flatpak compatibility)
 - `cargo test --all-features` — passes (50+ Rust tests)
 - `npm run build` — passes (TypeScript + Vite)
-- `npm test` — 5 test files, 30+ cases passing
+- `npm test` — 12 test files, 90 cases passing
 - CI: Check (ubuntu) + Build (ubuntu/windows/macos) — **PASSING**
-- Nightly: 3-platform build → pre-release artifacts — **PASSING**
+- Release: v0.2.0 tagged and published — artifacts available on GitHub Releases
+- Flatpak: Build passing
 - macOS: `--bundles dmg,app` + `macOSPrivateApi: true` for overlay transparency
 
 ---

@@ -2,6 +2,32 @@
 
 All notable changes to ClickyX are documented here.
 
+## [0.2.0] - 2026-07-31
+
+### Fixed — Critical Stability & Security
+
+- **Bridge API**: Fixed `StatusCode::from_u16().unwrap()` panic on non-standard HTTP status codes from upstream APIs — now safely falls back to `OK` or `BadGateway`
+- **Bridge API**: Fixed zombie process leaks — added `child.wait()` after `child.kill()` in MCP command execution paths (`mcp_list_tools_sync`, `mcp_call_tool_sync`)
+- **Computer Use (Linux)**: Fixed shell injection vulnerability in `wtype_text()` — replaced naive escaping with POSIX-safe single-quote wrapping protecting against `$`, `` ` ``, `!`, `#`, `'` characters
+- **Computer Use (Windows)**: Fixed redundant `CoInitializeEx` calls — now uses `std::sync::Once` to ensure COM initialization happens only once per process
+- **Computer Use (Linux)**: Fixed xdotool search with empty class filter that matched nothing — removed `--class ""` argument
+- **Audio Pipeline**: Fixed potential deadlock from `rt.block_on()` called inside Tauri async command handlers — now creates dedicated runtime via `Runtime::new()`
+- **Audio Pipeline**: Removed misleading VAD state transition from `Listening` to `Speaking` during TTS ducking (state was unchanged correctly)
+- **Platform Detection**: Fixed `display_server()` returning `"x11"` for all non-Linux platforms — now returns platform-specific values (`core-graphics` for macOS, `gdi` for Windows)
+- **Config Paths**: Replaced panicking `dirs::config_dir().expect(...)` with safe fallback to `.clickyx` directory in `config.rs` and `agent/session.rs`
+- **Overlay Lifecycle**: Fixed annotation cleanup ordering — `miss()` now properly removes entries and cleans `kind_order`; lifecycle sweep calls `miss()` before removal
+- **Frontend Types**: Fixed `getAudioLevel` type mismatch — now correctly returns `AudioLevelResponse` struct (rms, peak, clipping) instead of `number`
+- **Frontend**: Removed phantom command references (`sendChatMessageStreamVision`, `testMcpServer`, `getAppUsageLog`, `clearAppUsageLog`, `getAutomationRuns`) that had no Rust backend counterparts
+- **Today Stats**: Implemented real statistics computation in `get_today_stats()` instead of hardcoded zeros — now counts completed agents, voice commands, and failed sessions from agent store
+
+### Changed
+
+- Version bumped from **0.1.3 → 0.2.0** across all config files (package.json, Cargo.toml, tauri.conf.json, bindings.ts)
+- Added `#[allow(dead_code)]` at crate level to fix Flatpak build strictness
+- Updated mock defaults in bindings.ts to match Rust implementation (openai_base_url, provider tiers/names)
+
+---
+
 ## [Unreleased]
 
 ### Fixed — First-Run Experience
@@ -172,7 +198,8 @@ All notable changes to ClickyX are documented here.
 - NVIDIA NIM API support via configurable `openai_base_url`
 - Cross-platform CI/CD (Linux, Windows, macOS)
 
-[Unreleased]: https://github.com/unn-Known1/clickyX/compare/v0.1.3...HEAD
+[Unreleased]: https://github.com/unn-Known1/clickyX/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/unn-Known1/clickyX/compare/v0.1.3...v0.2.0
 [0.1.3]: https://github.com/unn-Known1/clickyX/compare/v0.1.2...v0.1.3
 [0.1.2]: https://github.com/unn-Known1/clickyX/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/unn-Known1/clickyX/compare/v0.1.0...v0.1.1

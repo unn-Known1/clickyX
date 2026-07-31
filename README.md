@@ -5,6 +5,7 @@
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![Tauri v2](https://img.shields.io/badge/Tauri-v2-orange)](https://tauri.app)
 [![Rust](https://img.shields.io/badge/rust-stable-blueviolet)](https://www.rust-lang.org)
+[![Version 0.2.0](https://img.shields.io/badge/version-0.2.0-informational)](https://github.com/unn-Known1/clickyX/releases/tag/v0.2.0)
 [![Local-First](https://img.shields.io/badge/local--first-yes-success)]()
 [![Telemetry](https://img.shields.io/badge/telemetry-none-success)]()
 
