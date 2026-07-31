@@ -27,7 +27,7 @@ export function invoke<T>(cmd: string, args?: any): Promise<T> {
         theme: "system",
         api_keys: [],
         window: { pin: false, width: 356, height: 500 },
-        version: "0.1.3",
+        version: "0.2.0",
         onboarding_completed: true,
         ai: {
           anthropic_api_key: null,
