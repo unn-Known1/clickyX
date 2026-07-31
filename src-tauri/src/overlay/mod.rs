@@ -285,7 +285,6 @@ pub fn show_cursor_on_screen<R: Runtime>(
     label: Option<String>,
     screen_idx: usize,
 ) -> Result<(), String> {
-    use tauri::Emitter;
     let payload = CursorPayload {
         id: next_id("cursor"),
         x, y,
@@ -382,7 +381,6 @@ pub fn show_animated_cursor_on_screen<R: Runtime>(
     accent: Option<String>,
     screen_idx: usize,
 ) -> Result<(), String> {
-    use tauri::Emitter;
     let (control_x, control_y) = match animation {
         "arc" | "bounce" => {
             let (cx, cy) = compute_arc_control_point(from_x, from_y, x, y);

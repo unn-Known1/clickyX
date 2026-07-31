@@ -537,7 +537,7 @@ async fn proxy_messages(
         )
         .json(json),
         Err(_) => HttpResponse::build(
-            actix_web::http::StatusCode::from_u16(status.as_u16()).unwrap_or(actix_web::http::StatusCode::BadGateway),
+            actix_web::http::StatusCode::from_u16(status.as_u16()).unwrap_or(actix_web::http::StatusCode::OK),
         )
         .body(text),
     }
@@ -631,7 +631,7 @@ async fn proxy_responses(
         )
         .json(json),
         Err(_) => HttpResponse::build(
-            actix_web::http::StatusCode::from_u16(status.as_u16()).unwrap_or(actix_web::http::StatusCode::BadGateway),
+            actix_web::http::StatusCode::from_u16(status.as_u16()).unwrap_or(actix_web::http::StatusCode::OK),
         )
         .body(text),
     }
