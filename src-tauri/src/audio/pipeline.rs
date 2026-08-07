@@ -13,6 +13,34 @@ use super::stt::{self, SttConfig, SttProvider};
 use super::tts::{self, TtsConfig, TtsProvider};
 use super::wake_word::WakeWordDetector;
 
+/// Shared background tokio runtime for audio work that runs on plain `std::thread`s
+/// (the VAD loop) or on actix's runtime (the HTTP bridge). `try_current()` fails in
+/// both of those contexts, so we own a runtime instead of borrowing the current one.
+static BACKGROUND_RUNTIME: std::sync::OnceLock<tokio::runtime::Runtime> =
+    std::sync::OnceLock::new();
+
+pub fn background_runtime() -> &'static tokio::runtime::Runtime {
+    BACKGROUND_RUNTIME.get_or_init(|| {
+        tokio::runtime::Builder::new_multi_thread()
+            .enable_all()
+            .thread_name("clickyx-bg")
+            .build()
+            .expect("failed to build background tokio runtime")
+    })
+}
+
+/// Block on `fut` without panicking whether we are inside a tokio runtime thread
+/// (bridge async handler), on actix threads, or on plain std threads.
+pub fn block_on_bg<F: std::future::Future>(fut: F) -> F::Output {
+    if tokio::runtime::Handle::try_current().is_ok() {
+        // Inside a tokio runtime thread — move the blocking work to a blocking
+        // thread instead of panicking with "cannot block the current thread".
+        tokio::task::block_in_place(|| background_runtime().block_on(fut))
+    } else {
+        background_runtime().block_on(fut)
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub enum PipelineState {
     Idle,
@@ -176,11 +204,11 @@ impl VoicePipeline {
             .clone();
 
         let sample_rate = self.sample_rate;
-        let result = tokio::runtime::Runtime::new()
-            .unwrap()
-            .block_on(async {
-                stt::transcribe(&audio_data, &stt_cfg, sample_rate).await
-            });
+        self.emit_event("processing-start", serde_json::json!({}));
+        let result = block_on_bg(async {
+            stt::transcribe(&audio_data, &stt_cfg, sample_rate).await
+        });
+        self.emit_event("processing-end", serde_json::json!({}));
 
         match &result {
             Ok(_) => {
@@ -192,7 +220,11 @@ impl VoicePipeline {
         }
 
         if let Ok(mut state) = self.state.lock() {
-            *state = PipelineState::Idle;
+            if self.always_on_running.load(Ordering::SeqCst) {
+                *state = PipelineState::WakeWordListening;
+            } else {
+                *state = PipelineState::Idle;
+            }
         }
         result
     }
@@ -209,13 +241,19 @@ impl VoicePipeline {
         // Activate audio ducking: suppress VAD input while TTS is playing
         self.set_ducking(true);
 
-        // Ensure ducking is always deactivated, even on panic
+        // Ensure ducking is always deactivated, even on panic.
+        // Restore the pre-speaking state instead of unconditionally resetting to
+        // Idle, so TTS during always-on listening never breaks the VAD loop.
         struct DuckingGuard<'a> { pipeline: &'a VoicePipeline }
         impl<'a> Drop for DuckingGuard<'a> {
             fn drop(&mut self) {
                 self.pipeline.set_ducking(false);
                 if let Ok(mut state) = self.pipeline.state.lock() {
-                    *state = PipelineState::Idle;
+                    if self.pipeline.always_on_running.load(Ordering::SeqCst) {
+                        *state = PipelineState::WakeWordListening;
+                    } else if *state == PipelineState::Speaking {
+                        *state = PipelineState::Idle;
+                    }
                 }
             }
         }
@@ -228,9 +266,7 @@ impl VoicePipeline {
             .clone();
 
         let text_owned = text.to_string();
-        let result = tokio::runtime::Runtime::new()
-            .unwrap()
-            .block_on(async { tts::speak(&text_owned, &tts_cfg).await });
+        let result = block_on_bg(async { tts::speak(&text_owned, &tts_cfg).await });
 
         match &result {
             Ok(_) => {
@@ -249,6 +285,17 @@ impl VoicePipeline {
             .lock()
             .map(|s| *s)
             .map_err(|e| format!("State lock error: {e}"))
+    }
+
+    /// Emit a Tauri event through the attached app handle (no-op until
+    /// `set_app_handle` is called during setup).
+    fn emit_event(&self, event: &str, payload: serde_json::Value) {
+        if let Some(handle_arc) = &self.app_handle {
+            if let Ok(handle) = handle_arc.lock() {
+                use tauri::Emitter;
+                let _ = handle.emit(event, payload);
+            }
+        }
     }
 
     /// Set audio ducking state and optionally emit a Tauri event.
@@ -408,6 +455,7 @@ impl VoicePipeline {
         self.capture.start_recording()?;
         *state = PipelineState::WakeWordListening;
         self.always_on_running.store(true, Ordering::SeqCst);
+        self.emit_event("always-on-state-changed", serde_json::json!({ "active": true }));
         log::info!("Voice pipeline: always-on listening started");
         Ok(())
     }
@@ -431,6 +479,7 @@ impl VoicePipeline {
                 Vec::new()
             }
         };
+        self.emit_event("always-on-state-changed", serde_json::json!({ "active": false }));
         log::info!("Voice pipeline: always-on stopped, {} samples discarded", audio_data.len());
         Ok(())
     }
@@ -458,6 +507,10 @@ impl VoicePipeline {
         let app_handle_arc = self.app_handle.clone();
 
         let on_transcript = std::sync::Arc::new(std::sync::Mutex::new(on_transcript));
+        // #1: use our own background runtime handle instead of try_current(),
+        // which always fails on a plain std::thread.
+        let runtime = background_runtime().handle().clone();
+
         std::thread::Builder::new()
             .name("vad-loop".into())
             .spawn(move || {
@@ -465,6 +518,16 @@ impl VoicePipeline {
             let mut speech_start: Option<Instant> = None;
             let mut silence_start: Option<Instant> = None;
             let mut audio_buffer: Vec<f32> = Vec::new();
+
+            // Emit an overlay event (waveform/processing) through the app handle.
+            let emit = |event: &str, payload: serde_json::Value| {
+                if let Some(handle_arc) = &app_handle_arc {
+                    if let Ok(handle) = handle_arc.lock() {
+                        use tauri::Emitter;
+                        let _ = handle.emit(event, payload);
+                    }
+                }
+            };
 
             log::info!("Always-on VAD loop started (threshold={}, silence_timeout={}ms)",
                 ao_config.vad_threshold, ao_config.silence_timeout_ms);
@@ -479,12 +542,18 @@ impl VoicePipeline {
                     vad = VadState::Silence;
                     speech_start = None;
                     silence_start = None;
+                    // Also consume the capture buffer so TTS audio never accumulates.
+                    if capture_handle.is_recording() {
+                        let _ = capture_handle.drain_buffer_samples();
+                    }
                     continue;
                 }
 
+                // #11: drain (consume) the ring buffer so each poll sees only new
+                // audio — no duplicated/repeating segments.
                 let samples = {
                     if capture_handle.is_recording() {
-                        capture_handle.get_buffer_samples()
+                        capture_handle.drain_buffer_samples()
                     } else {
                         continue;
                     }
@@ -497,6 +566,29 @@ impl VoicePipeline {
                 let energy: f32 = samples.iter().map(|s| s * s).sum::<f32>() / samples.len() as f32;
                 let is_speech = energy > ao_config.vad_threshold;
 
+                // #9: stream the real amplitude envelope to the overlay waveform.
+                {
+                    let rms = energy.sqrt();
+                    let peak = samples.iter().fold(0.0f32, |m, s| m.max(s.abs()));
+                    let buckets = 20usize.min(samples.len());
+                    let mut bars = Vec::with_capacity(buckets);
+                    if buckets > 0 {
+                        let chunk = samples.len() / buckets;
+                        for b in 0..buckets {
+                            let start = b * chunk;
+                            let end = if b == buckets - 1 { samples.len() } else { start + chunk };
+                            let slice = &samples[start..end];
+                            let e = slice.iter().map(|s| s * s).sum::<f32>() / slice.len().max(1) as f32;
+                            bars.push(e.sqrt().min(1.0));
+                        }
+                    }
+                    emit("audio-level-update", serde_json::json!({
+                        "rms": rms.min(1.0),
+                        "peak": peak.min(1.0),
+                        "bars": bars,
+                    }));
+                }
+
                 match (vad, is_speech) {
                     (VadState::Silence, true) => {
                         vad = VadState::Speech;
@@ -504,6 +596,7 @@ impl VoicePipeline {
                         silence_start = None;
                         audio_buffer.clear();
                         audio_buffer.extend_from_slice(&samples);
+                        emit("waveform-start", serde_json::json!({}));
                         if let Ok(mut state) = state_arc.lock() {
                             if *state == PipelineState::WakeWordListening {
                                 *state = PipelineState::Listening;
@@ -530,49 +623,56 @@ impl VoicePipeline {
                                         let on_tx = on_transcript.clone();
                                         let handoff_clone = handoff_arc.clone();
                                         let app_handle_clone = app_handle_arc.clone();
+                                        let rt = runtime.clone();
 
-                                        if let Ok(rt) = tokio::runtime::Handle::try_current() {
-                                            let _ = rt.spawn(async move {
-                                                let result = stt::transcribe(&buffer_clone, &stt_cfg_clone, sample_rate).await;
-                                                match result {
-                                                    Ok(text) if !text.trim().is_empty() => {
-                                                        log::info!("VAD auto-transcribed: {}", text);
+                                        emit("processing-start", serde_json::json!({}));
+                                        let _ = rt.spawn(async move {
+                                            let result = stt::transcribe(&buffer_clone, &stt_cfg_clone, sample_rate).await;
+                                            // #9: hide the processing indicator when done.
+                                            if let Some(handle_arc) = &app_handle_clone {
+                                                if let Ok(handle) = handle_arc.lock() {
+                                                    use tauri::Emitter;
+                                                    let _ = handle.emit("processing-end", serde_json::json!({}));
+                                                }
+                                            }
+                                            match result {
+                                                Ok(text) if !text.trim().is_empty() => {
+                                                    log::info!("VAD auto-transcribed: {}", text);
 
-                                                        // B-006: Check for voice-agent handoff triggers
-                                                        if let Ok(hf) = handoff_clone.lock() {
-                                                            if let Some(action) = hf.analyze(&text) {
-                                                                log::info!(
-                                                                    "Voice handoff: agent={}, phrase={}",
-                                                                    action.agent_slug,
-                                                                    action.trigger_phrase
-                                                                );
-                                                                if let Some(handle_arc) = &app_handle_clone {
-                                                                    if let Ok(handle) = handle_arc.lock() {
-                                                                        use tauri::Emitter;
-                                                                        let _ = handle.emit(
-                                                                            "voice-agent-handoff",
-                                                                            serde_json::json!({
-                                                                                "agent_slug": action.agent_slug,
-                                                                                "agent_name": action.agent_name,
-                                                                                "query": action.query,
-                                                                                "trigger_phrase": action.trigger_phrase,
-                                                                            }),
-                                                                        );
-                                                                    }
+                                                    // B-006: Check for voice-agent handoff triggers
+                                                    if let Ok(hf) = handoff_clone.lock() {
+                                                        if let Some(action) = hf.analyze(&text) {
+                                                            log::info!(
+                                                                "Voice handoff: agent={}, phrase={}",
+                                                                action.agent_slug,
+                                                                action.trigger_phrase
+                                                            );
+                                                            if let Some(handle_arc) = &app_handle_clone {
+                                                                if let Ok(handle) = handle_arc.lock() {
+                                                                    use tauri::Emitter;
+                                                                    let _ = handle.emit(
+                                                                        "voice-agent-handoff",
+                                                                        serde_json::json!({
+                                                                            "agent_slug": action.agent_slug,
+                                                                            "agent_name": action.agent_name,
+                                                                            "query": action.query,
+                                                                            "trigger_phrase": action.trigger_phrase,
+                                                                        }),
+                                                                    );
                                                                 }
                                                             }
                                                         }
-
-                                                        // Fire transcript callback
-                                                        if let Ok(cb) = on_tx.lock() {
-                                                            cb(text);
-                                                        }
                                                     }
-                                                    Ok(_) => {}
-                                                    Err(e) => log::error!("VAD auto-transcribe error: {e}"),
+
+                                                    // Fire transcript callback
+                                                    if let Ok(cb) = on_tx.lock() {
+                                                        cb(text);
+                                                    }
                                                 }
-                                            });
-                                        }
+                                                Ok(_) => {}
+                                                Err(e) => log::error!("VAD auto-transcribe error: {e}"),
+                                            }
+                                        });
                                     } else {
                                         log::debug!("VAD: silence timeout but ducking active, deferring transcription");
                                     }
@@ -582,6 +682,7 @@ impl VoicePipeline {
                             vad = VadState::Silence;
                             speech_start = None;
                             silence_start = None;
+                            emit("waveform-end", serde_json::json!({}));
                             if let Ok(mut state) = state_arc.lock() {
                                 if *state == PipelineState::Listening {
                                     *state = PipelineState::WakeWordListening;

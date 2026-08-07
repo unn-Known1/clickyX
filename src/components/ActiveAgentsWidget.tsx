@@ -8,10 +8,11 @@ interface Props {
   agents: ActiveAgent[];
 }
 
+// Colors come from the shared status tokens in theme.css — single source of truth.
 const statusColors: Record<string, string> = {
-  running: "#4caf50",
-  idle: "#ff9800",
-  error: "#f44336",
+  running: "var(--status-running)",
+  idle: "var(--status-idle)",
+  error: "var(--status-error)",
 };
 
 function ActiveAgentsWidget({ agents }: Props) {

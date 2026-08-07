@@ -64,9 +64,20 @@ fn init_logging() {
         }
     };
 
+    // #38: write a stable, parseable format ("ts | LEVEL | target | message")
+    // so the in-app log viewer can split lines reliably.
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info"))
         .target(env_logger::Target::Pipe(Box::new(file_writer)))
-        .format_timestamp_secs()
+        .format(|buf, record| {
+            writeln!(
+                buf,
+                "{} | {} | {} | {}",
+                buf.timestamp(),
+                record.level(),
+                record.target(),
+                record.args()
+            )
+        })
         .init();
 }
 
@@ -79,6 +90,54 @@ pub(crate) fn register_hotkeys(app: &AppHandle) -> Result<(), String> {
     }
 
     let hotkey_config = config::load_config(app)?;
+
+    // #18: bind the user-configured PTT hotkey (start/stop recording toggle).
+    let ptt_hotkey = hotkey_config.audio.ptt_hotkey.clone();
+    if !ptt_hotkey.trim().is_empty() {
+        let key = ptt_hotkey.trim().to_string();
+        if let Err(e) = app
+            .global_shortcut()
+            .on_shortcut(key.as_str(), move |handler_app, _shortcut, event| {
+                if event.state != ShortcutState::Pressed {
+                    return;
+                }
+                if let Some(pipeline) =
+                    handler_app.try_state::<Mutex<audio::VoicePipeline>>()
+                {
+                    if let Ok(pipe) = pipeline.lock() {
+                        let is_listening = matches!(
+                            pipe.get_state().ok(),
+                            Some(audio::PipelineState::Listening)
+                        );
+                        if is_listening {
+                            let _ = pipe.stop_ptt_and_transcribe();
+                            if let Some(state) =
+                                handler_app.try_state::<Mutex<commands::AppState>>()
+                            {
+                                if let Ok(mut s) = state.lock() {
+                                    s.app_mode = "idle".into();
+                                }
+                            }
+                        } else {
+                            if pipe.start_ptt().is_ok() {
+                                if let Some(state) =
+                                    handler_app.try_state::<Mutex<commands::AppState>>()
+                                {
+                                    if let Ok(mut s) = state.lock() {
+                                        s.app_mode = "listening".into();
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            })
+        {
+            log::warn!("failed to register PTT hotkey {}: {e}", key);
+        } else {
+            log::info!("Registered PTT hotkey: {}", key);
+        }
+    }
 
     for binding in &hotkey_config.hotkeys {
         if binding.enabled {
@@ -215,7 +274,10 @@ pub fn run() {
                 ..Default::default()
             };
 
-            let pipeline = audio::VoicePipeline::with_config(&config.audio, stt_cfg, tts_cfg);
+            let mut pipeline = audio::VoicePipeline::with_config(&config.audio, stt_cfg, tts_cfg);
+            // #9: attach the app handle so the pipeline can emit overlay/voice
+            // events (waveform, processing, always-on state, audio level...).
+            pipeline.set_app_handle(handle.clone());
 
             // Start always-on voice mode if enabled
             if config.audio.activation_mode == "always_on" {
@@ -269,32 +331,23 @@ pub fn run() {
                         }
                         for auto in triggered {
                             if let Some(slug) = &auto.agent_slug {
+                                let prompt = format!("[Automation Trigger: {}]\n{}", auto.name, auto.prompt);
                                 log::info!("Triggering agent: {} for automation: {}", slug, auto.name);
-                                if let Some(store_mutex) = handle.try_state::<Mutex<crate::agent::session::AgentStore>>() {
-                                    match store_mutex.try_lock() {
-                                        Ok(mut store) => {
-                                            if let Some(session) = store.get_mut(slug) {
-                                                session.state = crate::agent::session::SessionState::Running;
-                                                session.transcript.push(crate::agent::session::ChatMessage {
-                                                    role: "user".into(),
-                                                    content: format!("[Automation Trigger: {}]\n{}", auto.name, auto.prompt),
-                                                });
-                                                let now_secs = std::time::SystemTime::now()
-                                                    .duration_since(std::time::UNIX_EPOCH)
-                                                    .unwrap_or_default()
-                                                    .as_secs()
-                                                    .to_string();
-                                                session.updated_at = now_secs;
-                                                let _ = handle.emit("agent-state-changed", slug.clone());
-                                            } else {
-                                                log::warn!("Agent {} not found for automation {}", slug, auto.name);
-                                            }
-                                        }
-                                        Err(e) => {
-                                            log::warn!("Automation trigger: could not acquire agent store lock: {e}");
-                                        }
-                                    }
-                                }
+                                // #15: actually execute the agent (mark Running,
+                                // persist, emit, and spawn the provider call).
+                                commands::spawn_agent_run(handle.clone(), slug.clone(), prompt.clone());
+                                // Record a run-history entry for the Connections UI.
+                                commands::record_automation_run(commands::AutomationRunEntry {
+                                    id: uuid::Uuid::new_v4().to_string(),
+                                    automation_id: auto.id.clone(),
+                                    started_at: crate::agent::session::now_utc(),
+                                    finished_at: None,
+                                    status: "running".into(),
+                                    duration_ms: None,
+                                    error: None,
+                                });
+                            } else {
+                                log::warn!("Automation {} has no agent_slug; nothing to run", auto.name);
                             }
                         }
                     }
@@ -339,6 +392,17 @@ pub fn run() {
             let ann_mgr_arc = std::sync::Arc::new(ann_manager);
             handle.manage(ann_mgr_arc.clone());
             overlay::start_lifecycle_sweep(handle.clone(), ann_mgr_arc);
+
+            // #2: create the per-screen overlay windows at startup (they were
+            // only created on hotplug, so a stable monitor setup never got them).
+            {
+                use crate::overlay::window_manager::OverlayWindowManager;
+                let mut wm = OverlayWindowManager::<tauri::Wry>::new();
+                if let Err(e) = wm.create_per_screen_windows(&handle, "src/overlay/index.html") {
+                    log::warn!("Failed to create overlay windows: {e}");
+                }
+                handle.manage(Mutex::new(wm));
+            }
             overlay::start_hotplug_poll(handle.clone(), "src/overlay/index.html");
 
             // Start bridge server on separate thread
@@ -456,6 +520,10 @@ pub fn run() {
             commands::install_update,
             commands::get_logs,
             commands::clear_logs,
+            commands::get_app_usage_log,
+            commands::clear_app_usage_log,
+            commands::get_automation_runs,
+            commands::set_bridge_token,
             commands::export_config,
             commands::import_config,
             commands::reset_config,

@@ -133,7 +133,20 @@ impl AutomationEngine {
                     due
                 }
                 Schedule::Cron { expression } => {
-                    matches_cron(expression, dt)
+                    if matches_cron(expression, dt) {
+                        // #14: only fire once per matching minute — never re-fire
+                        // every tick while the expression keeps matching.
+                        match &automation.last_run {
+                            Some(last) => {
+                                let last_secs = parse_rfc3339_secs(last).unwrap_or(0);
+                                let now_secs = parse_rfc3339_secs(&now).unwrap_or(0);
+                                now_secs.saturating_sub(last_secs) >= 60
+                            }
+                            None => true,
+                        }
+                    } else {
+                        false
+                    }
                 }
             };
             if should_run {
@@ -187,6 +200,18 @@ fn chrono_now_rfc3339() -> String {
     let nanos = duration.subsec_nanos();
     let datetime = chrono_datetime_from_unix(secs, nanos);
     format_datetime_rfc3339(datetime)
+}
+
+/// Calendar date parts (y, m, d) for a unix-epoch seconds timestamp.
+pub(crate) fn date_parts_from_unix_secs(secs: u64) -> (i32, u32, u32) {
+    let dt = chrono_datetime_from_unix(secs, 0);
+    (dt.0, dt.1, dt.2)
+}
+
+/// Calendar date parts (y, m, d) for the current time.
+pub(crate) fn now_date_parts() -> (i32, u32, u32) {
+    let dt = chrono_datetime_now();
+    (dt.0, dt.1, dt.2)
 }
 
 fn chrono_datetime_now() -> ChronoDatetime {

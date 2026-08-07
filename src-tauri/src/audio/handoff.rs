@@ -41,11 +41,16 @@ impl VoiceAgentHandoff {
     }
 
     pub fn analyze(&self, transcript: &str) -> Option<HandoffAction> {
-        let lower = transcript.to_lowercase();
+        // #50: match case-insensitively on the ORIGINAL string. Byte indices
+        // derived from a lowercased copy misboundary non-ASCII text (e.g. "İ"),
+        // which previously panicked/sliced mid-character.
         for trigger in &self.triggers {
             for phrase in &trigger.phrases {
-                if let Some(idx) = lower.find(phrase) {
-                    let remainder = transcript[idx + phrase.len()..].trim().to_string();
+                let Ok(pattern) = Regex::new(&format!("(?i){}", regex::escape(phrase))) else {
+                    continue;
+                };
+                if let Some(m) = pattern.find(transcript) {
+                    let remainder = transcript[m.end()..].trim().to_string();
                     return Some(HandoffAction {
                         agent_slug: trigger.agent_slug.clone(),
                         agent_name: trigger.agent_name.clone(),

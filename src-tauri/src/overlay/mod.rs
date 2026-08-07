@@ -150,7 +150,96 @@ pub fn show_overlay<R: Runtime>(app: &AppHandle<R>) -> Result<(), String> {
             break;
         }
     }
-    if shown { Ok(()) } else { Err("no overlay windows found".into()) }
+    if shown {
+        // #9: brief calibration frame while the overlay fades in.
+        if let Ok(monitors) = xcap::Monitor::all() {
+            if let Some(m) = monitors.first() {
+                let _ = emit_overlay_event(
+                    app,
+                    "calibration-start",
+                    serde_json::json!({
+                        "x": m.x().unwrap_or(0),
+                        "y": m.y().unwrap_or(0),
+                        "w": m.width().unwrap_or(0),
+                        "h": m.height().unwrap_or(0),
+                    }),
+                );
+                let app2 = app.clone();
+                std::thread::spawn(move || {
+                    std::thread::sleep(std::time::Duration::from_millis(1500));
+                    let _ = app2.emit("calibration-end", serde_json::json!({}));
+                });
+            }
+        }
+        Ok(())
+    } else {
+        Err("no overlay windows found".into())
+    }
+}
+
+/// Show hidden overlay windows so annotations are actually visible (#2).
+fn ensure_overlay_visible<R: Runtime>(app: &AppHandle<R>) {
+    let mut i = 0;
+    while let Some(window) = app.get_webview_window(&format!("overlay-{}", i)) {
+        if !window.is_visible().unwrap_or(true) {
+            let _ = window.show();
+        }
+        i += 1;
+    }
+}
+
+fn emit_completed_lifecycle<R: Runtime>(app: &AppHandle<R>, ids: Vec<String>) {
+    for id in ids {
+        let _ = emit_overlay_event(
+            app,
+            "lifecycle-event",
+            serde_json::json!({ "action": "lifecycle", "id": id, "state": "completed" }),
+        );
+    }
+}
+
+fn register_cursor_annotation<R: Runtime>(app: &AppHandle<R>, id: String, data: CursorData) {
+    if let Some(mgr) = app.try_state::<std::sync::Arc<Mutex<AnnotationManager>>>() {
+        if let Ok(mut mgr) = mgr.lock() {
+            let completed = mgr.add_cursor(id, data);
+            emit_completed_lifecycle(app, completed);
+        }
+    }
+}
+
+fn register_rect_annotation<R: Runtime>(app: &AppHandle<R>, id: String, data: RectPayload) {
+    if let Some(mgr) = app.try_state::<std::sync::Arc<Mutex<AnnotationManager>>>() {
+        if let Ok(mut mgr) = mgr.lock() {
+            let completed = mgr.add_rect(id, data);
+            emit_completed_lifecycle(app, completed);
+        }
+    }
+}
+
+fn register_scribble_annotation<R: Runtime>(app: &AppHandle<R>, id: String, data: ScribblePayload) {
+    if let Some(mgr) = app.try_state::<std::sync::Arc<Mutex<AnnotationManager>>>() {
+        if let Ok(mut mgr) = mgr.lock() {
+            let completed = mgr.add_scribble(id, data);
+            emit_completed_lifecycle(app, completed);
+        }
+    }
+}
+
+fn register_caption_annotation<R: Runtime>(app: &AppHandle<R>, id: String, data: CaptionPayload) {
+    if let Some(mgr) = app.try_state::<std::sync::Arc<Mutex<AnnotationManager>>>() {
+        if let Ok(mut mgr) = mgr.lock() {
+            let completed = mgr.add_caption(id, data);
+            emit_completed_lifecycle(app, completed);
+        }
+    }
+}
+
+fn schedule_hide_event<R: Runtime>(app: &AppHandle<R>, event: &'static str, id: String) {
+    let app = app.clone();
+    std::thread::spawn(move || {
+        std::thread::sleep(std::time::Duration::from_millis(6000));
+        let _ = app.emit(event, serde_json::json!({ "id": id }));
+    });
 }
 
 pub fn hide_overlay<R: Runtime>(app: &AppHandle<R>) -> Result<(), String> {
@@ -173,10 +262,11 @@ fn emit_overlay_event<R: Runtime>(app: &AppHandle<R>, event: &str, payload: impl
 }
 
 pub fn show_cursor<R: Runtime>(app: &AppHandle<R>, x: f64, y: f64, label: Option<String>) -> Result<(), String> {
+    let id = next_id("cursor");
     let payload = CursorPayload {
-        id: next_id("cursor"),
+        id: id.clone(),
         x, y,
-        label,
+        label: label.clone(),
         accent: None,
         animation: "none".into(),
         state: AnnotationState::Armed,
@@ -185,6 +275,26 @@ pub fn show_cursor<R: Runtime>(app: &AppHandle<R>, x: f64, y: f64, label: Option
         control_x: None,
         control_y: None,
     };
+    ensure_overlay_visible(app);
+    // #9: soft glow bloom behind the cursor (same id → lifecycle expiry clears it).
+    let _ = emit_overlay_event(
+        app,
+        "show-glow",
+        serde_json::json!({
+            "id": id.clone(),
+            "x": x - 60.0,
+            "y": y - 60.0,
+            "w": 120.0,
+            "h": 120.0,
+            "label": label,
+        }),
+    );
+    // #3: register with the annotation manager so the sweep expires it.
+    register_cursor_annotation(
+        app,
+        id,
+        CursorData { x, y, label: payload.label.clone(), accent: None, duration_ms: 5000 },
+    );
     emit_overlay_event(app, "show-cursor", payload)
 }
 
@@ -241,26 +351,123 @@ pub fn hide_agent_dock<R: Runtime>(app: &AppHandle<R>) -> Result<(), String> {
 }
 
 pub fn show_rect<R: Runtime>(app: &AppHandle<R>, x: f64, y: f64, w: f64, h: f64, label: Option<String>) -> Result<(), String> {
+    let id = next_id("rect");
     let payload = RectPayload {
-        id: next_id("rect"),
-        x, y, w, h, label,
+        id: id.clone(),
+        x, y, w, h, label: label.clone(),
         state: AnnotationState::Armed,
     };
+    ensure_overlay_visible(app);
+    let _ = emit_overlay_event(
+        app,
+        "show-glow",
+        serde_json::json!({
+            "id": id.clone(),
+            "x": x - 24.0,
+            "y": y - 24.0,
+            "w": w + 48.0,
+            "h": h + 48.0,
+            "label": label,
+        }),
+    );
+    register_rect_annotation(app, id, payload.clone());
     emit_overlay_event(app, "show-rect", payload)
 }
 
 pub fn show_scribble<R: Runtime>(app: &AppHandle<R>, points: Vec<[f64; 2]>, label: Option<String>) -> Result<(), String> {
-    let payload = ScribblePayload { points, label, state: AnnotationState::Armed };
+    let id = next_id("scribble");
+    let payload = ScribblePayload { points: points.clone(), label: label.clone(), state: AnnotationState::Armed };
+    ensure_overlay_visible(app);
+    // Glow over the scribble's bounding box.
+    if !points.is_empty() {
+        let min_x = points.iter().map(|p| p[0]).fold(f64::INFINITY, f64::min);
+        let max_x = points.iter().map(|p| p[0]).fold(f64::NEG_INFINITY, f64::max);
+        let min_y = points.iter().map(|p| p[1]).fold(f64::INFINITY, f64::min);
+        let max_y = points.iter().map(|p| p[1]).fold(f64::NEG_INFINITY, f64::max);
+        let _ = emit_overlay_event(
+            app,
+            "show-glow",
+            serde_json::json!({
+                "id": id.clone(),
+                "x": min_x - 20.0,
+                "y": min_y - 20.0,
+                "w": (max_x - min_x) + 40.0,
+                "h": (max_y - min_y) + 40.0,
+                "label": label,
+            }),
+        );
+    }
+    register_scribble_annotation(app, id, payload.clone());
     emit_overlay_event(app, "show-scribble", payload)
 }
 
 pub fn show_caption<R: Runtime>(app: &AppHandle<R>, text: &str, x: f64, y: f64) -> Result<(), String> {
+    let id = next_id("caption");
     let payload = CaptionPayload {
         text: text.to_string(),
         x, y,
         state: AnnotationState::Armed,
     };
+    ensure_overlay_visible(app);
+    register_caption_annotation(app, id, payload.clone());
     emit_overlay_event(app, "show-caption", payload)
+}
+
+/// P-005: accent-tinted HIGHLIGHT annotation (emits `show-highlight`).
+pub fn show_highlight<R: Runtime>(
+    app: &AppHandle<R>,
+    x: f64,
+    y: f64,
+    w: f64,
+    h: f64,
+    label: Option<String>,
+) -> Result<(), String> {
+    let id = next_id("highlight");
+    ensure_overlay_visible(app);
+    emit_overlay_event(
+        app,
+        "show-highlight",
+        serde_json::json!({
+            "id": id.clone(),
+            "x": x,
+            "y": y,
+            "w": w,
+            "h": h,
+            "label": label,
+        }),
+    )?;
+    schedule_hide_event(app, "hide-highlight", id);
+    Ok(())
+}
+
+/// P-005: SHAPE annotation (arrow/curve, emits `show-shape`).
+pub fn show_shape<R: Runtime>(
+    app: &AppHandle<R>,
+    shape_type: &str,
+    x1: f64,
+    y1: f64,
+    x2: f64,
+    y2: f64,
+    label: Option<String>,
+) -> Result<(), String> {
+    let id = next_id("shape");
+    let shape_type = if shape_type == "curve" { "curve" } else { "arrow" };
+    ensure_overlay_visible(app);
+    emit_overlay_event(
+        app,
+        "show-shape",
+        serde_json::json!({
+            "id": id.clone(),
+            "shapeType": shape_type,
+            "x1": x1,
+            "y1": y1,
+            "x2": x2,
+            "y2": y2,
+            "label": label,
+        }),
+    )?;
+    schedule_hide_event(app, "hide-shape", id);
+    Ok(())
 }
 
 pub fn clear_overlays<R: Runtime>(app: &AppHandle<R>) -> Result<(), String> {
@@ -425,7 +632,6 @@ pub fn start_hotplug_poll<R: Runtime>(app: AppHandle<R>, url: &str) {
             }
             Err(_) => (0, Vec::new()),
         };
-        let mut wm = OverlayWindowManager::<R>::new();
         loop {
             std::thread::sleep(std::time::Duration::from_secs(3));
 
@@ -446,13 +652,24 @@ pub fn start_hotplug_poll<R: Runtime>(app: AppHandle<R>, url: &str) {
                 last_count = current.len();
                 last_geoms = current.clone();
 
-                if let Err(e) = wm.refresh_windows(&app, &url) {
-                    log::error!("Hotplug window refresh failed: {e}");
+                // #2: refresh through the window manager created at startup so we
+                // never duplicate window labels.
+                if let Some(wm_mutex) = app.try_state::<Mutex<OverlayWindowManager<R>>>() {
+                    match wm_mutex.lock() {
+                        Ok(mut wm) => {
+                            if let Err(e) = wm.refresh_windows(&app, &url) {
+                                log::error!("Hotplug window refresh failed: {e}");
+                            } else {
+                                let _ = app.emit(
+                                    "display-config-changed",
+                                    serde_json::json!({ "monitor_count": last_count }),
+                                );
+                            }
+                        }
+                        Err(e) => log::error!("Hotplug: window manager lock error: {e}"),
+                    }
                 } else {
-                    let _ = app.emit(
-                        "display-config-changed",
-                        serde_json::json!({ "monitor_count": last_count }),
-                    );
+                    log::warn!("Hotplug: overlay window manager not initialized");
                 }
             }
         }

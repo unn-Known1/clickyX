@@ -71,7 +71,13 @@ impl ModelCatalog {
     }
 
     pub async fn fetch_openai_compatible(base_url: &str, api_key: &str) -> Vec<ModelInfo> {
-        let url = format!("{}/v1/models", base_url.trim_end_matches('/'));
+        // #13: don't duplicate `/v1` when the base URL already ends with it.
+        let base = base_url.trim_end_matches('/');
+        let url = if base.ends_with("/v1") {
+            format!("{}/models", base)
+        } else {
+            format!("{}/v1/models", base)
+        };
         let client = reqwest::Client::builder()
             .timeout(std::time::Duration::from_secs(5))
             .build()

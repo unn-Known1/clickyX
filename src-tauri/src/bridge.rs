@@ -27,7 +27,11 @@ impl BridgeState {
 
 pub fn emit_event(state: &BridgeState, event_type: &str, payload: &str) {
     let msg = format!("event: {}\ndata: {}\n\n", event_type, payload);
-    let _ = state.event_tx.send(msg);
+    // #44: don't drop SSE payloads silently — broadcast send only fails when
+    // there are no connected receivers, which is worth logging at debug level.
+    if let Err(tokio::sync::broadcast::error::SendError(_)) = state.event_tx.send(msg) {
+        log::debug!("bridge event '{event_type}' dropped (no SSE receivers)");
+    }
 }
 
 #[derive(Serialize)]
@@ -1085,6 +1089,11 @@ async fn bridge_create_agent(
         match store.lock() {
             Ok(mut s) => {
                 let session = s.create(name.to_string(), slug.to_string(), skills);
+                // #5: persist and notify like the Tauri `create_agent` command.
+                let config = crate::config::load_config(app).unwrap_or_default();
+                let _ = s.save(&config.agent.encryption_key);
+                drop(s);
+                let _ = app.emit("agent-state-changed", slug);
                 HttpResponse::Ok().json(session)
             }
             Err(e) => HttpResponse::InternalServerError().json(ErrorResponse {
@@ -1114,27 +1123,18 @@ async fn bridge_run_agent(
 
     if let Some(store) = app.try_state::<std::sync::Mutex<crate::agent::session::AgentStore>>() {
         match store.lock() {
-            Ok(mut s) => {
-                if let Some(session) = s.get_mut(&slug) {
-                    session.state = crate::agent::session::SessionState::Running;
-                    session.transcript.push(crate::agent::session::ChatMessage {
-                        role: "user".into(),
-                        content: prompt.to_string(),
-                    });
-                    let now =
-                        std::time::SystemTime::now()
-                            .duration_since(std::time::UNIX_EPOCH)
-                            .unwrap_or_default()
-                            .as_secs()
-                            .to_string();
-                    session.updated_at = now;
-                    HttpResponse::Ok().json(serde_json::json!({ "ok": true }))
-                } else {
-                    HttpResponse::NotFound().json(ErrorResponse {
+            Ok(s) => {
+                if s.get(&slug).is_none() {
+                    return HttpResponse::NotFound().json(ErrorResponse {
                         error: "not_found".into(),
                         message: format!("agent '{slug}' not found"),
-                    })
+                    });
                 }
+                drop(s);
+                // #5: actually execute the agent through the shared path (marks
+                // Running, persists, emits, and runs the AI provider).
+                crate::commands::spawn_agent_run(app.clone(), slug, prompt.to_string());
+                HttpResponse::Ok().json(serde_json::json!({ "ok": true }))
             }
             Err(e) => HttpResponse::InternalServerError().json(ErrorResponse {
                 error: "internal_error".into(),
@@ -1161,6 +1161,11 @@ async fn bridge_stop_agent(
             Ok(mut s) => {
                 if let Some(session) = s.get_mut(&slug) {
                     session.state = crate::agent::session::SessionState::Paused;
+                    session.updated_at = crate::agent::session::now_utc();
+                    let config = crate::config::load_config(app).unwrap_or_default();
+                    let _ = s.save(&config.agent.encryption_key);
+                    drop(s);
+                    let _ = app.emit("agent-state-changed", slug);
                     HttpResponse::Ok().json(serde_json::json!({ "ok": true }))
                 } else {
                     HttpResponse::NotFound().json(ErrorResponse {

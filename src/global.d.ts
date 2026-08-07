@@ -1,6 +1,6 @@
 interface Window {
-  /** Used by CommandPalette to deep-link into settings sections */
-  __paletteSection?: (section: string) => void;
+  /** Pending settings section to open (set by CommandPalette or deep-links; consumed by SettingsTab on mount) */
+  __paletteSection?: string;
   /** Set by deep-link handler; consumed by router on next render */
   __deepLinkPending?: string;
 }

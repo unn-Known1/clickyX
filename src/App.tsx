@@ -5,6 +5,7 @@ import UpdateBanner from "./components/UpdateBanner";
 import AboutDialog from "./components/AboutDialog";
 import CommandPalette from "./components/CommandPalette";
 import StatusBar from "./components/StatusBar";
+import { Icon } from "./components/Icon";
 import { useConfig } from "./hooks/useConfig";
 import { AppProvider, useAppContext } from "./context/AppContext";
 import type { Tab } from "./context/AppContext";
@@ -52,15 +53,20 @@ function Toast({
     return () => clearTimeout(t);
   }, [message.id, onDismiss]);
 
+  const toastIcon = message.type === "success" ? "check" : message.type === "error" ? "error" : "info";
+
   return (
     <div className={`toast toast-${message.type}`} role="alert">
+      <span className="toast-icon" aria-hidden="true">
+        <Icon name={toastIcon} size={14} />
+      </span>
       <span className="toast-text">{message.text}</span>
       <button
         className="toast-close"
         onClick={() => onDismiss(message.id)}
         aria-label="Dismiss notification"
       >
-        ×
+        <Icon name="close" size={12} />
       </button>
     </div>
   );
@@ -85,9 +91,12 @@ const TABS: { id: Tab; label: string }[] = [
 function SplashScreen() {
   return (
     <div className="splash-screen" aria-label="Loading ClickyX">
-      <div className="splash-logo">✦</div>
+      <div className="splash-logo" aria-hidden="true">
+        <Icon name="sparkle" size={40} />
+      </div>
       <div className="splash-name">ClickyX</div>
-      <div className="splash-spinner" />
+      <div className="splash-tagline">Your AI companion</div>
+      <div className="splash-spinner" role="progressbar" aria-busy="true" />
     </div>
   );
 }
@@ -225,8 +234,8 @@ function AppInner() {
         } else if (parts[0] === "settings") {
           setActiveTab("settings");
           if (parts[1]) {
-            // Signal CommandPalette/SettingsTab to open a sub-section
-            (window as unknown as Record<string, unknown>).__paletteSection = parts[1];
+            // Signal SettingsTab to open a sub-section
+            window.__paletteSection = parts[1];
           }
         } else if (parts[0] === "connections") {
           setActiveTab("connections");
@@ -329,7 +338,7 @@ function AppInner() {
               aria-label="Minimize window"
               title="Minimize"
             >
-              ─
+              <Icon name="minus" size={12} />
             </button>
             <button
               className="window-btn window-btn-close"
@@ -337,7 +346,7 @@ function AppInner() {
               aria-label="Close window"
               title="Close"
             >
-              ✕
+              <Icon name="close" size={12} />
             </button>
           </div>
         </div>
@@ -366,11 +375,7 @@ function AppInner() {
               title="Command palette (Ctrl+K)"
               aria-label="Open command palette"
             >
-              {/* Search icon */}
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                <circle cx="11" cy="11" r="8" />
-                <line x1="21" y1="21" x2="16.65" y2="16.65" />
-              </svg>
+              <Icon name="search" size={13} />
             </button>
             <button
               className="pin-toggle-btn"
@@ -378,19 +383,7 @@ function AppInner() {
               title={config?.window?.pin ? "Unpin panel" : "Pin panel"}
               aria-label={config?.window?.pin ? "Unpin panel" : "Pin panel"}
             >
-              {config?.window?.pin ? (
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
-                  <line x1="7" y1="11" x2="7" y2="4" />
-                  <line x1="17" y1="11" x2="17" y2="4" />
-                  <line x1="12" y1="11" x2="12" y2="2" />
-                </svg>
-              ) : (
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <rect x="5" y="2" width="14" height="20" rx="2" ry="2" />
-                  <line x1="12" y1="18" x2="12.01" y2="18" />
-                </svg>
-              )}
+              <Icon name={config?.window?.pin ? "unpin" : "pin"} size={14} />
             </button>
           </div>
         </nav>

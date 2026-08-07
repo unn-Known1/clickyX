@@ -27,7 +27,7 @@ class OverlayErrorBoundary extends Component<{ children: ReactNode }, { error: E
   render() {
     if (this.state.error) {
       return (
-        <div style={{ position: "fixed", bottom: 8, right: 8, background: "rgba(244,67,54,0.85)", color: "#fff", padding: "6px 12px", borderRadius: 6, fontSize: 11, pointerEvents: "none" }}>
+        <div className="overlay-error-boundary" role="alert">
           Overlay error: {this.state.error.message}
         </div>
       );
@@ -252,7 +252,7 @@ function HighlightOverlay({ highlights, accent }: { highlights: HighlightState[]
             top: h.y,
             width: h.w,
             height: h.h,
-            background: `rgba(255, 220, 0, 0.25)`,
+            background: withAlpha(accent, 0.22),
             borderColor: accent,
           }}
           aria-hidden="true"

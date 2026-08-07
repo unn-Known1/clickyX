@@ -8,6 +8,8 @@ import { useVision } from "../hooks/useVision";
 import { useConversations } from "../hooks/useConversations";
 import type { ChatMessage } from "../hooks/useChat";
 import ModelSelector from "./ModelSelector";
+import { Icon } from "./Icon";
+import ConfirmDialog from "./ConfirmDialog";
 import { useAppContext } from "../context/AppContext";
 import { useQuery } from "@tanstack/react-query";
 import { commands } from "../bindings";
@@ -82,30 +84,18 @@ function MessageBubble({
             {message.content}
           </ReactMarkdown>
         ) : (
-          <span style={{ whiteSpace: "pre-wrap", wordBreak: "break-word" }}>{message.content}</span>
+          message.content
         )}
       </div>
 
       <div className="message-actions">
         <button className="msg-action-btn" onClick={handleCopy} title={copied ? "Copied!" : "Copy"}>
-          {copied ? (
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <polyline points="20 6 9 17 4 12" />
-            </svg>
-          ) : (
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
-              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
-            </svg>
-          )}
+          <Icon name={copied ? "check" : "copy"} size={12} />
           {copied ? "Copied" : "Copy"}
         </button>
         {message.role === "assistant" && isLast && onRegenerate && (
           <button className="msg-action-btn" onClick={onRegenerate} title="Regenerate">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <polyline points="23 4 23 10 17 10" />
-              <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
-            </svg>
+            <Icon name="retry" size={12} />
             Retry
           </button>
         )}
@@ -133,9 +123,7 @@ function ConversationSidebar({
       <div className="chat-sidebar-header">
         <span className="chat-sidebar-title">Conversations</span>
         <button className="chat-sidebar-new" onClick={onCreate} title="New conversation" aria-label="New conversation">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-            <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
-          </svg>
+          <Icon name="plus" size={13} />
         </button>
       </div>
       <div className="chat-sidebar-list">
@@ -149,6 +137,7 @@ function ConversationSidebar({
             onClick={() => onSelect(c.id)}
             role="button"
             tabIndex={0}
+            aria-label={`Open conversation: ${c.title}`}
             onKeyDown={(e) => e.key === "Enter" && onSelect(c.id)}
           >
             <span className="chat-sidebar-item-title">{c.title}</span>
@@ -176,7 +165,7 @@ function ChatTab({ initialText }: { initialText?: string }) {
   const {
     messages, streaming, currentText, error,
     sendMessageStream, sendMessageStreamWithVision,
-    cancelStream, clearMessages,
+    cancelStream, clearMessages, replaceMessages, regenerateLast,
   } = useChat();
   const { images, addImageFromDataUrl, removeImage, clearImages, getImageDataUrls } = useVision();
   const {
@@ -199,8 +188,10 @@ function ChatTab({ initialText }: { initialText?: string }) {
   const [selectedModel, setSelectedModel] = useState("");
   const [isDraggingOver, setIsDraggingOver] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [confirmClear, setConfirmClear] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Derive default model from saved config when it loads
   useEffect(() => {
@@ -228,6 +219,18 @@ function ChatTab({ initialText }: { initialText?: string }) {
       updateMessages(activeId, messages);
     }
   }, [messages, activeId, updateMessages]);
+
+  // Auto-grow the composer
+  const resizeInput = useCallback(() => {
+    const el = inputRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${Math.min(el.scrollHeight, 140)}px`;
+  }, []);
+
+  useEffect(() => {
+    resizeInput();
+  }, [input, resizeInput]);
 
   const addImageFile = useCallback((file: File) => {
     const reader = new FileReader();
@@ -285,17 +288,23 @@ function ChatTab({ initialText }: { initialText?: string }) {
   }, [showToast]);
 
   const handleRegenerate = useCallback(() => {
-    const lastUser = [...messages].reverse().find(m => m.role === "user");
-    if (!lastUser || streaming) return;
-    sendMessageStream(lastUser.content, selectedModel);
-  }, [messages, streaming, selectedModel, sendMessageStream]);
+    if (streaming) return;
+    void regenerateLast(selectedModel);
+  }, [streaming, selectedModel, regenerateLast]);
 
-  const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLInputElement>) => {
+  const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "ArrowUp" && input === "") {
       const lastUser = [...messages].reverse().find(m => m.role === "user");
       if (lastUser) { e.preventDefault(); setInput(lastUser.content); }
     }
-  }, [input, messages]);
+    // Enter sends, Shift+Enter inserts a newline
+    if (e.key === "Enter" && !e.shiftKey && !streaming) {
+      e.preventDefault();
+      if (input.trim() || images.length > 0) {
+        handleSubmit(e as unknown as React.FormEvent);
+      }
+    }
+  }, [input, messages, streaming, images.length, handleSubmit]);
 
   const handleNewConversation = useCallback(() => {
     clearMessages();
@@ -306,12 +315,18 @@ function ChatTab({ initialText }: { initialText?: string }) {
 
   const handleSelectConversation = useCallback((id: string) => {
     setActiveId(id);
-    clearMessages();
+    const convo = conversations.find(c => c.id === id);
+    // F-010 fix: load the conversation's persisted history instead of starting fresh
+    replaceMessages(convo?.messages ?? []);
     clearImages();
     setSidebarOpen(false);
-    // Note: reloading message history from store is a future enhancement
-    // when backend persistence lands; for now new messages start fresh
-  }, [setActiveId, clearMessages, clearImages]);
+  }, [setActiveId, conversations, replaceMessages, clearImages]);
+
+  const handleClear = useCallback(() => {
+    clearMessages();
+    clearImages();
+    setConfirmClear(false);
+  }, [clearMessages, clearImages]);
 
   return (
     <div className={`chat-tab ${isDraggingOver ? "chat-drop-active" : ""}`}
@@ -339,9 +354,7 @@ function ChatTab({ initialText }: { initialText?: string }) {
             aria-label="Toggle conversation history"
             aria-expanded={sidebarOpen}
           >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <line x1="3" y1="6" x2="21" y2="6" /><line x1="3" y1="12" x2="21" y2="12" /><line x1="3" y1="18" x2="21" y2="18" />
-            </svg>
+            <Icon name="menu" size={14} />
           </button>
           <span className="chat-title" title={activeConversation?.title ?? "Chat"}>
             {activeConversation?.title ?? "Chat"}
@@ -351,14 +364,12 @@ function ChatTab({ initialText }: { initialText?: string }) {
           <ModelSelector selectedModel={selectedModel} onModelChange={setSelectedModel} />
           {streaming && (
             <button className="chat-stop-btn" onClick={cancelStream}>
-              <svg width="10" height="10" viewBox="0 0 10 10">
-                <rect x="1" y="1" width="8" height="8" rx="1" fill="currentColor" />
-              </svg>
+              <Icon name="stop" size={10} />
               Stop
             </button>
           )}
           {messages.length > 0 && !streaming && (
-            <button className="chat-clear-btn" onClick={() => { clearMessages(); clearImages(); }}>Clear</button>
+            <button className="chat-clear-btn" onClick={() => setConfirmClear(true)}>Clear</button>
           )}
         </div>
       </div>
@@ -368,7 +379,7 @@ function ChatTab({ initialText }: { initialText?: string }) {
           <div className="chat-empty">
             Ask me anything — I can see your screen and help with tasks.
             <br />
-            <span className="chat-empty-hint">Paste or drag images to attach them.</span>
+            <span className="chat-empty-hint">Paste, drag, or use the paperclip to attach images. Enter to send.</span>
           </div>
         )}
 
@@ -418,9 +429,28 @@ function ChatTab({ initialText }: { initialText?: string }) {
       )}
 
       <form className="chat-input-form" onSubmit={handleSubmit}>
+        <button
+          type="button"
+          className="chat-attach-btn"
+          onClick={() => fileInputRef.current?.click()}
+          aria-label="Attach image"
+          title="Attach image"
+        >
+          <Icon name="paperclip" size={16} />
+        </button>
         <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          multiple
+          hidden
+          onChange={(e) => {
+            for (const f of Array.from(e.target.files ?? [])) addImageFile(f);
+            e.target.value = "";
+          }}
+        />
+        <textarea
           ref={inputRef}
-          type="text"
           className="chat-input"
           placeholder={images.length > 0 ? "Ask about the image…" : "Ask me anything…"}
           value={input}
@@ -428,16 +458,29 @@ function ChatTab({ initialText }: { initialText?: string }) {
           onPaste={handlePaste}
           onKeyDown={handleKeyDown}
           disabled={streaming}
+          rows={1}
           aria-label="Chat input"
         />
         <button
           type="submit"
           className="chat-submit-btn"
           disabled={(!input.trim() && images.length === 0) || streaming}
+          title="Send (Enter)"
+          aria-label="Send message"
         >
-          {streaming ? "…" : "Send"}
+          <Icon name="send" size={14} />
         </button>
       </form>
+
+      {confirmClear && (
+        <ConfirmDialog
+          title="Clear conversation?"
+          message="This removes the current messages from the view. The conversation history entry is kept."
+          confirmLabel="Clear"
+          onConfirm={handleClear}
+          onCancel={() => setConfirmClear(false)}
+        />
+      )}
     </div>
   );
 }

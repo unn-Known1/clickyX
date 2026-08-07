@@ -3,6 +3,8 @@ import { listen } from "../bindings";
 import { useStore } from "../store/appStore";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { commands } from "../bindings";
+import { useAgents } from "../hooks/useAgents";
+import { Icon } from "./Icon";
 import type { AutoCaptureStatus, AudioLevelResponse, TodayStats } from "../bindings";
 
 export default function StatusBar({ typeModeActive }: { typeModeActive?: boolean }) {
@@ -50,7 +52,8 @@ export default function StatusBar({ typeModeActive }: { typeModeActive?: boolean
   useEffect(() => { if (fetchedAudioStatus) setAudioStatus(fetchedAudioStatus); }, [fetchedAudioStatus, setAudioStatus]);
   useEffect(() => {
     if (fetchedAudioLevel !== undefined) {
-      const level = Math.max(0, Math.min(1, fetchedAudioLevel.rms / 100));
+      // Backend clamps rms to 0..1 — use it directly (was divided by 100, meter never lit)
+      const level = Math.max(0, Math.min(1, fetchedAudioLevel.rms));
       setAudioLevel(level);
     }
   }, [fetchedAudioLevel, setAudioLevel]);
@@ -63,8 +66,8 @@ export default function StatusBar({ typeModeActive }: { typeModeActive?: boolean
   const isListening = audioStatus?.listening ?? false;
   const captureActive = acStatus?.running ?? false;
 
-  // Derive needs-attention from store agents
-  const agents = useStore(s => s.agents);
+  // Derive needs-attention from the live react-query agent list (store agents were never populated)
+  const { agents } = useAgents();
   useEffect(() => {
     const items: { type: "warning" | "error" | "info"; message: string }[] = [];
     const errored = agents.filter(a => ["error", "failed"].includes(a.state.toLowerCase()));
@@ -83,16 +86,17 @@ export default function StatusBar({ typeModeActive }: { typeModeActive?: boolean
       <div className="status-bar-item" title={isListening ? `Listening (${audioStatus?.mode})` : "Microphone idle"}>
         <span className={`status-bar-dot ${isListening ? "status-bar-dot-active" : ""}`} />
         <AudioMeter level={audioLevel} active={isListening} />
-        <span className="status-bar-label">{isListening ? "Listening" : "Idle"}</span>
+        <span className="status-bar-label">{isListening ? "Listening" : "Mic idle"}</span>
       </div>
 
       <div className="status-bar-divider" />
 
       {/* Auto-capture state */}
-      <div className="status-bar-item" title={captureActive ? `Auto-capture active${lastCapture ? ` · ${lastCapture}` : ""}` : "Auto-capture off"}>
+      <div className="status-bar-item" title={captureActive ? `Auto-capture active${lastCapture ? ` · last capture ${lastCapture}` : ""}` : "Auto-capture off"}>
         <span className={`status-bar-dot ${captureActive ? "status-bar-dot-capture" : ""}`} />
+        <Icon name="screen" size={11} />
         <span className="status-bar-label">
-          {captureActive ? (lastCapture ? `Cap ${lastCapture}` : "Capturing") : "No capture"}
+          {captureActive ? (lastCapture ? `Capture · ${lastCapture}` : "Capturing…") : "Capture off"}
         </span>
       </div>
 
@@ -101,7 +105,10 @@ export default function StatusBar({ typeModeActive }: { typeModeActive?: boolean
         <>
           <div className="status-bar-divider" />
           <div className="status-bar-item" title={`Today: ${todayStats.agents_run} agents, ${todayStats.voice_commands} voice`}>
-            <span className="status-bar-label">{todayStats.agents_run}A · {todayStats.voice_commands}V</span>
+            <Icon name="clock" size={11} />
+            <span className="status-bar-label">
+              {todayStats.agents_run} agent{todayStats.agents_run === 1 ? "" : "s"} · {todayStats.voice_commands} voice
+            </span>
           </div>
         </>
       )}
@@ -111,7 +118,8 @@ export default function StatusBar({ typeModeActive }: { typeModeActive?: boolean
         <>
           <div className="status-bar-divider" />
           <div className="status-bar-item" title="Type mode active — keyboard input will be simulated">
-            <span className="status-bar-label type-mode-label">⌨ Type</span>
+            <Icon name="keyboard" size={11} />
+            <span className="status-bar-label type-mode-label">Type mode</span>
           </div>
         </>
       )}
@@ -124,8 +132,9 @@ export default function StatusBar({ typeModeActive }: { typeModeActive?: boolean
             className={`status-bar-item status-bar-attention ${errorCount > 0 ? "attention-error" : "attention-warn"}`}
             title={attentionItems.map(i => i.message).join("; ")}
           >
+            <Icon name="warning" size={11} />
             <span className="status-bar-label">
-              {errorCount > 0 ? `⚠ ${errorCount} error${errorCount > 1 ? "s" : ""}` : `⚠ ${warnCount} warning${warnCount > 1 ? "s" : ""}`}
+              {errorCount > 0 ? `${errorCount} error${errorCount > 1 ? "s" : ""}` : `${warnCount} warning${warnCount > 1 ? "s" : ""}`}
             </span>
           </div>
         </>

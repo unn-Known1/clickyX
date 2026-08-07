@@ -101,6 +101,16 @@ impl CaptureThreadHandle {
             vec![]
         }
     }
+
+    /// Read the newest buffered samples and consume them so the next poll only
+    /// returns newly captured audio (fixes duplicated/repeating transcriptions).
+    pub fn drain_buffer_samples(&self) -> Vec<f32> {
+        if let Ok(mut buf) = self.buffer.lock() {
+            buf.drain_all()
+        } else {
+            vec![]
+        }
+    }
 }
 
 // Send + Sync are automatically derived since all fields are Send + Sync:

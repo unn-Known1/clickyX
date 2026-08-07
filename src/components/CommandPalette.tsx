@@ -1,5 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import type { Tab } from "../context/AppContext";
+import { Icon } from "./Icon";
+import type { IconName } from "./Icon";
 
 interface Props {
   onClose: () => void;
@@ -10,8 +12,24 @@ interface PaletteItem {
   id: string;
   label: string;
   description: string;
+  icon: IconName;
   action: () => void;
   category: string;
+}
+
+/** Case-insensitive substring highlighting for search results */
+function Highlight({ text, query }: { text: string; query: string }) {
+  const q = query.trim();
+  if (!q) return <>{text}</>;
+  const idx = text.toLowerCase().indexOf(q.toLowerCase());
+  if (idx === -1) return <>{text}</>;
+  return (
+    <>
+      {text.slice(0, idx)}
+      <mark className="palette-match">{text.slice(idx, idx + q.length)}</mark>
+      {text.slice(idx + q.length)}
+    </>
+  );
 }
 
 export default function CommandPalette({ onClose, onNavigate }: Props) {
@@ -20,16 +38,16 @@ export default function CommandPalette({ onClose, onNavigate }: Props) {
   const inputRef = useRef<HTMLInputElement>(null);
 
   const items: PaletteItem[] = [
-    { id: "nav-home",        label: "Go to Home",        description: "Open the Home tab",        action: () => onNavigate("home"),        category: "Navigation" },
-    { id: "nav-agents",      label: "Go to Agents",      description: "Open the Agents tab",      action: () => onNavigate("agents"),      category: "Navigation" },
-    { id: "nav-connections", label: "Go to Connections", description: "Open the Connections tab", action: () => onNavigate("connections"), category: "Navigation" },
-    { id: "nav-settings",    label: "Go to Settings",    description: "Open the Settings tab",    action: () => onNavigate("settings"),    category: "Navigation" },
-    { id: "nav-settings-voice",    label: "Voice Settings",    description: "Settings › Voice",          action: () => { onNavigate("settings"); window.__paletteSection?.("voice"); },        category: "Settings" },
-    { id: "nav-settings-ai",       label: "AI Providers",      description: "Settings › AI Providers",   action: () => { onNavigate("settings"); window.__paletteSection?.("providers"); },    category: "Settings" },
-    { id: "nav-settings-general",  label: "General Settings",  description: "Settings › General",        action: () => { onNavigate("settings"); window.__paletteSection?.("general"); },     category: "Settings" },
-    { id: "nav-settings-system",   label: "System & Logs",     description: "Settings › System & Logs", action: () => { onNavigate("settings"); window.__paletteSection?.("system"); },      category: "Settings" },
-    { id: "nav-settings-perm",     label: "Permissions",       description: "Settings › Permissions",   action: () => { onNavigate("settings"); window.__paletteSection?.("permissions"); }, category: "Settings" },
-    { id: "new-agent", label: "New Agent", description: "Create a new agent in the Agents tab", action: () => onNavigate("agents"), category: "Actions" },
+    { id: "nav-home",        label: "Go to Home",        description: "Open the Home tab",        icon: "home",        action: () => onNavigate("home"),        category: "Navigation" },
+    { id: "nav-agents",      label: "Go to Agents",      description: "Open the Agents tab",      icon: "agents",      action: () => onNavigate("agents"),      category: "Navigation" },
+    { id: "nav-connections", label: "Go to Connections", description: "Open the Connections tab", icon: "connections", action: () => onNavigate("connections"), category: "Navigation" },
+    { id: "nav-settings",    label: "Go to Settings",    description: "Open the Settings tab",    icon: "settings",    action: () => onNavigate("settings"),    category: "Navigation" },
+    { id: "nav-settings-voice",    label: "Voice Settings",    description: "Settings › Voice",          icon: "microphone", action: () => { window.__paletteSection = "voice"; onNavigate("settings"); },        category: "Settings" },
+    { id: "nav-settings-ai",       label: "AI Providers",      description: "Settings › AI Providers",   icon: "ai",         action: () => { window.__paletteSection = "providers"; onNavigate("settings"); },    category: "Settings" },
+    { id: "nav-settings-general",  label: "General Settings",  description: "Settings › General",        icon: "settings",   action: () => { window.__paletteSection = "general"; onNavigate("settings"); },     category: "Settings" },
+    { id: "nav-settings-system",   label: "System & Logs",     description: "Settings › System & Logs", icon: "info",       action: () => { window.__paletteSection = "system"; onNavigate("settings"); },      category: "Settings" },
+    { id: "nav-settings-perm",     label: "Permissions",       description: "Settings › Permissions",   icon: "shield",     action: () => { window.__paletteSection = "permissions"; onNavigate("settings"); }, category: "Settings" },
+    { id: "new-agent", label: "New Agent", description: "Create a new agent in the Agents tab", icon: "plus", action: () => onNavigate("agents"), category: "Actions" },
   ];
 
   const filtered = query.trim()
@@ -65,9 +83,7 @@ export default function CommandPalette({ onClose, onNavigate }: Props) {
     <div className="palette-backdrop" onClick={onClose} role="dialog" aria-modal="true" aria-label="Command palette">
       <div className="palette-box" onClick={(e) => e.stopPropagation()}>
         <div className="palette-input-wrap">
-          <svg className="palette-search-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
-          </svg>
+          <Icon name="search" size={15} className="palette-search-icon" />
           <input
             ref={inputRef}
             className="palette-input"
@@ -101,8 +117,13 @@ export default function CommandPalette({ onClose, onNavigate }: Props) {
                         onClick={() => { item.action(); onClose(); }}
                         onMouseEnter={() => setSelected(globalIdx)}
                       >
-                        <span className="palette-item-label">{item.label}</span>
-                        <span className="palette-item-desc">{item.description}</span>
+                        <span className="palette-item-icon">
+                          <Icon name={item.icon} size={15} />
+                        </span>
+                        <span className="palette-item-text">
+                          <span className="palette-item-label"><Highlight text={item.label} query={query} /></span>
+                          <span className="palette-item-desc"><Highlight text={item.description} query={query} /></span>
+                        </span>
                       </div>
                     );
                   })}

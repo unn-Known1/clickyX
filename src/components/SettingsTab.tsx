@@ -12,7 +12,7 @@ const ModelGeneratorTab = lazy(() => import("./ModelGeneratorTab"));
 
 type SettingsTabId =
   | "general" | "voice" | "providers" | "computer_use"
-  | "permissions" | "agents" | "automations" | "system" | "3d_models";
+  | "permissions" | "system" | "3d_models";
 
 interface NavItem {
   id: SettingsTabId;
@@ -28,8 +28,6 @@ const SETTINGS_TABS: NavItem[] = [
   { id: "permissions",  label: "Permissions",   icon: "shield" },
   { id: "system",       label: "System",        icon: "info" },
   { id: "3d_models",    label: "3D Models",     icon: "cube" },
-  { id: "agents",       label: "Agents",        icon: "agents" },
-  { id: "automations",  label: "Automations",   icon: "bolt" },
 ];
 
 interface NavGroup {
@@ -40,7 +38,7 @@ interface NavGroup {
 const NAV_GROUPS: NavGroup[] = [
   { label: "Appearance",  items: ["general"] },
   { label: "AI & Voice",  items: ["providers", "voice"] },
-  { label: "Automation",  items: ["computer_use", "agents", "automations"] },
+  { label: "Automation",  items: ["computer_use"] },
   { label: "System",      items: ["permissions", "system", "3d_models"] },
 ];
 
@@ -54,13 +52,13 @@ function SettingsTab({ onOpenAbout }: Props) {
   // Scroll memory: save scroll position per section
   const scrollMemory = useRef<Record<string, number>>({});
 
-  // Expose section setter for CommandPalette deep-links
+  // Consume pending section from CommandPalette / deep-links on mount
   useEffect(() => {
-    window.__paletteSection = (section: string) => {
-      if (SETTINGS_TABS.some((t) => t.id === section)) {
-        setActiveSection(section as SettingsTabId);
-      }
-    };
+    const pending = window.__paletteSection;
+    if (typeof pending === "string" && SETTINGS_TABS.some((t) => t.id === pending)) {
+      setActiveSection(pending as SettingsTabId);
+    }
+    window.__paletteSection = undefined;
     return () => { window.__paletteSection = undefined; };
   }, []);
 
@@ -119,18 +117,6 @@ function SettingsTab({ onOpenAbout }: Props) {
           {activeSection === "providers"    && <AiProviderSettings />}
           {activeSection === "computer_use" && <ComputerUseSettings />}
           {activeSection === "permissions"  && <PermissionsSettings />}
-          {activeSection === "agents"       && (
-            <section className="settings-section elevated-card">
-              <h3>Agents</h3>
-              <p className="settings-placeholder">Agent configuration is managed in the Agents tab.</p>
-            </section>
-          )}
-          {activeSection === "automations"  && (
-            <section className="settings-section elevated-card">
-              <h3>Automations</h3>
-              <p className="settings-placeholder">Automation CRUD is available in the Connections tab.</p>
-            </section>
-          )}
           {activeSection === "3d_models" && (
             <Suspense fallback={<div className="skeleton-loader" />}>
               <ModelGeneratorTab />

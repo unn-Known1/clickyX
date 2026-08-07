@@ -42,36 +42,44 @@ impl AnnotationManager {
         }
     }
 
-    pub fn add_cursor(&mut self, id: String, data: super::CursorData) {
-        self.force_complete_kind(&AnnotationKind::Cursor);
-        let timeout = data.duration_ms;
+    /// Insert a cursor annotation. Returns the ids of any previously-active
+    /// annotations of the same kind that were force-completed (so the caller can
+    /// emit lifecycle events).
+    pub fn add_cursor(&mut self, id: String, data: super::CursorData) -> Vec<String> {
+        let completed = self.force_complete_kind(&AnnotationKind::Cursor);
+        let timeout = if data.duration_ms > 0 { data.duration_ms } else { self.timeouts.cursor_ms };
         let ann = Annotation::new(id.clone(), AnnotationKind::Cursor, timeout, data);
         self.cursors.insert(id.clone(), ann);
         self.kind_order.push(id);
+        completed
     }
 
-    pub fn add_rect(&mut self, id: String, data: super::RectPayload) {
-        self.force_complete_kind(&AnnotationKind::Rect);
+    pub fn add_rect(&mut self, id: String, data: super::RectPayload) -> Vec<String> {
+        let completed = self.force_complete_kind(&AnnotationKind::Rect);
         let ann = Annotation::new(id.clone(), AnnotationKind::Rect, self.timeouts.rect_ms, data);
         self.rectangles.insert(id.clone(), ann);
         self.kind_order.push(id);
+        completed
     }
 
-    pub fn add_scribble(&mut self, id: String, data: super::ScribblePayload) {
-        self.force_complete_kind(&AnnotationKind::Scribble);
+    pub fn add_scribble(&mut self, id: String, data: super::ScribblePayload) -> Vec<String> {
+        let completed = self.force_complete_kind(&AnnotationKind::Scribble);
         let ann = Annotation::new(id.clone(), AnnotationKind::Scribble, self.timeouts.scribble_ms, data);
         self.scribbles.insert(id.clone(), ann);
         self.kind_order.push(id);
+        completed
     }
 
-    pub fn add_caption(&mut self, id: String, data: super::CaptionPayload) {
-        self.force_complete_kind(&AnnotationKind::Caption);
+    pub fn add_caption(&mut self, id: String, data: super::CaptionPayload) -> Vec<String> {
+        let completed = self.force_complete_kind(&AnnotationKind::Caption);
         let ann = Annotation::new(id.clone(), AnnotationKind::Caption, self.timeouts.caption_ms, data);
         self.captions.insert(id.clone(), ann);
         self.kind_order.push(id);
+        completed
     }
 
-    pub fn complete(&mut self, id: &str) {
+    /// Mark an annotation completed/removed. Returns whether it was found.
+    pub fn complete(&mut self, id: &str) -> bool {
         let completed = if let Some(ann) = self.cursors.get_mut(id) {
             ann.state = AnnotationState::Completed;
             true
@@ -94,6 +102,7 @@ impl AnnotationManager {
             self.captions.remove(id);
             self.kind_order.retain(|k| k != id);
         }
+        completed
     }
 
     pub fn miss(&mut self, id: &str) {
@@ -147,16 +156,20 @@ impl AnnotationManager {
         self.kind_order.clear();
     }
 
-    fn force_complete_kind(&mut self, kind: &AnnotationKind) {
+    fn force_complete_kind(&mut self, kind: &AnnotationKind) -> Vec<String> {
         let to_complete: Vec<String> = match kind {
             AnnotationKind::Cursor => self.cursors.keys().cloned().collect(),
             AnnotationKind::Rect => self.rectangles.keys().cloned().collect(),
             AnnotationKind::Scribble => self.scribbles.keys().cloned().collect(),
             AnnotationKind::Caption => self.captions.keys().cloned().collect(),
         };
+        let mut completed = Vec::new();
         for id in to_complete {
-            self.complete(&id);
+            if self.complete(&id) {
+                completed.push(id);
+            }
         }
+        completed
     }
 
     pub fn has_active(&self) -> bool {

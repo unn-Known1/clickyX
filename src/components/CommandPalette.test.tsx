@@ -30,7 +30,8 @@ describe("CommandPalette", () => {
     const user = userEvent.setup();
     renderPalette();
     await user.type(screen.getByPlaceholderText("Search commands…"), "agent");
-    expect(screen.getByText("Go to Agents")).toBeInTheDocument();
+    // Matched substrings are wrapped in <mark>, so match on the full label text
+    expect(screen.getByText((_, el) => el?.textContent === "Go to Agents")).toBeInTheDocument();
     expect(screen.queryByText("Go to Home")).not.toBeInTheDocument();
   });
 

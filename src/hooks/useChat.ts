@@ -29,6 +29,12 @@ export function useChat() {
   const cancelledRef = useRef(false);
   // F-029: stable session ID so multiple useChat instances don't cross-contaminate
   const sessionIdRef = useRef<string>(newSessionId());
+  // Mirror of messages for imperative helpers (regenerateLast)
+  const messagesRef = useRef<ChatMessage[]>([]);
+
+  useEffect(() => {
+    messagesRef.current = messages;
+  }, [messages]);
 
   useEffect(() => {
     return () => {
@@ -78,6 +84,8 @@ export function useChat() {
             accumulated += p.text;
             setCurrentText(accumulated);
           } else if (p.type === "TextDone" && p.text) {
+            // Capture the authoritative final text so Done doesn't persist a truncated buffer
+            accumulated = p.text;
             setCurrentText(p.text);
           } else if (p.type === "Done") {
             setMessages((prev) => [
@@ -146,6 +154,8 @@ export function useChat() {
             accumulated += p.text;
             setCurrentText(accumulated);
           } else if (p.type === "TextDone" && p.text) {
+            // Capture the authoritative final text so Done doesn't persist a truncated buffer
+            accumulated = p.text;
             setCurrentText(p.text);
           } else if (p.type === "Done") {
             setMessages((prev) => [
@@ -200,6 +210,44 @@ export function useChat() {
     }
   }, []);
 
+  /** Replace the message history wholesale (e.g. when loading a conversation) */
+  const replaceMessages = useCallback((newMessages: ChatMessage[]) => {
+    cancelledRef.current = true;
+    if (unlistenRef.current) {
+      unlistenRef.current();
+      unlistenRef.current = null;
+    }
+    setStreaming(false);
+    setCurrentText("");
+    setError(null);
+    setMessages(Array.isArray(newMessages) ? newMessages : []);
+  }, []);
+
+  /** Regenerate the last assistant reply: drop everything after the last user
+   *  message, then re-run the prompt without duplicating the user turn. */
+  const regenerateLast = useCallback(
+    async (model?: string) => {
+      if (streaming) return;
+      const msgs = messagesRef.current;
+      let idx = -1;
+      for (let i = msgs.length - 1; i >= 0; i--) {
+        if (msgs[i].role === "user") { idx = i; break; }
+      }
+      if (idx === -1) return;
+      const prompt = msgs[idx].content;
+      const images = msgs[idx].images;
+      // Drop the trailing assistant messages AND the user turn; sendMessageStream
+      // will re-append the user turn once (no duplicate reply, no duplicate prompt).
+      setMessages(msgs.slice(0, idx));
+      if (images && images.length > 0) {
+        await sendMessageStreamWithVision(prompt, images, model);
+      } else {
+        await sendMessageStream(prompt, model);
+      }
+    },
+    [streaming, sendMessageStream, sendMessageStreamWithVision],
+  );
+
   return {
     messages,
     streaming,
@@ -209,5 +257,7 @@ export function useChat() {
     sendMessageStreamWithVision,
     cancelStream,
     clearMessages,
+    replaceMessages,
+    regenerateLast,
   };
 }

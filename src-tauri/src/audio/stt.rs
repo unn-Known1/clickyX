@@ -259,9 +259,11 @@ async fn transcribe_assemblyai(wav_data: &[u8], config: &SttConfig) -> Result<St
                 loop {
                     tokio::time::sleep(std::time::Duration::from_millis(500)).await;
                     poll_count += 1;
+                    // #22: hung poll connections must not block forever.
                     let poll_resp = client
                         .get(&polling_url)
                         .header("authorization", config.api_key.clone())
+                        .timeout(std::time::Duration::from_secs(config.timeout_secs))
                         .send()
                         .await
                         .map_err(|e| format!("AssemblyAI poll error: {e}"))?;

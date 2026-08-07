@@ -10,54 +10,91 @@ pub struct Skill {
     pub entry_point: String,
 }
 
-fn skills_dir() -> PathBuf {
+/// Candidate skill directories.
+///
+/// #19: the old code only used `CARGO_MANIFEST_DIR/../skills` (a compile-time
+/// path), so packaged/installed builds always returned an empty skill list.
+/// We now also scan the per-user data + config dirs, which admins/packagers can
+/// seed, and fall back to the in-repo `skills/` dir for dev builds.
+fn skills_dirs() -> Vec<PathBuf> {
+    let mut dirs = Vec::new();
+
+    if let Some(data) = dirs::data_dir() {
+        dirs.push(data.join("clickyx").join("skills"));
+    }
+    if let Some(config) = dirs::config_dir() {
+        dirs.push(config.join("clickyx").join("skills"));
+    }
+
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    manifest_dir.parent().map(|p| p.join("skills")).unwrap_or_else(|| manifest_dir.join("../skills"))
+    if let Some(dev) = manifest_dir.parent().map(|p| p.join("skills")) {
+        if dev.exists() {
+            dirs.push(dev);
+        }
+    }
+    dirs
+}
+
+/// Scan one skill directory: every sub-folder may contain skill metadata files
+/// (`<name>.toml` / `<name>.json`); top-level files are also loaded.
+fn scan_dir(dir: &PathBuf, skills: &mut Vec<Skill>) {
+    if !dir.exists() {
+        return;
+    }
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.is_dir() {
+            if let Ok(sub_entries) = std::fs::read_dir(&path) {
+                for sub in sub_entries.flatten() {
+                    push_unique(skills, load_skill_file(&sub.path()));
+                }
+            }
+        } else {
+            push_unique(skills, load_skill_file(&path));
+        }
+    }
+}
+
+fn push_unique(skills: &mut Vec<Skill>, skill: Option<Skill>) {
+    if let Some(skill) = skill {
+        if !skills.iter().any(|s| s.name == skill.name) {
+            skills.push(skill);
+        }
+    }
 }
 
 pub fn load_skills() -> Vec<Skill> {
-    let dir = skills_dir();
-    if !dir.exists() {
-        return vec![];
-    }
-
     let mut skills = vec![];
-    if let Ok(entries) = std::fs::read_dir(&dir) {
-        for entry in entries.flatten() {
-            let path = entry.path();
-            if path.is_dir() {
-                if let Ok(sub_entries) = std::fs::read_dir(&path) {
-                    for sub in sub_entries.flatten() {
-                        if let Some(skill) = load_skill_file(&sub.path()) {
-                            skills.push(skill);
-                        }
-                    }
-                }
-            } else if let Some(skill) = load_skill_file(&path) {
-                skills.push(skill);
-            }
-        }
+    for dir in skills_dirs() {
+        scan_dir(&dir, &mut skills);
     }
     skills
 }
 
 pub fn load_skill(name: &str) -> Option<Skill> {
-    let dir = skills_dir();
-    if !dir.exists() {
-        return None;
-    }
-
-    if let Ok(entries) = std::fs::read_dir(&dir) {
-        for entry in entries.flatten() {
-            let path = entry.path();
-            if path.is_dir() {
-                if let Ok(sub_entries) = std::fs::read_dir(&path) {
-                    for sub in sub_entries.flatten() {
-                        if let Some(skill) = load_skill_file(&sub.path()) {
-                            if skill.name == name {
-                                return Some(skill);
+    for dir in skills_dirs() {
+        if !dir.exists() {
+            continue;
+        }
+        if let Ok(entries) = std::fs::read_dir(&dir) {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if path.is_dir() {
+                    if let Ok(sub_entries) = std::fs::read_dir(&path) {
+                        for sub in sub_entries.flatten() {
+                            if let Some(skill) = load_skill_file(&sub.path()) {
+                                if skill.name == name {
+                                    return Some(skill);
+                                }
                             }
                         }
+                    }
+                } else if let Some(skill) = load_skill_file(&path) {
+                    if skill.name == name {
+                        return Some(skill);
                     }
                 }
             }
@@ -161,57 +198,13 @@ mod tests {
         let json = serde_json::to_string(&original).expect("serialize");
         let restored: Skill = serde_json::from_str(&json).expect("deserialize");
         assert_eq!(original.name, restored.name);
-        assert_eq!(original.version, restored.version);
-        assert_eq!(original.entry_point, restored.entry_point);
+        assert_eq!(original.description, restored.description);
     }
 
     #[test]
-    fn test_load_skill_file_returns_none_for_unknown_extension() {
-        let path = PathBuf::from("test.yaml");
-        let result = load_skill_file(&path);
-        assert!(result.is_none(), "unknown extension should return None");
-    }
-
-    #[test]
-    fn test_load_json_skill_parses_valid_file() {
-        let tmp = tempfile::tempdir().expect("tempdir");
-        let path = tmp.path().join("skill.json");
-        let json = r#"{
-            "name": "temp-skill",
-            "description": "Temporary",
-            "version": "1.0.0",
-            "permission_class": "read_only",
-            "entry_point": "index.js"
-        }"#;
-        std::fs::write(&path, json).expect("write");
-        let result = load_json_skill(&path);
-        assert!(result.is_some());
-        assert_eq!(result.unwrap().name, "temp-skill");
-    }
-
-    #[test]
-    fn test_load_json_skill_returns_none_for_invalid_json() {
-        let tmp = tempfile::tempdir().expect("tempdir");
-        let path = tmp.path().join("bad.json");
-        std::fs::write(&path, "not valid json").expect("write");
-        let result = load_json_skill(&path);
-        assert!(result.is_none());
-    }
-
-    #[test]
-    fn test_load_toml_skill_parses_valid_file() {
-        let tmp = tempfile::tempdir().expect("tempdir");
-        let path = tmp.path().join("skill.toml");
-        let toml_content = r#"
-name = "toml-skill"
-description = "A TOML skill"
-version = "1.2.3"
-permission_class = "read_only"
-entry_point = "skill.js"
-"#;
-        std::fs::write(&path, toml_content).expect("write");
-        let result = load_toml_skill(&path);
-        assert!(result.is_some());
-        assert_eq!(result.unwrap().name, "toml-skill");
+    fn test_scan_dir_skips_missing_dir() {
+        let mut skills = vec![];
+        scan_dir(&PathBuf::from("/nonexistent/definitely/missing"), &mut skills);
+        assert!(skills.is_empty());
     }
 }

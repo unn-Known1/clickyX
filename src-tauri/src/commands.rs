@@ -282,10 +282,10 @@ fn execute_guidance_tags(app: &AppHandle, text: &str) {
                 let _ = crate::overlay::show_rect(app, x, y, w, h, label);
             }
             crate::ai::guidance::GuidanceTag::Highlight { x, y, w, h, label } => {
-                let _ = crate::overlay::show_rect(app, x, y, w, h, label);
+                let _ = crate::overlay::show_highlight(app, x, y, w, h, label);
             }
-            crate::ai::guidance::GuidanceTag::Shape { shape_type: _, x1, y1, x2, y2, label } => {
-                let _ = crate::overlay::show_scribble(app, vec![[x1, y1], [x2, y2]], label);
+            crate::ai::guidance::GuidanceTag::Shape { shape_type, x1, y1, x2, y2, label } => {
+                let _ = crate::overlay::show_shape(app, &shape_type, x1, y1, x2, y2, label);
             }
             crate::ai::guidance::GuidanceTag::Scribble { points, label } => {
                 let p = points.into_iter().map(|(x, y)| [x, y]).collect();
@@ -709,10 +709,18 @@ pub fn get_today_stats(
     store: State<'_, Mutex<AgentStore>>,
 ) -> Result<TodayStatsResponse, String> {
     let store = store.lock().map_err(|e| format!("lock error: {e}"))?;
+    // #16: only count sessions active today, not the entire history.
+    let today = crate::automation::now_date_parts();
     let mut agents_run = 0;
     let mut voice_commands = 0;
     let mut items_for_review = 0;
     for session in store.sessions.values() {
+        let created = crate::agent::session::parse_ts_secs(&session.created_at);
+        let parts = crate::automation::date_parts_from_unix_secs(created);
+        let is_today = parts == today;
+        if !is_today {
+            continue;
+        }
         if matches!(session.state, SessionState::Completed { .. }) {
             agents_run += 1;
         }
@@ -733,19 +741,17 @@ pub fn get_today_stats(
 }
 
 #[tauri::command]
-pub fn transcribe_audio(
+pub async fn transcribe_audio(
     audio_data: Vec<f32>,
     _provider: Option<String>,
     pipeline: State<'_, Mutex<VoicePipeline>>,
 ) -> Result<String, String> {
+    // #17: async command — runs directly on the Tauri async runtime, no
+    // hand-rolled Runtime::new()/block_on on the main thread.
     let pipe = pipeline.lock().map_err(|e| format!("lock error: {e}"))?;
     let stt_cfg = pipe.stt_config()?;
     let sample_rate = 16000;
-
-    let rt = tokio::runtime::Handle::try_current()
-        .map_err(|e| format!("No tokio runtime: {e}"))?;
-
-    rt.block_on(async { crate::audio::transcribe(&audio_data, &stt_cfg, sample_rate).await })
+    crate::audio::transcribe(&audio_data, &stt_cfg, sample_rate).await
 }
 
 #[tauri::command]
@@ -1257,18 +1263,35 @@ pub fn get_logs(count: Option<u32>) -> Result<Vec<LogEntry>, String> {
             let parts: Vec<&str> = line.splitn(4, " | ").collect();
             if parts.len() == 4 {
                 entries.push(LogEntry {
-                    timestamp: parts[0].into(),
-                    level: parts[1].into(),
-                    target: parts[2].into(),
+                    timestamp: parts[0].trim().into(),
+                    level: parts[1].trim().into(),
+                    target: parts[2].trim().into(),
                     message: parts[3].into(),
                 });
             } else {
-                entries.push(LogEntry {
-                    timestamp: String::new(),
-                    level: String::new(),
-                    target: String::new(),
-                    message: line.into(),
-                });
+                // env_logger default format: "[2026-08-07T12:00:00Z INFO target] msg"
+                let trimmed = line.trim();
+                let trimmed = trimmed.trim_start_matches('[').trim_end_matches(']');
+                let mut split = trimmed.splitn(3, ' ');
+                let ts = split.next().unwrap_or("");
+                let lvl = split.next().unwrap_or("");
+                let rest = split.next().unwrap_or("");
+                if rest.contains("] ") {
+                    let mut parts = rest.splitn(2, "] ");
+                    entries.push(LogEntry {
+                        timestamp: ts.into(),
+                        level: lvl.into(),
+                        target: parts.next().unwrap_or("").into(),
+                        message: parts.next().unwrap_or("").into(),
+                    });
+                } else {
+                    entries.push(LogEntry {
+                        timestamp: ts.into(),
+                        level: lvl.into(),
+                        target: String::new(),
+                        message: rest.into(),
+                    });
+                }
             }
         }
         if entries.len() >= count {
@@ -1291,10 +1314,150 @@ pub fn clear_logs() -> Result<(), String> {
     {
         let entry = entry.map_err(|e| format!("failed to read entry: {e}"))?;
         if entry.path().extension().map(|ext| ext == "log").unwrap_or(false) {
-            std::fs::remove_file(entry.path())
-                .map_err(|e| format!("failed to remove log: {e}"))?;
+            // #39: on Windows the logger holds an open handle, so remove may fail;
+            // fall back to truncating so the viewer still clears.
+            if let Err(_e) = std::fs::remove_file(entry.path()) {
+                let _ = std::fs::OpenOptions::new()
+                    .write(true)
+                    .truncate(true)
+                    .open(entry.path());
+            }
         }
     }
+    Ok(())
+}
+
+// ── App Usage Log + Automation Run History (#8) ──────────────────────────────
+// These commands are invoked by the frontend but did not exist in Rust, so the
+// App Usage Log and Automation run history always showed empty/error states.
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AppUsageEntry {
+    pub app: String,
+    pub duration_secs: u64,
+    pub last_seen: String,
+    pub interaction_count: u64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AutomationRunEntry {
+    pub id: String,
+    pub automation_id: String,
+    pub started_at: String,
+    pub finished_at: Option<String>,
+    pub status: String,
+    pub duration_ms: Option<u64>,
+    pub error: Option<String>,
+}
+
+fn usage_log_path() -> std::path::PathBuf {
+    dirs::config_dir()
+        .unwrap_or_else(|| std::path::PathBuf::from("."))
+        .join("clickyx")
+        .join("usage_log.json")
+}
+
+fn automation_runs_path() -> std::path::PathBuf {
+    dirs::config_dir()
+        .unwrap_or_else(|| std::path::PathBuf::from("."))
+        .join("clickyx")
+        .join("automation_runs.json")
+}
+
+#[tauri::command]
+pub fn get_app_usage_log() -> Result<Vec<AppUsageEntry>, String> {
+    let path = usage_log_path();
+    if !path.exists() {
+        return Ok(vec![]);
+    }
+    let content =
+        std::fs::read_to_string(&path).map_err(|e| format!("failed to read usage log: {e}"))?;
+    serde_json::from_str(&content).map_err(|e| format!("failed to parse usage log: {e}"))
+}
+
+#[tauri::command]
+pub fn clear_app_usage_log() -> Result<(), String> {
+    let path = usage_log_path();
+    if path.exists() {
+        std::fs::remove_file(&path).map_err(|e| format!("failed to clear usage log: {e}"))?;
+    }
+    Ok(())
+}
+
+/// Record focused-app usage; merges into the on-disk log (called by capture paths).
+pub fn record_app_usage(app_name: &str) {
+    let now = crate::agent::session::now_utc();
+    let mut entries = get_app_usage_log().unwrap_or_default();
+    if let Some(entry) = entries.iter_mut().find(|e| e.app == app_name) {
+        entry.interaction_count += 1;
+        entry.last_seen = now.clone();
+    } else {
+        entries.push(AppUsageEntry {
+            app: app_name.to_string(),
+            duration_secs: 0,
+            last_seen: now,
+            interaction_count: 1,
+        });
+    }
+    entries.sort_by(|a, b| b.last_seen.cmp(&a.last_seen));
+    if let Some(parent) = usage_log_path().parent() {
+        std::fs::create_dir_all(parent).unwrap_or_default();
+    }
+    if let Ok(json) = serde_json::to_string(&entries) {
+        let _ = std::fs::write(usage_log_path(), json);
+    }
+}
+
+#[tauri::command]
+pub fn get_automation_runs(automation_id: String) -> Result<Vec<AutomationRunEntry>, String> {
+    let path = automation_runs_path();
+    if !path.exists() {
+        return Ok(vec![]);
+    }
+    let content = std::fs::read_to_string(&path)
+        .map_err(|e| format!("failed to read automation runs: {e}"))?;
+    let all: Vec<AutomationRunEntry> = serde_json::from_str(&content)
+        .map_err(|e| format!("failed to parse automation runs: {e}"))?;
+    Ok(all
+        .into_iter()
+        .filter(|r| r.automation_id == automation_id)
+        .collect())
+}
+
+/// Append an automation run entry (used by the automation tick loop).
+pub fn record_automation_run(entry: AutomationRunEntry) {
+    let mut all: Vec<AutomationRunEntry> = {
+        let path = automation_runs_path();
+        if path.exists() {
+            std::fs::read_to_string(&path)
+                .ok()
+                .and_then(|c| serde_json::from_str(&c).ok())
+                .unwrap_or_default()
+        } else {
+            Vec::new()
+        }
+    };
+    all.push(entry);
+    if all.len() > 200 {
+        all.drain(0..all.len() - 200);
+    }
+    if let Some(parent) = automation_runs_path().parent() {
+        std::fs::create_dir_all(parent).unwrap_or_default();
+    }
+    if let Ok(json) = serde_json::to_string(&all) {
+        let _ = std::fs::write(automation_runs_path(), json);
+    }
+}
+
+// ── Bridge auth token (#45) ──────────────────────────────────────────────────
+// Lets the UI enable/disable the local HTTP bridge token (was never exposable).
+
+#[tauri::command]
+pub fn set_bridge_token(app: AppHandle, token: Option<String>) -> Result<(), String> {
+    let mut config = config::load_config(&app)?;
+    config.bridge_token = token;
+    config::save_config(&app, &config)?;
+    log::info!("Bridge token updated (takes effect on next app start)");
     Ok(())
 }
 
@@ -1447,32 +1610,30 @@ pub fn create_agent(
     Ok(session)
 }
 
-#[tauri::command]
-pub async fn run_agent(
-    app: AppHandle,
-    slug: String,
-    prompt: String,
-    state: tauri::State<'_, Mutex<AgentStore>>,
-) -> Result<(), String> {
+/// Shared agent execution: marks the session Running, appends the prompt,
+/// persists, emits `agent-state-changed`, and spawns the provider call on the
+/// async runtime. Used by the `run_agent` command and by automation triggers
+/// (#15) so both paths actually execute the AI provider.
+pub fn spawn_agent_run(app: AppHandle, slug: String, prompt: String) {
     // Set agent to running state and save transcript
     {
-        let mut store = state.lock().map_err(|e| format!("lock error: {e}"))?;
-        let session = store
-            .get_mut(&slug)
-            .ok_or_else(|| format!("agent '{slug}' not found"))?;
-        session.state = SessionState::Running;
-        session.transcript.push(ChatMessage {
-            role: "user".into(),
-            content: prompt.clone(),
-        });
-        let now = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_secs()
-            .to_string();
-        session.updated_at = now;
-        let config = config::load_config(&app).unwrap_or_default();
-        let _ = store.save(&config.agent.encryption_key);
+        if let Some(store_mutex) = app.try_state::<Mutex<AgentStore>>() {
+            if let Ok(mut store) = store_mutex.lock() {
+                if let Some(session) = store.get_mut(&slug) {
+                    session.state = SessionState::Running;
+                    session.transcript.push(ChatMessage {
+                        role: "user".into(),
+                        content: prompt.clone(),
+                    });
+                    session.updated_at = crate::agent::session::now_utc();
+                    let config = config::load_config(&app).unwrap_or_default();
+                    let _ = store.save(&config.agent.encryption_key);
+                } else {
+                    log::warn!("spawn_agent_run: agent '{slug}' not found");
+                    return;
+                }
+            }
+        }
     }
 
     // Emit state change so frontend updates
@@ -1526,10 +1687,15 @@ pub async fn run_agent(
 
         match provider.chat(&messages, &model).await {
             Ok(response) => {
-                // Append assistant response to transcript
                 if let Some(store_mutex) = app_clone.try_state::<Mutex<AgentStore>>() {
                     if let Ok(mut store) = store_mutex.lock() {
                         if let Some(session) = store.get_mut(&slug_clone) {
+                            // #12: never resurrect a stopped/archived agent.
+                            if matches!(session.state, SessionState::Paused | SessionState::Archived) {
+                                log::info!("Agent {} was stopped while running — discarding completion", slug_clone);
+                                drop(store);
+                                return;
+                            }
                             session.transcript.push(ChatMessage {
                                 role: "assistant".into(),
                                 content: response,
@@ -1537,12 +1703,7 @@ pub async fn run_agent(
                             session.state = SessionState::Completed {
                                 result: "completed".into(),
                             };
-                            let now = std::time::SystemTime::now()
-                                .duration_since(std::time::UNIX_EPOCH)
-                                .unwrap_or_default()
-                                .as_secs()
-                                .to_string();
-                            session.updated_at = now;
+                            session.updated_at = crate::agent::session::now_utc();
                             let _ = store.save(&config.agent.encryption_key);
                         }
                     }
@@ -1554,15 +1715,15 @@ pub async fn run_agent(
                 if let Some(store_mutex) = app_clone.try_state::<Mutex<AgentStore>>() {
                     if let Ok(mut store) = store_mutex.lock() {
                         if let Some(session) = store.get_mut(&slug_clone) {
+                            if matches!(session.state, SessionState::Paused | SessionState::Archived) {
+                                log::info!("Agent {} was stopped while running — discarding error", slug_clone);
+                                drop(store);
+                                return;
+                            }
                             session.state = SessionState::Failed {
                                 error: e.to_string(),
                             };
-                            let now = std::time::SystemTime::now()
-                                .duration_since(std::time::UNIX_EPOCH)
-                                .unwrap_or_default()
-                                .as_secs()
-                                .to_string();
-                            session.updated_at = now;
+                            session.updated_at = crate::agent::session::now_utc();
                             let _ = store.save(&config.agent.encryption_key);
                         }
                     }
@@ -1571,7 +1732,22 @@ pub async fn run_agent(
             }
         }
     });
+}
 
+#[tauri::command]
+pub async fn run_agent(
+    app: AppHandle,
+    slug: String,
+    prompt: String,
+    state: tauri::State<'_, Mutex<AgentStore>>,
+) -> Result<(), String> {
+    {
+        let store = state.lock().map_err(|e| format!("lock error: {e}"))?;
+        if store.get(&slug).is_none() {
+            return Err(format!("agent '{slug}' not found"));
+        }
+    }
+    spawn_agent_run(app, slug, prompt);
     Ok(())
 }
 
@@ -1591,15 +1767,10 @@ pub fn stop_agent(
         }
         _ => {} // already stopped, no-op
     }
-    let now =
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_secs()
-            .to_string();
-    session.updated_at = now;
+    session.updated_at = crate::agent::session::now_utc();
     let config = config::load_config(&app).unwrap_or_default();
     let _ = store.save(&config.agent.encryption_key);
+    let _ = app.emit("agent-state-changed", slug.clone());
     Ok(())
 }
 
@@ -1614,15 +1785,10 @@ pub fn archive_agent(
         .get_mut(&slug)
         .ok_or_else(|| format!("agent '{slug}' not found"))?;
     session.state = SessionState::Archived;
-    let now =
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_secs()
-            .to_string();
-    session.updated_at = now;
+    session.updated_at = crate::agent::session::now_utc();
     let config = config::load_config(&app).unwrap_or_default();
     let _ = store.save(&config.agent.encryption_key);
+    let _ = app.emit("agent-state-changed", slug.clone());
     Ok(())
 }
 
@@ -1895,8 +2061,14 @@ pub fn agent_attach_files(
                 // Read file content and store as a message
                 match std::fs::read_to_string(path_obj) {
                     Ok(content) => {
+                        // #6: never slice at a non-char-boundary (panics on CJK/emoji)
                         let truncated = if content.len() > 10000 {
-                            format!("{}... [truncated]", &content[..10000])
+                            let cut = content
+                                .char_indices()
+                                .nth(10000)
+                                .map(|(i, _)| i)
+                                .unwrap_or(content.len());
+                            format!("{}... [truncated]", &content[..cut])
                         } else {
                             content
                         };

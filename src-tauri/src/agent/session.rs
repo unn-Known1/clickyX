@@ -126,13 +126,25 @@ impl AgentStore {
     }
 }
 
-fn now_utc() -> String {
+/// Millisecond-granularity UTC timestamp (#51: second-granularity made the
+/// "recent first" sort unstable for sessions created in the same second).
+pub fn now_utc() -> String {
     use std::time::{SystemTime, UNIX_EPOCH};
     let duration = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap_or_default();
-    let secs = duration.as_secs();
-    format!("{}", secs)
+    let millis = duration.as_millis();
+    format!("{}", millis)
+}
+
+/// Parse a stored timestamp (either seconds or milliseconds since epoch).
+pub fn parse_ts_secs(ts: &str) -> u64 {
+    let v = ts.parse::<u64>().unwrap_or(0);
+    if v > 100_000_000_000 {
+        v / 1000
+    } else {
+        v
+    }
 }
 
 fn agents_file_path() -> std::path::PathBuf {

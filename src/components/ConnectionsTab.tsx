@@ -42,6 +42,8 @@ interface WorkspaceStatus {
 import ActiveAgentsWidget from "./ActiveAgentsWidget";
 import TodayStatsWidget from "./TodayStatsWidget";
 import NeedsAttentionWidget from "./NeedsAttentionWidget";
+import { Icon } from "./Icon";
+import ConfirmDialog from "./ConfirmDialog";
 import { useAgents } from "../hooks/useAgents";
 
 interface ActiveAgent {
@@ -66,6 +68,7 @@ interface AppUsageEntry {
 function AppUsageLog({ showToast }: { showToast: (msg: string, type?: import("../context/AppContext").ToastType) => void }) {
   const [expanded, setExpanded] = useState(false);
   const [clearing, setClearing] = useState(false);
+  const [confirmClear, setConfirmClear] = useState(false);
 
   const { data: usageLog = [], refetch } = useQuery<AppUsageEntry[]>({
     queryKey: ["app-usage-log"],
@@ -91,15 +94,15 @@ function AppUsageLog({ showToast }: { showToast: (msg: string, type?: import("..
     <section className="connections-section">
       <div
         className="section-header"
-        style={{ cursor: "pointer", display: "flex", alignItems: "center", gap: 8 }}
         onClick={() => setExpanded((v) => !v)}
         role="button"
         aria-expanded={expanded}
+        title={expanded ? "Collapse section" : "Expand section"}
       >
-        <span style={{ fontSize: 12, opacity: 0.5 }}>{expanded ? "▾" : "▸"}</span>
-        <h3 style={{ margin: 0 }}>App Usage Log</h3>
+        <Icon name={expanded ? "chevron-down" : "chevron-right"} size={12} />
+        <h3>App Usage Log</h3>
         {usageLog.length > 0 && (
-          <span className="agent-skill-badge" style={{ marginLeft: "auto" }}>
+          <span className="agent-skill-badge usage-count">
             {usageLog.length} apps
           </span>
         )}
@@ -111,37 +114,37 @@ function AppUsageLog({ showToast }: { showToast: (msg: string, type?: import("..
             <p className="empty-state-text">No app usage data collected yet. Usage is tracked when ClickyX detects active applications.</p>
           ) : (
             <>
-              <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 8 }}>
+              <div className="usage-toolbar">
                 <button
-                  className="btn-secondary btn-sm"
-                  onClick={clearLog}
+                  className="btn btn-secondary btn-sm"
+                  onClick={() => setConfirmClear(true)}
                   disabled={clearing}
                 >
                   {clearing ? "Clearing…" : "Clear Log"}
                 </button>
               </div>
-              <table style={{ width: "100%", fontSize: 12, borderCollapse: "collapse" }}>
+              <table className="usage-table">
                 <thead>
-                  <tr style={{ opacity: 0.6, textAlign: "left" }}>
-                    <th style={{ padding: "4px 8px" }}>App</th>
-                    <th style={{ padding: "4px 8px" }}>Time</th>
-                    <th style={{ padding: "4px 8px" }}>Interactions</th>
-                    <th style={{ padding: "4px 8px" }}>Last seen</th>
+                  <tr>
+                    <th>App</th>
+                    <th>Time</th>
+                    <th>Interactions</th>
+                    <th>Last seen</th>
                   </tr>
                 </thead>
                 <tbody>
                   {usageLog.map((entry) => (
-                    <tr key={entry.app} style={{ borderTop: "1px solid var(--border)" }}>
-                      <td style={{ padding: "4px 8px", fontWeight: 500 }}>{entry.app}</td>
-                      <td style={{ padding: "4px 8px" }}>
+                    <tr key={entry.app}>
+                      <td className="usage-app">{entry.app}</td>
+                      <td>
                         {entry.duration_secs >= 3600
                           ? `${(entry.duration_secs / 3600).toFixed(1)}h`
                           : entry.duration_secs >= 60
                           ? `${Math.round(entry.duration_secs / 60)}m`
                           : `${entry.duration_secs}s`}
                       </td>
-                      <td style={{ padding: "4px 8px" }}>{entry.interaction_count}</td>
-                      <td style={{ padding: "4px 8px", opacity: 0.6 }}>
+                      <td>{entry.interaction_count}</td>
+                      <td className="usage-last-seen">
                         {new Date(entry.last_seen).toLocaleString()}
                       </td>
                     </tr>
@@ -151,6 +154,16 @@ function AppUsageLog({ showToast }: { showToast: (msg: string, type?: import("..
             </>
           )}
         </div>
+      )}
+
+      {confirmClear && (
+        <ConfirmDialog
+          title="Clear usage log?"
+          message="All collected app usage data will be permanently deleted."
+          confirmLabel="Clear Log"
+          onConfirm={() => { setConfirmClear(false); void clearLog(); }}
+          onCancel={() => setConfirmClear(false)}
+        />
       )}
     </section>
   );
@@ -195,6 +208,10 @@ function ConnectionsTab() {
 
   // F-024: Args array editor state
   const [editingArg, setEditingArg] = useState("");
+
+  // Destructive-action confirmations
+  const [confirmRemoveMcp, setConfirmRemoveMcp] = useState<string | null>(null);
+  const [confirmDeleteAuto, setConfirmDeleteAuto] = useState<string | null>(null);
 
   // New automation state
   const [newAutomation, setNewAutomation] = useState<Automation>({
@@ -423,14 +440,14 @@ function ConnectionsTab() {
                     ))}
                   </div>
                 )}
-                <button className="btn-small btn-danger" onClick={disconnectGoogle}>
+                <button className="btn btn-small btn-danger" onClick={disconnectGoogle}>
                   Disconnect
                 </button>
               </div>
             ) : workspace.available ? (
               <div className="google-auth-options">
                 <button
-                  className="btn-primary google-oauth-btn"
+                  className="btn btn-primary google-oauth-btn"
                   onClick={startGoogleAuth}
                   disabled={workspaceConnecting}
                 >
@@ -488,12 +505,12 @@ function ConnectionsTab() {
                 {/* F-011: Test button */}
                 <div className="mcp-item-actions">
                   <button
-                    className="btn-secondary btn-sm"
+                    className="btn btn-secondary btn-sm"
                     onClick={() => testMcpServer(server)}
                   >
                     Test
                   </button>
-                  <button className="btn-small btn-danger" onClick={() => removeMcpServer(server.name)}>
+                  <button className="btn btn-small btn-danger" onClick={() => setConfirmRemoveMcp(server.name)}>
                     Remove
                   </button>
                 </div>
@@ -535,7 +552,7 @@ function ConnectionsTab() {
                 className="mcp-arg-input"
                 aria-label="New argument"
               />
-              <button className="btn-small btn-primary" onClick={addArg} type="button">Add</button>
+              <button className="btn btn-small btn-primary" onClick={addArg} type="button">Add</button>
             </div>
           </div>
 
@@ -547,7 +564,7 @@ function ConnectionsTab() {
                 <span className="mcp-env-key">{k}</span>
                 <span className="mcp-env-eq">=</span>
                 <span className="mcp-env-val">{v}</span>
-                <button className="btn-small btn-danger" onClick={() => removeEnvPair(k)} aria-label={`Remove ${k}`}>×</button>
+                <button className="btn btn-small btn-danger" onClick={() => removeEnvPair(k)} aria-label={`Remove ${k}`}>×</button>
               </div>
             ))}
             <div className="form-row mcp-env-add-row">
@@ -560,11 +577,11 @@ function ConnectionsTab() {
                 onChange={(e) => setNewEnvVal(e.target.value)}
                 className="mcp-env-input-val"
                 aria-label="Env value" />
-              <button className="btn-small btn-primary" onClick={addEnvPair} type="button">+</button>
+              <button className="btn btn-small btn-primary" onClick={addEnvPair} type="button">+</button>
             </div>
           </div>
 
-          <button className="btn-primary" onClick={addMcpServer}>Add MCP Server</button>
+          <button className="btn btn-primary" onClick={addMcpServer}>Add MCP Server</button>
         </div>
       </section>
 
@@ -611,7 +628,7 @@ function ConnectionsTab() {
                     >
                       History{historyRuns.length > 0 ? ` (${historyRuns.length} runs)` : ""}
                     </button>
-                    <button className="btn-small btn-danger" onClick={() => deleteAutomation(a.id)}>Delete</button>
+                    <button className="btn btn-small btn-danger" onClick={() => setConfirmDeleteAuto(a.id)}>Delete</button>
                   </div>
 
                   {/* F-023: Collapsible run history */}
@@ -686,12 +703,32 @@ function ConnectionsTab() {
             </div>
           )}
 
-          <button className="btn-primary" onClick={createAutomation}>Create Automation</button>
+          <button className="btn btn-primary" onClick={createAutomation}>Create Automation</button>
         </div>
       </section>
 
       {/* P-007: App Usage Logging surface */}
       <AppUsageLog showToast={showToast} />
+
+      {confirmRemoveMcp && (
+        <ConfirmDialog
+          title="Remove MCP server?"
+          message={`"${confirmRemoveMcp}" will be removed from your configuration.`}
+          confirmLabel="Remove"
+          onConfirm={() => removeMcpServer(confirmRemoveMcp)}
+          onCancel={() => setConfirmRemoveMcp(null)}
+        />
+      )}
+
+      {confirmDeleteAuto && (
+        <ConfirmDialog
+          title="Delete automation?"
+          message="This automation and its run history will be permanently deleted."
+          confirmLabel="Delete"
+          onConfirm={() => deleteAutomation(confirmDeleteAuto)}
+          onCancel={() => setConfirmDeleteAuto(null)}
+        />
+      )}
     </div>
   );
 }

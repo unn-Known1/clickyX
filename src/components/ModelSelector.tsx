@@ -12,8 +12,9 @@ function ModelSelector({ selectedModel, onModelChange }: ModelSelectorProps) {
   const { setActiveTab } = useAppContext();
 
   // Load current AI config to know which providers have keys configured
+  // NOTE: keep key in sync with ChatTab's ["ai-config"] so both share one cache entry
   const { data: aiConfig } = useQuery<AiConfig>({
-    queryKey: ["ai_config"],
+    queryKey: ["ai-config"],
     queryFn: () => commands.getAiConfig(),
     staleTime: 30_000,
   });

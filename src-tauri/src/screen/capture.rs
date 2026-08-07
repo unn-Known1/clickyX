@@ -86,6 +86,12 @@ pub fn capture_focused_window() -> Result<Option<ScreenImage>, String> {
     let windows = Window::all().map_err(|e| format!("enumerate windows: {e}"))?;
     for w in &windows {
         if w.is_focused().unwrap_or(false) {
+            // #8: feed the App Usage Log with the focused app title.
+            if let Ok(title) = w.title() {
+                if !title.trim().is_empty() {
+                    crate::commands::record_app_usage(&title);
+                }
+            }
             let img = match w.capture_image() {
                 Ok(img) => img,
                 Err(e) => return with_capture_guide(Err(format!("window capture: {e}"))),

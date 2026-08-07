@@ -3,6 +3,20 @@ use std::time::Duration;
 use super::streaming::{self, StreamEvent, StreamSender};
 use super::{AiError, AiProvider, ChatMessage, ImageInput};
 
+/// Normalize a configured base URL to the chat completions endpoint without
+/// duplicating `/v1` (#13 — self-hosted providers configured as
+/// `https://host/v1` previously got `/v1/v1/chat/completions` in streaming).
+fn chat_completions_url(base: &str) -> String {
+    let base = base.trim_end_matches('/');
+    if base.ends_with("/chat/completions") {
+        base.to_string()
+    } else if base.ends_with("/v1") {
+        format!("{}/chat/completions", base)
+    } else {
+        format!("{}/v1/chat/completions", base)
+    }
+}
+
 pub struct OpenAIProvider {
     api_key: String,
     system_prompt: String,
@@ -19,14 +33,7 @@ impl OpenAIProvider {
     }
 
     fn api_url(&self) -> String {
-        let base = self.base_url.trim_end_matches('/');
-        if base.ends_with("/chat/completions") {
-            base.to_string()
-        } else if base.ends_with("/v1") {
-            format!("{}/chat/completions", base)
-        } else {
-            format!("{}/v1/chat/completions", base)
-        }
+        chat_completions_url(&self.base_url)
     }
 
     fn build_request_body(
@@ -45,8 +52,12 @@ impl OpenAIProvider {
             }));
         }
 
-        for msg in messages {
-            let content = if msg.role == "user" && !images.is_empty() {
+        // #20: attach images only to the *last* user message, not every user
+        // turn of the thread (prevents re-sending screenshots on each turn).
+        let last_user_idx = messages.iter().rposition(|m| m.role == "user");
+        for (idx, msg) in messages.iter().enumerate() {
+            let attach_images = Some(idx) == last_user_idx && !images.is_empty();
+            let content = if attach_images {
                 let mut parts: Vec<serde_json::Value> = vec![serde_json::json!({
                     "type": "text",
                     "text": msg.content
@@ -188,7 +199,7 @@ impl OpenAIProvider {
         body: serde_json::Value,
         sender: StreamSender,
     ) -> Result<(), AiError> {
-        let url = format!("{}/v1/chat/completions", base_url.trim_end_matches('/'));
+        let url = chat_completions_url(&base_url);
         let client = reqwest::Client::builder()
             .timeout(Duration::from_secs(120))
             .build()
@@ -249,6 +260,27 @@ impl OpenAIProvider {
                                 .await;
                         }
                     }
+                }
+            }
+        }
+
+        // #47: flush a trailing partial SSE line that never ended with '\n'.
+        let line = buf.trim().to_string();
+        if let Some(data) = line.strip_prefix("data: ") {
+            if data.trim() == "[DONE]" {
+                let _ = sender.send(StreamEvent::TextDone { text: full_text.clone(), session_id: None }).await;
+                let _ = sender.send(StreamEvent::Done { session_id: None }).await;
+                return Ok(());
+            }
+            if let Ok(json) = serde_json::from_str::<serde_json::Value>(data) {
+                if let Some(delta) = json
+                    .pointer("/choices/0/delta/content")
+                    .and_then(|c| c.as_str())
+                {
+                    full_text.push_str(delta);
+                    let _ = sender
+                        .send(StreamEvent::TextDelta { text: delta.to_string(), session_id: None })
+                        .await;
                 }
             }
         }

@@ -31,6 +31,10 @@ export default function UpdateBanner() {
         await update.downloadAndInstall();
         await message("Update installed! Please restart the app.", { title: "ClickyX Update", kind: "info" });
       }
+      // Always leave the installing state on every completion path
+      setInstalling(false);
+      setAvailable(false);
+      setDismissed(true);
     } catch (e) {
       console.error("Update failed:", e);
       setInstalling(false);

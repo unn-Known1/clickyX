@@ -33,6 +33,28 @@ struct TaskOutput {
     model: String,
 }
 
+/// #49: strip any characters that could escape the models dir or be invalid in
+/// a filename (`/`, `..`, path separators, control chars).
+fn sanitize_prompt_fragment(prompt: &str) -> String {
+    let mut out = String::new();
+    for c in prompt.chars() {
+        if c.is_alphanumeric() || c == '-' || c == '_' || c == ' ' {
+            out.push(c);
+        } else {
+            out.push('-');
+        }
+        if out.chars().count() >= 24 {
+            break;
+        }
+    }
+    let trimmed = out.trim().trim_matches('-');
+    if trimmed.is_empty() {
+        "model".to_string()
+    } else {
+        trimmed.to_string()
+    }
+}
+
 pub async fn generate_3d(prompt: &str, style: &str, api_key: &str) -> Result<String, String> {
     let client = reqwest::Client::new();
 
@@ -41,13 +63,19 @@ pub async fn generate_3d(prompt: &str, style: &str, api_key: &str) -> Result<Str
         style: style.to_string(),
     };
 
-    let resp: TripoResponse = client
+    let resp = client
         .post("https://api.tripo3d.ai/v2/openapi/text_to_model")
         .header("Authorization", format!("Bearer {}", api_key))
         .json(&req_body)
         .send()
         .await
-        .map_err(|e| format!("Tripo3D request failed: {e}"))?
+        .map_err(|e| format!("Tripo3D request failed: {e}"))?;
+    if !resp.status().is_success() {
+        let status = resp.status();
+        let body = resp.text().await.unwrap_or_default();
+        return Err(format!("Tripo3D request returned {status}: {body}"));
+    }
+    let resp: TripoResponse = resp
         .json()
         .await
         .map_err(|e| format!("Tripo3D response parse failed: {e}"))?;
@@ -59,18 +87,35 @@ pub async fn generate_3d(prompt: &str, style: &str, api_key: &str) -> Result<Str
     for i in 0..max_attempts {
         tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
 
-        let status: TaskStatusResponse = client
+        let status_resp = client
             .get(format!(
                 "https://api.tripo3d.ai/v2/openapi/task/{}",
                 task_id
             ))
             .header("Authorization", format!("Bearer {}", api_key))
             .send()
-            .await
-            .map_err(|e| format!("Tripo3D status check failed: {e}"))?
-            .json()
-            .await
-            .map_err(|e| format!("Tripo3D status parse failed: {e}"))?;
+            .await;
+
+        // #49: transient network errors should be retried, not fatal.
+        let status: TaskStatusResponse = match status_resp {
+            Ok(r) if r.status().is_success() => r
+                .json()
+                .await
+                .map_err(|e| format!("Tripo3D status parse failed: {e}"))?,
+            Ok(r) => {
+                let code = r.status();
+                if code.is_client_error() {
+                    let body = r.text().await.unwrap_or_default();
+                    return Err(format!("Tripo3D task check returned {code}: {body}"));
+                }
+                log::warn!("Tripo3D task check transient error {code} — retrying");
+                continue;
+            }
+            Err(e) => {
+                log::warn!("Tripo3D task check network error: {e} — retrying");
+                continue;
+            }
+        };
 
         match status.data.status.as_str() {
             "success" => {
@@ -92,11 +137,8 @@ pub async fn generate_3d(prompt: &str, style: &str, api_key: &str) -> Result<Str
                     std::fs::create_dir_all(&output_dir)
                         .map_err(|e| format!("Failed to create models dir: {e}"))?;
 
-                    let file_name = format!(
-                        "{}_{}.glb",
-                        task_id,
-                        prompt.chars().take(20).collect::<String>()
-                    );
+                    let fragment = sanitize_prompt_fragment(prompt);
+                    let file_name = format!("{}_{}.glb", task_id, fragment);
                     let file_path = output_dir.join(&file_name);
                     std::fs::write(&file_path, &model_bytes)
                         .map_err(|e| format!("Failed to save model: {e}"))?;

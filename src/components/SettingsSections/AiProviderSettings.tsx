@@ -72,14 +72,20 @@ function AiProviderSettings() {
       setAnthropicKey("");
       setOpenaiKey("");
 
-      // Update App config keys
+      // Update App config keys — merge with existing keys so unrelated
+      // providers (and previously saved voice keys) are never wiped.
+      const editedProviders = ["elevenlabs", "cartesia", "deepgram", "assemblyai"];
+      const preservedKeys = (appConfig?.api_keys ?? []).filter(
+        (k) => !editedProviders.includes(k.provider),
+      );
       const newApiKeys = [
+        ...preservedKeys,
         elevenlabsKey && { provider: "elevenlabs", key: elevenlabsKey },
         cartesiaKey && { provider: "cartesia", key: cartesiaKey },
         deepgramKey && { provider: "deepgram", key: deepgramKey },
         assemblyaiKey && { provider: "assemblyai", key: assemblyaiKey },
       ].filter(Boolean) as { provider: string; key: string }[];
-      
+
       await updateAppConfig({ api_keys: newApiKeys });
 
       setSaved(true);
@@ -94,7 +100,7 @@ function AiProviderSettings() {
   }, [
     anthropicKey, anthropicModel, openaiKey, openaiModel, openaiBaseUrl,
     defaultProvider, systemPrompt, elevenlabsKey, cartesiaKey, deepgramKey, assemblyaiKey,
-    updateAiConfig, updateAppConfig, showToast
+    appConfig, updateAiConfig, updateAppConfig, showToast
   ]);
 
   const error = aiError || appError;

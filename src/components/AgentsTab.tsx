@@ -5,6 +5,8 @@ import { useAppContext } from "../context/AppContext";
 import { commands } from "../bindings";
 import { SkeletonList } from "./SkeletonLoader";
 import { Sounds } from "../utils/sounds";
+import { Icon } from "./Icon";
+import ConfirmDialog from "./ConfirmDialog";
 
 function AgentCard({
   agent, selected, onSelect, onRun, onStop, onArchive, onDelete, onPopOut, dragOver,
@@ -58,7 +60,8 @@ function AgentCard({
             title="Pop out HUD"
             aria-label="Open agent HUD in floating window"
           >
-            ↗ HUD
+            <Icon name="external" size={11} />
+            HUD
           </button>
         )}
       </div>
@@ -210,10 +213,17 @@ function AgentsTab() {
   } = useAgents();
 
   const { showToast } = useAppContext();
+
+  // Swallow-and-toast for fire-and-forget mutations (no unhandled rejections)
+  const safeCall = useCallback((fn: () => Promise<unknown>) => {
+    void fn().catch((e) => showToast(String(e), "error"));
+  }, [showToast]);
+
   const [selectedSlug, setSelectedSlug] = useState<string | null>(null);
   const [showCreate, setShowCreate] = useState(false);
   const [promptInput, setPromptInput] = useState<Record<string, string>>({});
   const [agentSearch, setAgentSearch] = useState("");
+  const [confirmDelete, setConfirmDelete] = useState<{ slug: string; name: string } | null>(null);
 
   // ── Drag-drop per-card state ────────────────────────────────────────────────
   const [dragOverSlug, setDragOverSlug] = useState<string | null>(null);
@@ -304,9 +314,9 @@ function AgentsTab() {
                 selected={selectedSlug === agent.slug}
                 onSelect={() => setSelectedSlug(agent.slug)}
                 onRun={() => { setSelectedSlug(agent.slug); handleRun(agent.slug); }}
-                onStop={() => stopAgent(agent.slug)}
-                onArchive={() => archiveAgent(agent.slug)}
-                onDelete={() => { deleteAgent(agent.slug); if (selectedSlug === agent.slug) setSelectedSlug(null); }}
+                onStop={() => safeCall(() => stopAgent(agent.slug))}
+                onArchive={() => safeCall(() => archiveAgent(agent.slug))}
+                onDelete={() => setConfirmDelete({ slug: agent.slug, name: agent.name })}
                 onPopOut={() => handlePopOut(agent.slug)}
                 dragOver={dragOverSlug === agent.slug}
                 onDragOver={(e) => { e.preventDefault(); setDragOverSlug(agent.slug); }}
@@ -330,11 +340,11 @@ function AgentsTab() {
               agent={selectedAgent}
               skills={skills}
               onRun={() => handleRun(selectedAgent.slug)}
-              onStop={() => stopAgent(selectedAgent.slug)}
-              onArchive={() => archiveAgent(selectedAgent.slug)}
-              onDelete={() => { deleteAgent(selectedAgent.slug); setSelectedSlug(null); }}
-              onEnableSkill={(s) => enableSkill(selectedAgent.slug, s)}
-              onDisableSkill={(s) => disableSkill(selectedAgent.slug, s)}
+              onStop={() => safeCall(() => stopAgent(selectedAgent.slug))}
+              onArchive={() => safeCall(() => archiveAgent(selectedAgent.slug))}
+              onDelete={() => setConfirmDelete({ slug: selectedAgent.slug, name: selectedAgent.name })}
+              onEnableSkill={(s) => safeCall(() => enableSkill(selectedAgent.slug, s))}
+              onDisableSkill={(s) => safeCall(() => disableSkill(selectedAgent.slug, s))}
             />
             <div className="agent-prompt-area">
               <input
@@ -350,6 +360,19 @@ function AgentsTab() {
           </div>
         )}
       </div>
+
+      {confirmDelete && (
+        <ConfirmDialog
+          title={`Delete ${confirmDelete.name}?`}
+          message={`"${confirmDelete.name}" will be permanently removed, including its transcript. This cannot be undone.`}
+          confirmLabel="Delete Agent"
+          onConfirm={() => {
+            safeCall(() => deleteAgent(confirmDelete.slug));
+            if (selectedSlug === confirmDelete.slug) setSelectedSlug(null);
+          }}
+          onCancel={() => setConfirmDelete(null)}
+        />
+      )}
     </div>
   );
 }

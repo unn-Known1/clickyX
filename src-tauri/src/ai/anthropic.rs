@@ -23,10 +23,15 @@ impl AnthropicProvider {
         stream: bool,
         images: &[ImageInput],
     ) -> serde_json::Value {
+        // #20: attach images only to the *last* user message, not every user
+        // turn of the thread (prevents re-sending screenshots on each turn).
+        let last_user_idx = messages.iter().rposition(|m| m.role == "user");
         let api_messages: Vec<serde_json::Value> = messages
             .iter()
-            .map(|msg| {
-                let content = if msg.role == "user" && !images.is_empty() {
+            .enumerate()
+            .map(|(idx, msg)| {
+                let attach_images = Some(idx) == last_user_idx && !images.is_empty();
+                let content = if attach_images {
                     let mut blocks: Vec<serde_json::Value> = vec![serde_json::json!({
                         "type": "text",
                         "text": msg.content
@@ -269,6 +274,23 @@ impl AnthropicProvider {
                     }
                 } else if let Some(event_type) = line.strip_prefix("event: ") {
                     current_event = event_type.to_string();
+                }
+            }
+        }
+
+        // #47: flush a trailing partial SSE line that never ended with '\n'.
+        let line = buf.trim().to_string();
+        if !line.is_empty() {
+            if let Some(data) = line.strip_prefix("data: ") {
+                if let Ok(json) = serde_json::from_str::<serde_json::Value>(data) {
+                    if json.get("type").and_then(|t| t.as_str()) == Some("content_block_delta") {
+                        if let Some(text) = json.pointer("/delta/text").and_then(|t| t.as_str()) {
+                            full_text.push_str(text);
+                            let _ = sender
+                                .send(StreamEvent::TextDelta { text: text.to_string(), session_id: None })
+                                .await;
+                        }
+                    }
                 }
             }
         }

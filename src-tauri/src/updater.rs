@@ -95,11 +95,24 @@ pub async fn check_for_updates(current_version: &str) -> Result<UpdateInfo, Stri
 
     let platform_info = data.platforms.get(&platform);
 
+    // #41: don't advertise an update we cannot download for this platform.
+    let Some(platform_info) = platform_info else {
+        log::warn!("updater: no artifact for platform '{platform}' (v{})", data.version);
+        return Ok(UpdateInfo {
+            available: false,
+            version: Some(data.version),
+            release_notes: data.notes,
+            download_url: None,
+            delta_available: None,
+            delta_url: None,
+        });
+    };
+
     Ok(UpdateInfo {
         available: true,
         version: Some(data.version),
         release_notes: data.notes,
-        download_url: platform_info.map(|p| p.url.clone()),
+        download_url: Some(platform_info.url.clone()),
         delta_available: None,
         delta_url: None,
     })

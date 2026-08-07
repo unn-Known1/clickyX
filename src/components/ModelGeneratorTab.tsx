@@ -80,7 +80,7 @@ export default function ModelGeneratorTab() {
         </div>
         <button
           type="submit"
-          className="btn-primary"
+          className="btn btn-primary"
           disabled={!prompt.trim() || loading}
         >
           {loading ? "Starting…" : "Generate Model"}
@@ -120,7 +120,7 @@ export default function ModelGeneratorTab() {
                 <ThreeViewer modelUrl={task.model_url} />
               </Suspense>
               <a
-                className="btn-primary"
+                className="btn btn-primary"
                 href={task.model_url}
                 download={`model-${task.task_id}.glb`}
                 style={{ display: "inline-flex", alignItems: "center", gap: 6, marginTop: 8 }}

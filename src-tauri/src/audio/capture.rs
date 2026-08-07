@@ -149,6 +149,14 @@ impl RingBuffer {
         result
     }
 
+    /// Return the newest samples and consume them (advance the write cursor past
+    /// the returned window) so repeated polls never re-append the same audio.
+    pub fn drain_all(&mut self) -> Vec<f32> {
+        let data = self.get_all();
+        self.write_pos = self.write_pos.saturating_sub(data.len());
+        data
+    }
+
     pub fn clear(&mut self) {
         self.data.fill(0.0);
         self.write_pos = 0;

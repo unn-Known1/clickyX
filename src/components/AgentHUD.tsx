@@ -7,6 +7,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { commands } from "../bindings";
 import { agentStatusColor, agentStatusLabel } from "../utils/agentStatus";
+import { Icon } from "./Icon";
 import type { AgentInfo } from "../bindings";
 import "../styles/theme.css";
 
@@ -131,7 +132,7 @@ export default function AgentHUD() {
             title={minimized ? "Restore" : "Minimize"}
             aria-label={minimized ? "Restore HUD" : "Minimize HUD"}
           >
-            {minimized ? "▲" : "▼"}
+            <Icon name={minimized ? "chevron-up" : "chevron-down"} size={12} />
           </button>
           <button
             className="hud-btn hud-btn-close"
@@ -139,7 +140,7 @@ export default function AgentHUD() {
             title="Close HUD"
             aria-label="Close Agent HUD"
           >
-            ×
+            <Icon name="close" size={12} />
           </button>
         </div>
       </div>

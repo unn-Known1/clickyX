@@ -8,6 +8,10 @@
   overflow: hidden;
   background: transparent;
   --accent: #4fc3f7;
+  /* Status tokens — same values as the app theme (kept local: overlay doesn't import theme.css) */
+  --status-running: #4caf50;
+  --status-idle: #ff9800;
+  --status-error: #f44336;
 }
 
 .overlay-rect {
@@ -241,14 +245,14 @@
   gap: 2px;
   padding: 6px 10px;
   border-radius: 10px;
-  transition: background 0.2s, transform 0.15s;
-  cursor: pointer;
+  transition: background 0.2s;
+  cursor: default;
   position: relative;
+  user-select: none;
 }
 
 .agent-dock-item:hover {
   background: rgba(79, 195, 247, 0.12);
-  transform: scale(1.08);
 }
 
 .agent-dock-avatar {
@@ -269,22 +273,22 @@
 }
 
 .status-dot-active {
-  background: #4caf50;
+  background: var(--status-running);
   box-shadow: 0 0 6px rgba(76, 175, 80, 0.5);
 }
 
 .status-dot-idle {
-  background: #ff9800;
+  background: var(--status-idle);
   box-shadow: 0 0 6px rgba(255, 152, 0, 0.4);
 }
 
 .status-dot-busy {
-  background: #f44336;
+  background: var(--status-error);
   box-shadow: 0 0 6px rgba(244, 67, 54, 0.5);
 }
 
 .status-dot-error {
-  background: #f44336;
+  background: var(--status-error);
   box-shadow: 0 0 6px rgba(244, 67, 54, 0.5);
   animation: dot-pulse 0.6s ease-in-out infinite alternate;
 }
@@ -467,14 +471,15 @@
   animation: highlight-pulse 2s ease-in-out infinite;
 }
 
+/* Background tint is supplied inline from the accent color; pulse the glow ring */
 @keyframes highlight-pulse {
   0%, 100% {
-    background: rgba(255, 220, 0, 0.18);
-    box-shadow: 0 0 0 0 rgba(255, 220, 0, 0.4);
+    box-shadow: 0 0 0 0 var(--accent, #4fc3f7);
+    opacity: 0.85;
   }
   50% {
-    background: rgba(255, 220, 0, 0.32);
-    box-shadow: 0 0 12px 4px rgba(255, 220, 0, 0.25);
+    box-shadow: 0 0 12px 4px var(--accent, #4fc3f7);
+    opacity: 1;
   }
 }
 
@@ -500,6 +505,31 @@
 @keyframes shape-draw-in {
   to {
     stroke-dashoffset: 0;
+  }
+}
+
+.overlay-error-boundary {
+  position: fixed;
+  bottom: 8px;
+  right: 8px;
+  background: rgba(244, 67, 54, 0.85);
+  color: #fff;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 11px;
+  pointer-events: none;
+  max-width: 320px;
+  z-index: 9999;
+}
+
+/* ── Reduced motion ─────────────────────────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  .overlay-container *,
+  .overlay-container *::before,
+  .overlay-container *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
   }
 }
 

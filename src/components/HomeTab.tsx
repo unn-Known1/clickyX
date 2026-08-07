@@ -1,9 +1,53 @@
 import { useState, useCallback } from "react";
 import { useQuery } from "@tanstack/react-query";
 import ChatTab from "./ChatTab";
+import { Icon } from "./Icon";
+import type { IconName } from "./Icon";
 import { useAgents } from "../hooks/useAgents";
 import { agentStatusColor, agentStatusLabel } from "../utils/agentStatus";
 import { useAppContext } from "../context/AppContext";
+
+function timeGreeting(): string {
+  const h = new Date().getHours();
+  if (h < 5) return "Hi";
+  if (h < 12) return "Good morning";
+  if (h < 18) return "Good afternoon";
+  return "Good evening";
+}
+
+// ── Suggestion catalog: known prompts get a matching icon + description ──────
+interface SuggestionMeta {
+  icon: IconName;
+  description: string;
+}
+
+const SUGGESTION_CATALOG: Record<string, SuggestionMeta> = {
+  "What's on my screen?": {
+    icon: "screen",
+    description: "Ask about what's visible right now",
+  },
+  "Summarize this document": {
+    icon: "file",
+    description: "Get a concise overview",
+  },
+  "Help me debug this code": {
+    icon: "code",
+    description: "Find and fix the error",
+  },
+  "Write a professional email": {
+    icon: "mail",
+    description: "Draft a polished message",
+  },
+};
+
+const FALLBACK_SUGGESTION: SuggestionMeta = {
+  icon: "sparkle",
+  description: "Continue the conversation",
+};
+
+function suggestionMeta(prompt: string): SuggestionMeta {
+  return SUGGESTION_CATALOG[prompt] ?? FALLBACK_SUGGESTION;
+}
 
 const DEFAULT_SUGGESTIONS = [
   "What's on my screen?",
@@ -51,7 +95,7 @@ function EmptyAgentsCTA({ onCreateAgent }: { onCreateAgent: () => void }) {
       <div className="empty-icon">✦</div>
       <h3>Create your first agent</h3>
       <p>Agents can automate tasks, answer questions, and control your computer.</p>
-      <button className="btn-primary" onClick={onCreateAgent}>
+      <button className="btn btn-primary" onClick={onCreateAgent}>
         Create Agent
       </button>
     </div>
@@ -99,9 +143,10 @@ function HomeTab() {
 
   if (showChat) {
     return (
-      <div className="home-tab">
+      <div className="home-tab home-chat-mode">
         <button className="home-back-btn" onClick={() => setShowChat(false)} aria-label="Back to home">
-          ← Back
+          <Icon name="chevron-left" size={14} />
+          Back
         </button>
         <ChatTab initialText={initialSuggestion ?? undefined} />
       </div>
@@ -118,20 +163,37 @@ function HomeTab() {
       )}
 
       <div className="hero-card">
-        <h1>Hi, I'm ClickyX</h1>
+        <h1>
+          {timeGreeting()}, I'm <span className="hero-brand">ClickyX</span>
+        </h1>
         <p>Your AI companion — ask me anything about your screen.</p>
       </div>
       <button className="start-chat-btn" onClick={() => setShowChat(true)}>
         Start a conversation
       </button>
 
-      {/* F-026: Dynamic suggestion chips */}
+      {/* F-026: Dynamic suggestion chips with icons + descriptions */}
       <div className="suggestions-grid">
-        {suggestions.map((s) => (
-          <button key={s} className="suggestion-chip" onClick={() => handleSuggestion(s)}>
-            {s}
-          </button>
-        ))}
+        {suggestions.map((s) => {
+          const meta = suggestionMeta(s);
+          return (
+            <button
+              key={s}
+              type="button"
+              className="suggestion-chip"
+              onClick={() => handleSuggestion(s)}
+              aria-label={`${s} — ${meta.description}`}
+            >
+              <span className="suggestion-chip-icon" aria-hidden="true">
+                <Icon name={meta.icon} size={16} />
+              </span>
+              <span className="suggestion-chip-text">
+                <span className="suggestion-chip-label">{s}</span>
+                <span className="suggestion-chip-desc">{meta.description}</span>
+              </span>
+            </button>
+          );
+        })}
       </div>
     </div>
   );

@@ -1,12 +1,14 @@
 import { useState, useEffect } from "react";
 import { commands } from "../bindings";
 import { OnboardingIntro } from "./OnboardingMedia";
+import { Icon } from "./Icon";
+import type { IconName } from "./Icon";
 
 interface PermissionStep {
   id: string;
   title: string;
   description: string;
-  icon: string;
+  icon: IconName;
   osHint: string;
 }
 
@@ -15,35 +17,35 @@ const STEPS: PermissionStep[] = [
     id: "microphone",
     title: "Microphone Access",
     description: "Allow ClickyX to hear your voice commands for push-to-talk and always-on voice mode.",
-    icon: "🎤",
+    icon: "mic",
     osHint: "Windows: Settings > Privacy & Security > Microphone\nmacOS: System Settings > Privacy & Security > Microphone\nLinux: Ensure PulseAudio/ALSA is configured",
   },
   {
     id: "screen_recording",
     title: "Screen Recording",
     description: "Enable screen capture so ClickyX can see your screen and provide contextual assistance.",
-    icon: "🖥️",
+    icon: "screen",
     osHint: "Windows: Settings > Privacy & Security > Screen Capture\nmacOS: System Settings > Privacy & Security > Screen Recording\nLinux: Ensure PipeWire or X11 sharing is enabled",
   },
   {
     id: "accessibility",
     title: "Accessibility Access",
     description: "Grant accessibility permissions for global keyboard shortcuts and automation features.",
-    icon: "⌨️",
+    icon: "keyboard",
     osHint: "Windows: Settings > Accessibility > Keyboard\nmacOS: System Settings > Privacy & Security > Accessibility\nLinux: Install at-spi2-core for accessibility bridge",
   },
   {
     id: "camera",
     title: "Camera Access",
     description: "Optional: allow ClickyX to use your camera for visual context features.",
-    icon: "📷",
+    icon: "camera",
     osHint: "Windows: Settings > Privacy & Security > Camera\nmacOS: System Settings > Privacy & Security > Camera\nLinux: Ensure V4L2 device is accessible",
   },
   {
     id: "notifications",
     title: "Notifications",
     description: "Receive desktop notifications for agent task completion, reminders, and updates.",
-    icon: "🔔",
+    icon: "bell",
     osHint: "Windows: Settings > System > Notifications\nmacOS: System Settings > Notifications\nLinux: Ensure D-Bus notification service is running",
   },
 ];
@@ -133,7 +135,9 @@ export default function OnboardingWizard({ onComplete, onSkip }: OnboardingWizar
 
         <div className="onboarding-step-content">
           {currentStep === 0 && <OnboardingIntro />}
-          <div className="onboarding-step-icon">{step.icon}</div>
+          <div className="onboarding-step-icon">
+            <Icon name={step.icon} size={40} />
+          </div>
           <h2>{step.title}</h2>
           <p>{step.description}</p>
           <div className="onboarding-permission-status">
