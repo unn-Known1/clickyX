@@ -233,8 +233,34 @@ Beyond bug-fixing, these make the app behave *smartly* — all aligned with the 
 
 ---
 
-## 6. Verification Notes
+> **Decommissioned:** `docs/WINDOWS_BUGS.md` and `docs/MACOS_BUGS.md` were removed after their findings were applied/verified (the reports referenced the stale commit `e2fa9c2`). The following is the consolidated list of the ~8 items from those reports that remain **unfixed or partial** in the current code.
 
-- `cargo check`, `npm run build`, `npm test` all currently pass — none of the findings above are build-breaking; they are behavioral/perf.
+---
+
+## 7. Remaining Platform Items (from decommissioned WINDOWS_BUGS.md / MACOS_BUGS.md)
+
+Kept here so nothing is lost. Items not listed were verified as fixed in code.
+
+| # | Platform | Severity | Status | Issue | Current state / suggestion |
+|---|----------|----------|--------|-------|-----------------------------|
+| W5 | Windows | Med | Partial | Dual tokio runtimes (actix `System::new` separate from Tauri's) | `bridge.rs:1344-1350` now single-threaded on Windows with an explanatory comment; still separate runtimes. Preferred: run the bridge on Tauri's runtime. |
+| W6 | Windows | Med | Open | PowerShell dependency in 3+ modules | `accessibility/windows.rs` (11 uses), `permissions.rs` (3), `cua.rs` (3). Design trade-off for background clicks/CUIA; a Win32 `sendInput`/COM rewrite (via `windows-rs`) is the long-term fix. Subprocess latency ~100–500 ms per call remains. |
+| W7 | Windows | Low | Partial | Permission consent read via PowerShell | Now reads the registry `ConsentStore` (the correct location) but still through `Get-ItemProperty`; direct registry read would remove the `powershell.exe` dependency. |
+| W11 | Windows | Low | Open | WebView2 version not pinned | No `minimumWebView2Version` in `tauri.conf.json`. Pin a minimum to guarantee overlay transparency / DOM APIs. |
+| W13 | Windows | Low | Open | CI assumes WebView2 on runner | `windows-latest` ships it today; add a runtime check or pin installer to harden. |
+| M4 | macOS | Med | Open | TCC DB queried directly via `sqlite3` | `permissions.rs:50-56` still reads `com.apple.TCC/TCC.db` (`auth_value=2`). Fragile across macOS versions and SIP; preferred: `AVCaptureDevice` auth status or `tccutil`-based probe with graceful fallback. |
+| M8 | macOS | Low | Partial | Broad `apple-events` entitlement | `network.server` was removed; `com.apple.security.automation.apple-events` remains `true` (`entitlements.plist:15`). Acceptable for system-level iOS control; document why. |
+| M10 | macOS | Low | No | `macOSPrivateApi` + JIT review friction | Known trade-off for transparent overlays; document in `PROJECT_SPEC.md` (see `AGENTS.md` "macOS private API" note). |
+| M12 | macOS | Cosmetic | No | `iconAsTemplate: true` deprecated | `tauri.conf.json:35`; retain for older macOS, no runtime effect on modern. |
+| M15 | macOS | Low | No | No Intel (`x86_64-apple-darwin`) CI build | Only `macos-latest` (ARM) is built. Add a second target or a `lipo` universal binary; otherwise document "Apple Silicon required". |
+| M16 | macOS | — | Fixed | Settings URLs per version | Resolved: `permission_settings_url` branches on macOS 13+ vs legacy (`permissions.rs:215-240`). |
+
+> Note: `docs/WINDOWS_BUGS.md` and `docs/MACOS_BUGS.md` were removed from the repo on 2026-08-07. Item numbering above references their original report numbering to keep traceability.
+
+---
+
+## 8. Verification Notes
+
+- `cargo check`, `npm run build`, `npm test` all pass locally — none of the findings above are build-breaking; they are behavioral/perf.
 - Claims §1.1–§1.7 were verified by direct source reads (`pipeline.rs:534`, `capture.rs:246`, `overlay/mod.rs:413`, `OverlayApp.tsx:140`, `automation/mod.rs:115`, `useAgents.ts:22`, `capture.rs:224`).
 - The "audio-level-update" event, "auto-capture-status" event, and `setAgents` store write were confirmed absent via repository-wide grep.
