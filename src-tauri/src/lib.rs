@@ -583,6 +583,8 @@ pub fn run() {
             commands::agent_attach_files,
             commands::test_mcp_server,
             commands::get_3d_model_task,
+            commands::overlay_show_highlight,
+            commands::overlay_show_shape,
         ])
         .build(tauri::generate_context!())
         .expect("error while building ClickyX")

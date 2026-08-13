@@ -154,9 +154,38 @@ async fn speak_cartesia(text: &str, config: &TtsConfig) -> Result<Vec<u8>, Strin
     Ok(audio_bytes)
 }
 
-async fn speak_edge(_text: &str, _config: &TtsConfig) -> Result<Vec<u8>, String> {
-    log::warn!("Microsoft Edge TTS not yet implemented (free tier, requires WS token negotiation)");
-    Err("Microsoft Edge TTS implementation pending (use another provider)".into())
+async fn speak_edge(text: &str, config: &TtsConfig) -> Result<Vec<u8>, String> {
+    // Microsoft Edge TTS uses a public WebSocket endpoint (no API key required).
+    // The edge-tts Python package is commonly used; here we call it as a subprocess.
+    // Falls back to generating silence if edge-tts is unavailable.
+    let output = std::process::Command::new("edge-tts")
+        .args(["--voice", &config.voice_id, "--text", text, "--write-media", "/tmp/clickyx_edge_tts.wav"])
+        .output();
+    match output {
+        Ok(out) if out.status.success() => {
+            match std::fs::read("/tmp/clickyx_edge_tts.wav") {
+                Ok(bytes) => Ok(bytes),
+                Err(e) => Err(format!("edge-tts produced output but could not read wav: {e}")),
+            }
+        }
+        _ => {
+            log::warn!("edge-tts not available (pip install edge-tts); falling back to system TTS");
+            // Fall through to system TTS path
+            let text_owned = text.to_string();
+            tokio::task::spawn_blocking(move || {
+                let mut tts = tts::Tts::default()
+                    .map_err(|e| format!("Failed to initialize System TTS: {e}"))?;
+                tts.speak(&text_owned, true)
+                    .map_err(|e| format!("System TTS speech error: {e}"))?;
+                while tts.is_speaking().unwrap_or(false) {
+                    std::thread::sleep(std::time::Duration::from_millis(50));
+                }
+                Ok::<Vec<u8>, String>(vec![])
+            })
+            .await
+            .map_err(|e| format!("Thread join error: {e}"))?
+        }
+    }
 }
 
 async fn speak_deepgram_aura(text: &str, config: &TtsConfig) -> Result<Vec<u8>, String> {

@@ -1221,6 +1221,9 @@ pub async fn generate_3d_model(
         .unwrap_or_else(|| std::path::PathBuf::from("."))
         .join("clickyx")
         .join("gen3d_task.json");
+    // #65: clear any stale task record so the UI starts fresh instead of
+    // showing a previous run's "success" state while the new one polls.
+    let _ = std::fs::remove_file(&task_path);
     let task_record = serde_json::json!({
         "task_id": task_id,
         "prompt": prompt,
@@ -2081,9 +2084,9 @@ pub fn set_agent_voice_triggers(
 }
 
 #[tauri::command]
-pub fn get_element_at_point(x: i32, y: i32) -> Result<AccessibilityElement, String> {
+pub fn get_element_at_point(x: f64, y: f64) -> Result<AccessibilityElement, String> {
     let api = crate::accessibility::create_accessibility_api();
-    api.get_element_at_point(x, y)
+    api.get_element_at_point(x as i32, y as i32)
 }
 
 #[tauri::command]
@@ -2181,6 +2184,35 @@ pub fn test_mcp_server(server_id: String, app: AppHandle) -> Result<bool, String
         }
         Err(e) => Err(format!("Failed to spawn '{}': {}", server.command, e)),
     }
+}
+
+// ── Overlay highlight / shape commands (P-005) ───────────────────────────────
+// These bridge the gap between the Rust overlay module's show_highlight/show_shape
+// helpers and what the frontend can invoke via Tauri commands.
+
+#[tauri::command]
+pub fn overlay_show_highlight(
+    app: AppHandle,
+    x: f64,
+    y: f64,
+    w: f64,
+    h: f64,
+    label: Option<String>,
+) -> Result<(), String> {
+    crate::overlay::show_highlight(&app, x, y, w, h, label)
+}
+
+#[tauri::command]
+pub fn overlay_show_shape(
+    app: AppHandle,
+    shape_type: String,
+    x1: f64,
+    y1: f64,
+    x2: f64,
+    y2: f64,
+    label: Option<String>,
+) -> Result<(), String> {
+    crate::overlay::show_shape(&app, &shape_type, x1, y1, x2, y2, label)
 }
 
 // ── B-011: Agent file attachment ──────────────────────────────────────────────

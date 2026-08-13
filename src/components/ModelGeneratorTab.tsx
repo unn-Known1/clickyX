@@ -116,9 +116,20 @@ export default function ModelGeneratorTab() {
 
           {task.status === "success" && task.model_url && (
             <div className="model-gen-viewer">
-              <Suspense fallback={<div className="skeleton-loader" style={{ height: 300 }} />}>
-                <ThreeViewer modelUrl={task.model_url} />
-              </Suspense>
+              {task.model_url.startsWith("http") ? (
+                <Suspense fallback={<div className="skeleton-loader" style={{ height: 300 }} />}>
+                  <ThreeViewer modelUrl={task.model_url} />
+                </Suspense>
+              ) : (
+                <div style={{ padding: "24px 0", textAlign: "center", color: "var(--color-muted)" }}>
+                  <p style={{ margin: 0, fontSize: 13 }}>
+                    Model saved locally — click Download to save the GLB file.
+                  </p>
+                  <p style={{ margin: "4px 0 0", fontSize: 11, opacity: 0.6, wordBreak: "break-all" }}>
+                    {task.model_url}
+                  </p>
+                </div>
+              )}
               <a
                 className="btn btn-primary"
                 href={task.model_url}

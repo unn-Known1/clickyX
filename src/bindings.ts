@@ -177,6 +177,20 @@ export function invoke<T>(cmd: string, args?: any): Promise<T> {
         created_at: Date.now(),
       }) as any;
     }
+    if (cmd === "get_voice") {
+      const voiceId = args?.voice_id || "";
+      return Promise.resolve({
+        id: voiceId,
+        provider: "elevenlabs",
+        name: voiceId || "Unknown",
+        description: "",
+        accent_color: "#4fc3f7",
+        gender: "neutral",
+        style: "default",
+        language: "en",
+        tier: "free",
+      }) as any;
+    }
     if (cmd === "test_mcp_server") {
       return Promise.resolve(true) as any;
     }
@@ -486,6 +500,8 @@ export const commands = {
   overlayShowRect: (x: number, y: number, w: number, h: number, label?: string) => invoke<void>("overlay_show_rect", { x, y, w, h, label }),
   overlayShowScribble: (points: [number, number][], label?: string) => invoke<void>("overlay_show_scribble", { points, label }),
   overlayShowCaption: (text: string, x: number, y: number) => invoke<void>("overlay_show_caption", { text, x, y }),
+  overlayShowHighlight: (x: number, y: number, w: number, h: number, label?: string) => invoke<void>("overlay_show_highlight", { x, y, w, h, label }),
+  overlayShowShape: (shapeType: string, x1: number, y1: number, x2: number, y2: number, label?: string) => invoke<void>("overlay_show_shape", { shapeType, x1, y1, x2, y2, label }),
   overlayClear: () => invoke<void>("overlay_clear"),
   setOverlayVisible: (visible: boolean) => invoke<void>("set_overlay_visible", { visible }),
 
