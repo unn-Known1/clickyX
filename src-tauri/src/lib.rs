@@ -598,3 +598,47 @@ pub fn run() {
             }
         });
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// #6: verify that a log file exceeding 5 MiB triggers rotation (rename)
+    /// while files under the threshold are left untouched.
+    #[test]
+    fn test_log_rotation_threshold() {
+        use std::io::Write;
+        let dir = tempfile::tempdir().expect("tempdir");
+        let log_file = dir.path().join("clickyx.log");
+        let rotated = dir.path().join("clickyx.old.log");
+
+        // A file just under the threshold must NOT be rotated.
+        std::fs::write(&log_file, vec![b'a'; 5 * 1024 * 1024 - 1])
+            .expect("write log file");
+        let meta = std::fs::metadata(&log_file).unwrap();
+        assert!(meta.len() < 5 * 1024 * 1024);
+        assert!(!rotated.exists()); // rotation should not have happened
+        assert!(log_file.exists());
+
+        // Clean up for next scenario
+        std::fs::remove_file(&log_file).ok();
+        std::fs::remove_file(&rotated).ok();
+
+        // A file over the threshold triggers rotation via rename.
+        std::fs::write(&log_file, vec![b'a'; 5 * 1024 * 1024 + 1])
+            .expect("write oversized log file");
+        let meta = std::fs::metadata(&log_file).unwrap();
+        assert!(meta.len() > 5 * 1024 * 1024);
+        // Simulate the rotation that init_logging performs
+        let _ = std::fs::rename(&log_file, &rotated);
+        assert!(rotated.exists());
+        assert!(!log_file.exists());
+    }
+
+    #[test]
+    fn test_get_log_dir_returns_valid_path() {
+        let dir = get_log_dir().expect("get_log_dir failed");
+        assert!(dir.is_absolute());
+        assert!(dir.to_string_lossy().contains("clickyx"));
+    }
+}

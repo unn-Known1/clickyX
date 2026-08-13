@@ -1,11 +1,12 @@
-import { useState, useCallback } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useState, useCallback, useEffect } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import ChatTab from "./ChatTab";
 import { Icon } from "./Icon";
 import type { IconName } from "./Icon";
 import { useAgents } from "../hooks/useAgents";
 import { agentStatusColor, agentStatusLabel } from "../utils/agentStatus";
 import { useAppContext } from "../context/AppContext";
+import { listen } from "../bindings";
 
 function timeGreeting(): string {
   const h = new Date().getHours();
@@ -107,6 +108,17 @@ function HomeTab() {
   const [initialSuggestion, setInitialSuggestion] = useState<string | null>(null);
   const { agents, loading: agentsLoading } = useAgents();
   const { setActiveTab } = useAppContext();
+  const queryClient = useQueryClient();
+
+  // F-003: invalidate today-stats cache when any agent completes/errors so the
+  // home card reflects real-time results without waiting for the 30s poll.
+  useEffect(() => {
+    let unlisten: (() => void) | null = null;
+    listen("agent-state-changed", () => {
+      void queryClient.invalidateQueries({ queryKey: ["today-stats"] });
+    }).then((fn) => { unlisten = fn; });
+    return () => { if (unlisten) unlisten(); };
+  }, [queryClient]);
 
   // F-026: Dynamic suggestions from recent prompts
   const { data: suggestions = DEFAULT_SUGGESTIONS } = useQuery({
