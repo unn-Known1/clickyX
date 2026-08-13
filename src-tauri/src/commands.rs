@@ -227,7 +227,8 @@ pub struct Conversation {
 #[tauri::command]
 pub fn load_conversations(app: AppHandle) -> Result<Vec<Conversation>, String> {
     let config = config::load_config(&app).unwrap_or_default();
-    let path = dirs::config_dir().expect("no config dir").join("clickyx").join("conversations.enc");
+    let base = dirs::config_dir().unwrap_or_else(|| std::path::PathBuf::from("."));
+    let path = base.join("clickyx").join("conversations.enc");
     if !path.exists() {
         return Ok(vec![]);
     }
@@ -239,7 +240,8 @@ pub fn load_conversations(app: AppHandle) -> Result<Vec<Conversation>, String> {
 #[tauri::command]
 pub fn save_conversations(app: AppHandle, conversations: Vec<Conversation>) -> Result<(), String> {
     let config = config::load_config(&app).unwrap_or_default();
-    let path = dirs::config_dir().expect("no config dir").join("clickyx").join("conversations.enc");
+    let base = dirs::config_dir().unwrap_or_else(|| std::path::PathBuf::from("."));
+    let path = base.join("clickyx").join("conversations.enc");
     let json = serde_json::to_string(&conversations).map_err(|e| e.to_string())?;
     let encrypted = crate::agent::session::encrypt_data(&json, &config.agent.encryption_key)?;
     if let Some(parent) = path.parent() {

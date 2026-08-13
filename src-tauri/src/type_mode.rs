@@ -61,8 +61,15 @@ impl TypeModeEngine {
     }
 
     pub fn handle_ctrl_press(&self) -> TypeModeState {
-        let cfg = self.config.lock().unwrap();
+        let cfg = match self.config.lock() {
+            Ok(g) => g,
+            Err(e) => {
+                log::error!("TypeModeEngine::handle_ctrl_press: config lock poisoned: {e}");
+                return TypeModeState::Idle;
+            }
+        };
         if !cfg.enabled {
+            drop(cfg);
             return TypeModeState::Idle;
         }
         let timeout = cfg.double_tap_timeout_ms;
@@ -74,13 +81,25 @@ impl TypeModeEngine {
         if now.saturating_sub(last) <= timeout {
             self.last_ctrl_time.store(0, Ordering::SeqCst);
             self.active.store(true, Ordering::SeqCst);
-            let mut state = self.state.lock().unwrap();
+            let mut state = match self.state.lock() {
+                Ok(g) => g,
+                Err(e) => {
+                    log::error!("TypeModeEngine::handle_ctrl_press: state lock poisoned: {e}");
+                    return TypeModeState::Idle;
+                }
+            };
             *state = TypeModeState::Active;
             log::info!("Type mode: activated (double-tap Ctrl)");
             TypeModeState::Active
         } else {
             self.last_ctrl_time.store(now, Ordering::SeqCst);
-            let mut state = self.state.lock().unwrap();
+            let mut state = match self.state.lock() {
+                Ok(g) => g,
+                Err(e) => {
+                    log::error!("TypeModeEngine::handle_ctrl_press: state lock poisoned: {e}");
+                    return TypeModeState::Idle;
+                }
+            };
             *state = TypeModeState::CtrlTapped;
             log::info!("Type mode: Ctrl tapped once");
             TypeModeState::CtrlTapped
@@ -89,7 +108,13 @@ impl TypeModeEngine {
 
     pub fn deactivate(&self) -> TypeModeState {
         self.active.store(false, Ordering::SeqCst);
-        let mut state = self.state.lock().unwrap();
+        let mut state = match self.state.lock() {
+            Ok(g) => g,
+            Err(e) => {
+                log::error!("TypeModeEngine::deactivate: state lock poisoned: {e}");
+                return TypeModeState::Idle;
+            }
+        };
         *state = TypeModeState::Idle;
         self.last_ctrl_time.store(0, Ordering::SeqCst);
         TypeModeState::Idle
@@ -100,15 +125,35 @@ impl TypeModeEngine {
     }
 
     pub fn get_state(&self) -> TypeModeState {
-        *self.state.lock().unwrap()
+        match self.state.lock() {
+            Ok(g) => *g,
+            Err(e) => {
+                log::error!("TypeModeEngine::get_state: state lock poisoned: {e}");
+                TypeModeState::Idle
+            }
+        }
     }
 
     pub fn get_config(&self) -> TypeModeConfig {
-        self.config.lock().unwrap().clone()
+        match self.config.lock() {
+            Ok(g) => g.clone(),
+            Err(e) => {
+                log::error!("TypeModeEngine::get_config: config lock poisoned: {e}");
+                TypeModeConfig::default()
+            }
+        }
     }
 
     pub fn set_config(&self, config: TypeModeConfig) {
-        *self.config.lock().unwrap() = config;
+        if let Err(e) = *self.config.lock() {
+            log::error!("TypeModeEngine::set_config: config lock poisoned: {e}");
+        } else {
+            // Re-acquire to assign (the match above borrows the guard)
+        }
+        // Simpler approach: just always try to set, ignore poison
+        if let Ok(mut g) = self.config.lock() {
+            *g = config;
+        }
     }
 
     pub fn type_text(&self, text: &str) -> Result<(), String> {
@@ -147,17 +192,30 @@ impl TypeModeEngine {
     }
 
     fn reset_timeout_if_idle(&self) {
-        let state = *self.state.lock().unwrap();
+        let state = match self.state.lock() {
+            Ok(g) => *g,
+            Err(e) => {
+                log::error!("TypeModeEngine::reset_timeout_if_idle: state lock poisoned: {e}");
+                return;
+            }
+        };
         if state == TypeModeState::CtrlTapped {
-            let cfg = self.config.lock().unwrap();
+            let cfg = match self.config.lock() {
+                Ok(g) => g,
+                Err(e) => {
+                    log::error!("TypeModeEngine::reset_timeout_if_idle: config lock poisoned: {e}");
+                    return;
+                }
+            };
             let timeout = cfg.double_tap_timeout_ms;
             drop(cfg);
             let now = Self::now_ms();
             let last = self.last_ctrl_time.load(Ordering::SeqCst);
             if last > 0 && now.saturating_sub(last) > timeout {
                 self.last_ctrl_time.store(0, Ordering::SeqCst);
-                let mut s = self.state.lock().unwrap();
-                *s = TypeModeState::Idle;
+                if let Ok(mut s) = self.state.lock() {
+                    *s = TypeModeState::Idle;
+                }
                 log::info!("Type mode: single-tap timeout expired");
             }
         }

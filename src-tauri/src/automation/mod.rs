@@ -167,7 +167,13 @@ impl AutomationEngine {
 
     pub fn start_ticking(engine: Arc<Mutex<Self>>) {
         let stop_rx = {
-            let mut eng = engine.lock().unwrap();
+            let mut eng = match engine.lock() {
+                Ok(g) => g,
+                Err(e) => {
+                    log::error!("AutomationEngine::start_ticking: engine lock poisoned: {e}");
+                    return;
+                }
+            };
             if eng.timer.is_none() {
                 eng.start();
             }
@@ -182,7 +188,14 @@ impl AutomationEngine {
                     }
                 }
                 {
-                    let mut eng = engine.lock().unwrap();
+                    let mut eng = match engine.lock() {
+                        Ok(g) => g,
+                        Err(e) => {
+                            log::warn!("AutomationEngine tick: engine lock poisoned, skipping tick: {e}");
+                            tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+                            continue;
+                        }
+                    };
                     let _ = eng.tick();
                 }
                 tokio::time::sleep(std::time::Duration::from_secs(1)).await;
