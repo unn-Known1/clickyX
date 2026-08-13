@@ -1133,7 +1133,7 @@ async fn bridge_run_agent(
                 drop(s);
                 // #5: actually execute the agent through the shared path (marks
                 // Running, persists, emits, and runs the AI provider).
-                crate::commands::spawn_agent_run(app.clone(), slug, prompt.to_string());
+                crate::commands::spawn_agent_run(app.clone(), slug, prompt.to_string(), None);
                 HttpResponse::Ok().json(serde_json::json!({ "ok": true }))
             }
             Err(e) => HttpResponse::InternalServerError().json(ErrorResponse {

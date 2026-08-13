@@ -335,11 +335,13 @@ pub fn run() {
                                 log::info!("Triggering agent: {} for automation: {}", slug, auto.name);
                                 // #15: actually execute the agent (mark Running,
                                 // persist, emit, and spawn the provider call).
-                                commands::spawn_agent_run(handle.clone(), slug.clone(), prompt.clone());
+                                let automation_id = auto.id.clone();
+                                let run_id = uuid::Uuid::new_v4().to_string();
+                                commands::spawn_agent_run(handle.clone(), slug.clone(), prompt.clone(), Some(run_id));
                                 // Record a run-history entry for the Connections UI.
                                 commands::record_automation_run(commands::AutomationRunEntry {
-                                    id: uuid::Uuid::new_v4().to_string(),
-                                    automation_id: auto.id.clone(),
+                                    id: run_id.clone(),
+                                    automation_id,
                                     started_at: crate::agent::session::now_utc(),
                                     finished_at: None,
                                     status: "running".into(),
@@ -579,6 +581,8 @@ pub fn run() {
             commands::set_agent_voice_triggers,
             commands::open_agent_hud,
             commands::agent_attach_files,
+            commands::test_mcp_server,
+            commands::get_3d_model_task,
         ])
         .build(tauri::generate_context!())
         .expect("error while building ClickyX")

@@ -3,6 +3,12 @@ import { commands } from "../bindings";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAppContext } from "../context/AppContext";
 import { SkeletonList } from "./SkeletonLoader";
+import ActiveAgentsWidget from "./ActiveAgentsWidget";
+import TodayStatsWidget from "./TodayStatsWidget";
+import NeedsAttentionWidget from "./NeedsAttentionWidget";
+import { Icon } from "./Icon";
+import ConfirmDialog from "./ConfirmDialog";
+import { useAgents } from "../hooks/useAgents";
 
 interface McpServer {
   id?: string;
@@ -39,12 +45,7 @@ interface WorkspaceStatus {
   scopes?: string[];
 }
 
-import ActiveAgentsWidget from "./ActiveAgentsWidget";
-import TodayStatsWidget from "./TodayStatsWidget";
-import NeedsAttentionWidget from "./NeedsAttentionWidget";
-import { Icon } from "./Icon";
-import ConfirmDialog from "./ConfirmDialog";
-import { useAgents } from "../hooks/useAgents";
+
 
 interface ActiveAgent {
   id: string;

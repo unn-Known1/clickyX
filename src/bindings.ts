@@ -158,6 +158,28 @@ export function invoke<T>(cmd: string, args?: any): Promise<T> {
         }
       }) as any;
     }
+    if (cmd === "generate_3d_model") {
+      return Promise.resolve({
+        task_id: "mock-task-" + Date.now(),
+        status: "pending" as const,
+        prompt: args?.prompt || "",
+        style: args?.style || "realistic",
+        created_at: Date.now(),
+      }) as any;
+    }
+    if (cmd === "get_3d_model_task") {
+      return Promise.resolve({
+        task_id: "mock-task-0",
+        status: "success" as const,
+        prompt: "Mock model",
+        style: "realistic",
+        model_url: "",
+        created_at: Date.now(),
+      }) as any;
+    }
+    if (cmd === "test_mcp_server") {
+      return Promise.resolve(true) as any;
+    }
     if (cmd.startsWith("list_") || cmd.startsWith("get_mcp_servers") || cmd === "get_app_usage_log" || cmd === "get_automation_runs" || cmd === "get_logs") {
       return Promise.resolve([]) as any;
     }

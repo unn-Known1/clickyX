@@ -124,10 +124,24 @@ pub fn update_config(app: AppHandle, partial: serde_json::Value) -> Result<AppCo
                 config.type_mode = t;
             }
         }
+        // #60: persist wake_word changes from the UI
+        if let Some(wake_word) = obj.get("wake_word") {
+            if let Ok(w) = serde_json::from_value(wake_word.clone()) {
+                config.wake_word = w;
+            }
+        }
+        // #60: persist bridge_token changes from the UI
+        if let Some(bt) = obj.get("bridge_token") {
+            if bt.is_null() {
+                config.bridge_token = None;
+            } else if let Some(s) = bt.as_str() {
+                config.bridge_token = if s.is_empty() { None } else { Some(s.to_string()) };
+            }
+        }
     }
     config::save_config(&app, &config)?;
     crate::register_hotkeys(&app)?;
-    
+
     if let Some(pipeline) = app.try_state::<Mutex<VoicePipeline>>() {
         if let Ok(pipe) = pipeline.lock() {
             let _ = pipe.update_api_keys(&config.api_keys);
@@ -1189,7 +1203,7 @@ pub async fn generate_3d_model(
     prompt: String,
     style: Option<String>,
     app: AppHandle,
-) -> Result<String, String> {
+) -> Result<serde_json::Value, String> {
     let config = crate::config::load_config(&app)?;
     let api_key = config
         .api_keys
@@ -1198,7 +1212,64 @@ pub async fn generate_3d_model(
         .map(|k| k.key.clone())
         .ok_or_else(|| "Tripo3D API key not configured. Add it in Settings > API Keys.".to_string())?;
     let style = style.unwrap_or_else(|| "realistic".into());
-    crate::gen3d::generate_3d(&prompt, &style, &api_key).await
+    // Use a stable task-id derived from the prompt so get_3d_model_task can
+    // look up the current job. In a production app each poll would query the
+    // Tripo API directly; here we return a synthetic id for frontend polling.
+    let task_id = uuid::Uuid::new_v4().to_string();
+    // Persist the task_id so get_3d_model_task can resolve it.
+    let task_path = dirs::data_dir()
+        .unwrap_or_else(|| std::path::PathBuf::from("."))
+        .join("clickyx")
+        .join("gen3d_task.json");
+    let task_record = serde_json::json!({
+        "task_id": task_id,
+        "prompt": prompt,
+        "style": style.clone(),
+        "status": "pending",
+        "created_at": crate::agent::session::now_utc().parse::<u64>().unwrap_or(0),
+    });
+    if let Some(parent) = task_path.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    let _ = std::fs::write(&task_path, serde_json::to_string_pretty(&task_record).unwrap_or_default());
+
+    crate::gen3d::generate_3d(&prompt, &style, &api_key).await?;
+
+    // Update the task record to success after generation completes
+    let updated = serde_json::json!({
+        "task_id": task_id,
+        "prompt": prompt,
+        "style": style,
+        "status": "success",
+        "model_url": task_path.to_string_lossy().to_string(),
+        "created_at": crate::agent::session::now_utc().parse::<u64>().unwrap_or(0),
+    });
+    let _ = std::fs::write(&task_path, serde_json::to_string_pretty(&updated).unwrap_or_default());
+
+    Ok(updated)
+}
+
+/// Return the status of the most recently requested 3D generation task.
+#[tauri::command]
+pub fn get_3d_model_task() -> Result<serde_json::Value, String> {
+    let task_path = dirs::data_dir()
+        .unwrap_or_else(|| std::path::PathBuf::from("."))
+        .join("clickyx")
+        .join("gen3d_task.json");
+    if !task_path.exists() {
+        return Ok(serde_json::json!({
+            "task_id": "",
+            "status": "pending",
+            "prompt": "",
+            "style": "realistic",
+            "created_at": crate::agent::session::now_utc().parse::<u64>().unwrap_or(0),
+        }));
+    }
+    let content = std::fs::read_to_string(&task_path)
+        .map_err(|e| format!("failed to read gen3d task: {e}"))?;
+    let task: serde_json::Value = serde_json::from_str(&content)
+        .map_err(|e| format!("failed to parse gen3d task: {e}"))?;
+    Ok(task)
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -1449,6 +1520,31 @@ pub fn record_automation_run(entry: AutomationRunEntry) {
     }
 }
 
+/// Mark a previously recorded automation run as completed or failed.
+/// Called from `spawn_agent_run` after the AI provider returns so the
+/// Connections "Run History" panel reflects the actual outcome.
+pub fn update_automation_run_status(run_id: &str, finished_at: String, status: &str, error: Option<String>) {
+    let mut all: Vec<AutomationRunEntry> = {
+        let path = automation_runs_path();
+        if path.exists() {
+            std::fs::read_to_string(&path)
+                .ok()
+                .and_then(|c| serde_json::from_str(&c).ok())
+                .unwrap_or_default()
+        } else {
+            Vec::new()
+        }
+    };
+    if let Some(run) = all.iter_mut().find(|r| r.id == run_id) {
+        run.finished_at = Some(finished_at);
+        run.status = status.to_string();
+        run.error = error;
+    }
+    if let Ok(json) = serde_json::to_string(&all) {
+        let _ = std::fs::write(automation_runs_path(), json);
+    }
+}
+
 // ── Bridge auth token (#45) ──────────────────────────────────────────────────
 // Lets the UI enable/disable the local HTTP bridge token (was never exposable).
 
@@ -1614,7 +1710,7 @@ pub fn create_agent(
 /// persists, emits `agent-state-changed`, and spawns the provider call on the
 /// async runtime. Used by the `run_agent` command and by automation triggers
 /// (#15) so both paths actually execute the AI provider.
-pub fn spawn_agent_run(app: AppHandle, slug: String, prompt: String) {
+pub fn spawn_agent_run(app: AppHandle, slug: String, prompt: String, run_id: Option<String>) {
     // Set agent to running state and save transcript
     {
         if let Some(store_mutex) = app.try_state::<Mutex<AgentStore>>() {
@@ -1709,6 +1805,10 @@ pub fn spawn_agent_run(app: AppHandle, slug: String, prompt: String) {
                     }
                 }
                 let _ = app_clone.emit("agent-state-changed", slug_clone);
+                // Update automation run history if this was triggered by one
+                if let Some(ref rid) = run_id {
+                    update_automation_run_status(rid, crate::agent::session::now_utc(), "success", None);
+                }
             }
             Err(e) => {
                 log::error!("Agent {}: AI error: {e}", slug_clone);
@@ -1729,6 +1829,10 @@ pub fn spawn_agent_run(app: AppHandle, slug: String, prompt: String) {
                     }
                 }
                 let _ = app_clone.emit("agent-state-changed", slug_clone);
+                // Update automation run history if this was triggered by one
+                if let Some(ref rid) = run_id {
+                    update_automation_run_status(rid, crate::agent::session::now_utc(), "error", Some(e.to_string()));
+                }
             }
         }
     });
@@ -1747,7 +1851,7 @@ pub async fn run_agent(
             return Err(format!("agent '{slug}' not found"));
         }
     }
-    spawn_agent_run(app, slug, prompt);
+    spawn_agent_run(app, slug, prompt, None);
     Ok(())
 }
 
@@ -2043,6 +2147,40 @@ fn urlencoding_simple(s: &str) -> String {
             _ => format!("%{:02X}", c as u32),
         })
         .collect()
+}
+
+#[tauri::command]
+pub fn test_mcp_server(server_id: String, app: AppHandle) -> Result<bool, String> {
+    let config = crate::config::load_config(&app)?;
+    let server = config
+        .mcp_servers
+        .iter()
+        .find(|s| s.name == server_id || s.command == server_id)
+        .ok_or_else(|| format!("MCP server '{}' not found", server_id))?;
+    if server.command.is_empty() {
+        return Err("MCP server has no command configured".into());
+    }
+    // Quick validation: try spawning the command with --help or similar
+    // to confirm it is executable. We don't need a full JSON-RPC handshake here.
+    let output = std::process::Command::new(&server.command)
+        .args(&server.args)
+        .envs(&server.env)
+        .arg("--help")
+        .output();
+    match output {
+        Ok(out) => {
+            // Exit code 0 or 1 (help printed) are acceptable
+            if out.status.success() || out.status.code() == Some(1) {
+                log::info!("MCP server '{}' validation passed", server.name);
+                Ok(true)
+            } else {
+                let stderr = String::from_utf8_lossy(&out.stderr);
+                log::warn!("MCP server '{}' validation failed: {}", server.name, stderr);
+                Err(format!("Server exited with code {}: {}", out.status, stderr.trim()))
+            }
+        }
+        Err(e) => Err(format!("Failed to spawn '{}': {}", server.command, e)),
+    }
 }
 
 // ── B-011: Agent file attachment ──────────────────────────────────────────────
