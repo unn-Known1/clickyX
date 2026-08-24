@@ -764,8 +764,11 @@ pub async fn transcribe_audio(
 ) -> Result<String, String> {
     // #17: async command — runs directly on the Tauri async runtime, no
     // hand-rolled Runtime::new()/block_on on the main thread.
-    let pipe = pipeline.lock().map_err(|e| format!("lock error: {e}"))?;
-    let stt_cfg = pipe.stt_config()?;
+    // The MutexGuard must be dropped before the await point (it is not Send).
+    let stt_cfg = {
+        let pipe = pipeline.lock().map_err(|e| format!("lock error: {e}"))?;
+        pipe.stt_config()?
+    };
     let sample_rate = 16000;
     crate::audio::transcribe(&audio_data, &stt_cfg, sample_rate).await
 }

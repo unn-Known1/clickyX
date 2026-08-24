@@ -69,6 +69,7 @@ fn init_logging() {
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info"))
         .target(env_logger::Target::Pipe(Box::new(file_writer)))
         .format(|buf, record| {
+            use std::io::Write as _;
             writeln!(
                 buf,
                 "{} | {} | {} | {}",
@@ -337,7 +338,7 @@ pub fn run() {
                                 // persist, emit, and spawn the provider call).
                                 let automation_id = auto.id.clone();
                                 let run_id = uuid::Uuid::new_v4().to_string();
-                                commands::spawn_agent_run(handle.clone(), slug.clone(), prompt.clone(), Some(run_id));
+                                commands::spawn_agent_run(handle.clone(), slug.clone(), prompt.clone(), Some(run_id.clone()));
                                 // Record a run-history entry for the Connections UI.
                                 commands::record_automation_run(commands::AutomationRunEntry {
                                     id: run_id.clone(),
@@ -609,7 +610,6 @@ mod tests {
     /// while files under the threshold are left untouched.
     #[test]
     fn test_log_rotation_threshold() {
-        use std::io::Write;
         let dir = tempfile::tempdir().expect("tempdir");
         let log_file = dir.path().join("clickyx.log");
         let rotated = dir.path().join("clickyx.old.log");

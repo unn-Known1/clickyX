@@ -5,7 +5,7 @@ use crate::bridge_auth::{Auth, BridgeAuthConfig};
 use futures_util::stream::Stream;
 use futures_util::StreamExt;
 use serde::{Deserialize, Serialize};
-use tauri::{AppHandle, Manager};
+use tauri::{AppHandle, Emitter, Manager};
 
 use crate::screen::capture;
 

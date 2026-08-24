@@ -196,7 +196,7 @@ mod tests {
 
     #[test]
     fn test_manager_new_is_empty() {
-        let mgr = AnnotationManager::new();
+        let mut mgr = AnnotationManager::new();
         assert!(!mgr.has_active());
         assert!(mgr.get_expired().is_empty());
     }
@@ -222,11 +222,19 @@ mod tests {
     #[test]
     fn test_sweep_expired() {
         let mut mgr = AnnotationManager::new();
+        // duration_ms: 0 falls back to the default cursor timeout, so a
+        // freshly-added cursor must not be reported as expired.
         let data = CursorData { x: 0.0, y: 0.0, label: None, accent: None, duration_ms: 0 };
         mgr.add_cursor("c3".into(), data);
+        assert!(mgr.get_expired().is_empty());
+
+        // A short positive duration does expire once the timeout elapses.
+        let short = CursorData { x: 1.0, y: 1.0, label: None, accent: None, duration_ms: 1 };
+        mgr.add_cursor("c4".into(), short);
+        std::thread::sleep(std::time::Duration::from_millis(20));
         let expired = mgr.get_expired();
         assert!(!expired.is_empty());
-        assert_eq!(expired[0], "c3");
+        assert_eq!(expired[0], "c4");
     }
 
     #[test]

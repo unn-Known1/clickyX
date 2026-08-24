@@ -145,14 +145,13 @@ impl TypeModeEngine {
     }
 
     pub fn set_config(&self, config: TypeModeConfig) {
-        if let Err(e) = *self.config.lock() {
-            log::error!("TypeModeEngine::set_config: config lock poisoned: {e}");
-        } else {
-            // Re-acquire to assign (the match above borrows the guard)
-        }
-        // Simpler approach: just always try to set, ignore poison
-        if let Ok(mut g) = self.config.lock() {
-            *g = config;
+        match self.config.lock() {
+            Ok(mut g) => *g = config,
+            Err(e) => {
+                log::error!("TypeModeEngine::set_config: config lock poisoned: {e}");
+                let mut g = e.into_inner();
+                *g = config;
+            }
         }
     }
 

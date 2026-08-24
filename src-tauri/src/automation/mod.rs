@@ -191,9 +191,8 @@ impl AutomationEngine {
                     let mut eng = match engine.lock() {
                         Ok(g) => g,
                         Err(e) => {
-                            log::warn!("AutomationEngine tick: engine lock poisoned, skipping tick: {e}");
-                            tokio::time::sleep(std::time::Duration::from_secs(1)).await;
-                            continue;
+                            log::warn!("AutomationEngine tick: engine lock poisoned, recovering: {e}");
+                            e.into_inner()
                         }
                     };
                     let _ = eng.tick();
