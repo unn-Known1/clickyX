@@ -325,62 +325,6 @@ if ($el -ne $null) {{
         })
     }
 
-    fn get_children(
-        &self,
-        element: &AccessibilityElement,
-    ) -> Result<Vec<AccessibilityElement>, String> {
-        if !element.children.is_empty() {
-            return Ok(element.children.clone());
-        }
-        if element.role == "desktop" {
-            let windows = list_visible_windows();
-            return Ok(windows
-                .into_iter()
-                .map(|(title, proc, pid)| build_element(&title, &proc, pid, false))
-                .collect());
-        }
-        Ok(Vec::new())
-    }
-
-    fn get_ancestors(
-        &self,
-        element: &AccessibilityElement,
-    ) -> Result<Vec<AccessibilityElement>, String> {
-        Ok(vec![AccessibilityElement {
-            role: "desktop".into(),
-            name: "Windows Desktop".into(),
-            x: 0,
-            y: 0,
-            width: 0,
-            height: 0,
-            enabled: true,
-            focused: false,
-            visible: true,
-            children: Vec::new(),
-            pid: element.pid,
-            description: None,
-            value: None,
-            help_text: None,
-        }])
-    }
-
-    fn get_all_elements_matching(
-        &self,
-        role: &str,
-        name: &str,
-    ) -> Result<Vec<AccessibilityElement>, String> {
-        let windows = list_visible_windows();
-        let matches: Vec<AccessibilityElement> = windows
-            .into_iter()
-            .map(|(title, proc, pid)| build_element(&title, &proc, pid, false))
-            .filter(|elem| {
-                (role.is_empty() || elem.role.to_lowercase().contains(&role.to_lowercase()))
-                    && (name.is_empty() || elem.name.to_lowercase().contains(&name.to_lowercase()))
-            })
-            .collect();
-        Ok(matches)
-    }
-
     fn snapshot(&self) -> Result<AccessibilityTree, String> {
         let now = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)

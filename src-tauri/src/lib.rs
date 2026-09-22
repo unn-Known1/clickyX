@@ -1,4 +1,3 @@
-#![allow(dead_code)]
 mod accessibility;
 mod agent;
 mod ai;
@@ -14,6 +13,7 @@ mod overlay;
 mod permissions;
 pub mod platform;
 mod screen;
+mod secret_store;
 mod tray;
 mod type_mode;
 mod updater;
@@ -436,10 +436,6 @@ pub fn run() {
             let agent_store = Mutex::new(agent_store);
             handle.manage(agent_store);
 
-            // Initialize codex state
-            let codex_state: Mutex<commands::CodexState> = Mutex::new(None);
-            handle.manage(codex_state);
-
             // Initialize overlay annotation lifecycle manager
             let ann_manager = overlay::init_manager();
             let ann_mgr_arc = std::sync::Arc::new(ann_manager);
@@ -604,9 +600,6 @@ pub fn run() {
             commands::list_skills,
             commands::enable_skill,
             commands::disable_skill,
-            commands::start_codex,
-            commands::stop_codex,
-            commands::get_codex_status,
             commands::get_agent_config,
             commands::update_agent_config,
             commands::start_always_on,

@@ -25,17 +25,16 @@ pub struct Automation {
 
 pub struct AutomationEngine {
     pub automations: Vec<Automation>,
-    pub timer: Option<tokio::sync::watch::Receiver<bool>>,
-    stop_tx: Option<tokio::sync::watch::Sender<bool>>,
     file_path: PathBuf,
 }
+// P3: ticking is driven by the single 1s loop in lib.rs setup — the engine's
+// own start/stop/watch-channel machinery (timer/stop_tx/start_ticking) was
+// never started by anyone and is deleted, not kept as a second driver.
 
 impl Default for AutomationEngine {
     fn default() -> Self {
         Self {
             automations: vec![],
-            timer: None,
-            stop_tx: None,
             file_path: PathBuf::from("automations.json"),
         }
     }
@@ -45,8 +44,6 @@ impl AutomationEngine {
     pub fn new(file_path: PathBuf) -> Self {
         Self {
             automations: vec![],
-            timer: None,
-            stop_tx: None,
             file_path,
         }
     }
@@ -59,8 +56,6 @@ impl AutomationEngine {
                 .map_err(|e| format!("failed to parse automations: {e}"))?;
             Self {
                 automations,
-                timer: None,
-                stop_tx: None,
                 file_path: path.clone(),
             }
         } else {
@@ -94,21 +89,6 @@ impl AutomationEngine {
             *existing = automation;
         }
         let _ = self.save();
-    }
-
-    pub fn start(&mut self) {
-        let (tx, rx) = tokio::sync::watch::channel(false);
-        self.stop_tx = Some(tx);
-        self.timer = Some(rx);
-        log::info!("Automation engine: started");
-    }
-
-    pub fn stop(&mut self) {
-        if let Some(tx) = self.stop_tx.take() {
-            let _ = tx.send(true);
-        }
-        self.timer = None;
-        log::info!("Automation engine: stopped");
     }
 
     pub fn tick(&mut self) -> Vec<Automation> {
@@ -159,45 +139,6 @@ impl AutomationEngine {
             let _ = self.save();
         }
         triggered
-    }
-
-    pub fn start_ticking(engine: Arc<Mutex<Self>>) {
-        let stop_rx = {
-            let mut eng = match engine.lock() {
-                Ok(g) => g,
-                Err(e) => {
-                    log::error!("AutomationEngine::start_ticking: engine lock poisoned: {e}");
-                    return;
-                }
-            };
-            if eng.timer.is_none() {
-                eng.start();
-            }
-            eng.timer.clone()
-        };
-        tokio::spawn(async move {
-            loop {
-                if let Some(ref rx) = stop_rx {
-                    if *rx.borrow() {
-                        log::info!("Automation engine: tick loop stopped");
-                        break;
-                    }
-                }
-                {
-                    let mut eng = match engine.lock() {
-                        Ok(g) => g,
-                        Err(e) => {
-                            log::warn!(
-                                "AutomationEngine tick: engine lock poisoned, recovering: {e}"
-                            );
-                            e.into_inner()
-                        }
-                    };
-                    let _ = eng.tick();
-                }
-                tokio::time::sleep(std::time::Duration::from_secs(1)).await;
-            }
-        });
     }
 }
 

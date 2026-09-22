@@ -394,56 +394,6 @@ public class Input {{
         Err("no platform-specific background click implementation".into())
     }
 
-    pub fn double_click(&mut self, x: f64, y: f64) -> ClickResult {
-        let first = self.click_native(x, y);
-        if first.success {
-            std::thread::sleep(std::time::Duration::from_millis(50));
-            let second = self.click_native(x, y);
-            ClickResult {
-                success: first.success && second.success,
-                ..first
-            }
-        } else {
-            first
-        }
-    }
-
-    pub fn type_text(&mut self, text: &str) -> Result<(), String> {
-        #[cfg(target_os = "linux")]
-        if display_server() == "wayland" {
-            return wtype_text(text);
-        }
-        let mut enigo = Enigo::new(&Settings::default()).map_err(|e| format!("enigo: {e}"))?;
-        enigo.text(text).map_err(|e| format!("type_text: {e}"))
-    }
-
-    pub fn key_press(&mut self, key: Key) -> Result<(), String> {
-        #[cfg(target_os = "linux")]
-        if display_server() == "wayland" {
-            return Err(
-                "key_press via enigo not supported on Wayland. Install ydotool and use type_text instead."
-                    .to_string(),
-            );
-        }
-        let mut enigo = Enigo::new(&Settings::default()).map_err(|e| format!("enigo: {e}"))?;
-        enigo
-            .key(key, Direction::Click)
-            .map_err(|e| format!("key_press: {e}"))
-    }
-
-    pub fn move_cursor(&mut self, x: f64, y: f64) -> Result<(), String> {
-        #[cfg(target_os = "linux")]
-        if display_server() == "wayland" {
-            return Err(
-                "move_cursor via enigo not supported on Wayland. Install ydotool.".to_string(),
-            );
-        }
-        let mut enigo = Enigo::new(&Settings::default()).map_err(|e| format!("enigo: {e}"))?;
-        enigo
-            .move_mouse(x as i32, y as i32, Coordinate::Abs)
-            .map_err(|e| format!("move_cursor: {e}"))
-    }
-
     pub fn scroll(&mut self, x: f64, y: f64, delta_x: f64, delta_y: f64) -> Result<(), String> {
         #[cfg(target_os = "linux")]
         if display_server() == "wayland" {
@@ -474,18 +424,6 @@ public class Input {{
 }
 
 #[cfg(target_os = "linux")]
-fn wtype_text(text: &str) -> Result<(), String> {
-    let safe = text.replace('\'', "'\\''");
-    let wrapped = format!("'{}'", safe);
-    std::process::Command::new("sh")
-        .args(["-c", &format!("wtype -k -- {}", wrapped)])
-        .output()
-        .map(|_| ())
-        .map_err(|e| format!("wtype failed: {e}"))
-}
-
-/// Wayland click via ydotool (P1/CR-5 fix).
-///
 /// ydotool has SEPARATE `mousemove` and `click` subcommands — the old code
 /// mashed both into one invocation (`mousemove -- X Y click 0xC0`), which
 /// ydotool's flag parser rejects, so Wayland clicks never landed.
@@ -516,24 +454,6 @@ fn ydotool_click(x: f64, y: f64) -> Result<(), String> {
     Ok(())
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct CuaConfig {
-    pub backend: CuaBackend,
-    pub native_cua: bool,
-    pub min_click_interval_ms: u64,
-}
-
-impl Default for CuaConfig {
-    fn default() -> Self {
-        Self {
-            backend: CuaBackend::Native,
-            native_cua: true,
-            min_click_interval_ms: 100,
-        }
-    }
-}
-
-#[cfg(test)]
 mod tests {
     use super::*;
 
@@ -551,14 +471,6 @@ mod tests {
         let mut sim = InputSimulator::new(CuaBackend::Native);
         sim.min_interval_ms = 0;
         assert!(sim.check_interval());
-    }
-
-    #[test]
-    fn test_cua_config_defaults() {
-        let cfg = CuaConfig::default();
-        assert_eq!(cfg.backend, CuaBackend::Native);
-        assert!(cfg.native_cua);
-        assert_eq!(cfg.min_click_interval_ms, 100);
     }
 
     #[test]

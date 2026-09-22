@@ -8,8 +8,6 @@ use crate::ai::AiConfig;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
 pub struct AgentConfig {
-    pub codex_path: Option<String>,
-    pub codex_home: String,
     pub max_workers: u32,
     pub agent_dock_position: String,
     pub enabled_skills: Vec<String>,
@@ -19,26 +17,12 @@ pub struct AgentConfig {
 impl Default for AgentConfig {
     fn default() -> Self {
         Self {
-            codex_path: None,
-            codex_home: {
-                let mut p = dirs::data_dir().unwrap_or_else(|| std::path::PathBuf::from("."));
-                p.push("clickyx");
-                p.push("codex");
-                p.to_string_lossy().to_string()
-            },
             max_workers: 2,
             agent_dock_position: "bottom".into(),
             enabled_skills: vec!["file_reader".into()],
             encryption_key: String::new(),
         }
     }
-}
-
-fn agent_data_dir() -> String {
-    let base = dirs::data_dir()
-        .map(|p| p.join("clickyx").join("codex"))
-        .unwrap_or_else(|| std::path::PathBuf::from("codex"));
-    base.to_string_lossy().to_string()
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -263,6 +247,9 @@ pub struct AppConfig {
     /// Phone the update server once per launch (version check only). P0-T3.
     #[serde(default = "default_true")]
     pub check_updates_on_startup: bool,
+    /// P3/T2: secrets live in the OS keychain; file fields stay empty.
+    /// Set on successful migration; load hydrates from the keychain instead.
+    pub secrets_in_keychain: bool,
     pub onboarding_completed: bool,
 }
 
@@ -290,6 +277,7 @@ impl Default for AppConfig {
             bridge_token: None,
             bridge_auth_disabled: false,
             check_updates_on_startup: true,
+            secrets_in_keychain: false,
             onboarding_completed: false,
         }
     }
@@ -304,7 +292,49 @@ fn config_path() -> PathBuf {
     config_dir().join("config.json")
 }
 
+/// P3: process-wide config cache with mtime validation (the ConfigService-lite
+/// answer to "disk-read + full JSON parse on every command").
+///
+/// - Hit: file mtime <= cached mtime → clone (microseconds, no disk I/O).
+/// - Miss: full load (parse + secret ensure + keychain migrate/hydrate).
+/// - External edits (hand-edited config.json) have a NEWER mtime → reload.
+/// - Every `save_config_inner` refresh writes through the cache, so readers
+///   never see stale data after an in-app change.
+static CONFIG_CACHE: std::sync::RwLock<Option<(std::time::SystemTime, AppConfig)>> =
+    std::sync::RwLock::new(None);
+
+fn file_mtime(path: &std::path::Path) -> Option<std::time::SystemTime> {
+    std::fs::metadata(path).and_then(|m| m.modified()).ok()
+}
+
 pub fn load_config(_app: &AppHandle) -> Result<AppConfig, String> {
+    let path = config_path();
+    if let Some(mtime) = file_mtime(&path) {
+        if let Ok(cache) = CONFIG_CACHE.read() {
+            if let Some((cached_mtime, cached)) = cache.as_ref() {
+                if mtime <= *cached_mtime {
+                    return Ok(cached.clone());
+                }
+            }
+        }
+    }
+    let config = load_config_uncached()?;
+    if let Ok(mut cache) = CONFIG_CACHE.write() {
+        let stamp = file_mtime(&path).unwrap_or_else(std::time::SystemTime::now);
+        *cache = Some((stamp, config.clone()));
+    }
+    Ok(config)
+}
+
+/// Invalidate the process cache (tests, or after out-of-band file changes).
+#[allow(dead_code)]
+pub fn invalidate_config_cache() {
+    if let Ok(mut cache) = CONFIG_CACHE.write() {
+        *cache = None;
+    }
+}
+
+fn load_config_uncached() -> Result<AppConfig, String> {
     let path = config_path();
     if !path.exists() {
         log::info!("No config file found at {:?}, creating defaults", path);
@@ -321,6 +351,9 @@ pub fn load_config(_app: &AppHandle) -> Result<AppConfig, String> {
             if ensure_auth_secrets(&mut config) {
                 let _ = save_config_inner(&config);
             }
+            // P3/T2: move legacy file secrets into the OS keychain once, then
+            // hydrate from the keychain on every load.
+            sync_secrets_with_keychain(&mut config);
             log::info!("Config loaded successfully from {:?}", path);
             Ok(config)
         }
@@ -332,6 +365,28 @@ pub fn load_config(_app: &AppHandle) -> Result<AppConfig, String> {
             let _ = save_config_inner(&config);
             Ok(config)
         }
+    }
+}
+
+/// P3/T2: keychain sync. First run with an available keychain migrates file
+/// secrets into it (flag persisted); afterwards secrets hydrate from it.
+/// All best-effort: failures log and keep file values (never fail the load).
+fn sync_secrets_with_keychain(config: &mut AppConfig) {
+    use crate::secret_store::{
+        hydrate_secrets_from_store, migrate_secrets_to_store, KeychainStore, SecretStore,
+    };
+    let store = KeychainStore;
+    if !store.available() {
+        return;
+    }
+    if !config.secrets_in_keychain {
+        if migrate_secrets_to_store(config, &store) {
+            config.secrets_in_keychain = true;
+            let _ = save_config_inner(config);
+            log::info!("Secrets migrated to OS keychain; config file stripped");
+        }
+    } else {
+        hydrate_secrets_from_store(config, &store);
     }
 }
 
@@ -372,13 +427,27 @@ fn ensure_auth_secrets(config: &mut AppConfig) -> bool {
         );
         changed = true;
     }
+    // P3/T2: freshly generated secrets go straight to the keychain when
+    // available (migration/sync on load handles the rest).
+    if changed {
+        crate::secret_store::persist_config_secrets(config);
+    }
     changed
 }
 
 fn save_config_inner(config: &AppConfig) -> Result<(), String> {
     let dir = config_dir();
     fs::create_dir_all(&dir).map_err(|e| format!("failed to create config dir: {e}"))?;
-    let content = serde_json::to_string_pretty(config)
+    // P3/T2: once migrated, secrets NEVER touch the file again — serialize a
+    // verified-stripped clone (fields the keychain provably holds are blanked;
+    // anything else stays, so a downed keychain can never lose keys).
+    // The process cache below keeps the full in-memory values.
+    let for_file = if config.secrets_in_keychain {
+        crate::secret_store::strip_verified_secrets(config, &crate::secret_store::KeychainStore)
+    } else {
+        config.clone()
+    };
+    let content = serde_json::to_string_pretty(&for_file)
         .map_err(|e| format!("failed to serialize config: {e}"))?;
     let path = config_path();
     let tmp_path = path.with_extension("json.tmp");
@@ -390,6 +459,12 @@ fn save_config_inner(config: &AppConfig) -> Result<(), String> {
     {
         use std::os::unix::fs::PermissionsExt;
         let _ = fs::set_permissions(&path, fs::Permissions::from_mode(0o600));
+    }
+    // P3: write through the process cache so subsequent loads are instant
+    // and never stale after an in-app change.
+    if let Ok(mut cache) = CONFIG_CACHE.write() {
+        let stamp = file_mtime(&path).unwrap_or_else(std::time::SystemTime::now);
+        *cache = Some((stamp, config.clone()));
     }
     Ok(())
 }
@@ -440,7 +515,6 @@ mod tests {
     #[test]
     fn test_agent_config_defaults() {
         let cfg = AgentConfig::default();
-        assert!(cfg.codex_path.is_none());
         assert_eq!(cfg.max_workers, 2);
         assert_eq!(cfg.agent_dock_position, "bottom");
         assert_eq!(cfg.enabled_skills.len(), 1);

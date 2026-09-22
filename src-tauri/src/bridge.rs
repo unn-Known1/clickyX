@@ -67,6 +67,8 @@ struct CursorRequest {
     x: f64,
     y: f64,
     label: Option<String>,
+    // P3: API-compat input — accepted but currently unused by the renderer.
+    #[allow(dead_code)]
     accent: Option<String>,
     screen: Option<usize>,
 }
@@ -279,6 +281,8 @@ async fn clear_overlays(
 #[derive(Deserialize)]
 struct SpeakRequest {
     text: String,
+    // P3: API-compat input — accepted but currently unused by the TTS path.
+    #[allow(dead_code)]
     provider: Option<String>,
 }
 

@@ -87,7 +87,7 @@ npm run test:visual           # Playwright visual regression
 | `gen3d.rs` | Tripo3D API |
 | `updater.rs` | Platform-aware updater with streaming progress events |
 | `config.rs` | Config load/save/export/import/reset |
-| `commands.rs` | All Tauri command handlers |
+| `commands/` | Tauri command handlers by domain (`config/panel/chat/ai/screen/overlay/audio/agent/automation/mcp/system/cua_cmds` + `types`); re-exported so `commands::foo` paths keep working |
 | `lib.rs` | App setup, plugin registration, deep-link handler |
 | `tray.rs` | System tray setup |
 | `type_mode.rs` | Double-tap Ctrl type mode |

@@ -93,15 +93,6 @@ pub struct CaptionPayload {
 }
 
 #[derive(Debug, Clone, Serialize)]
-pub struct OverlayState {
-    pub cursors: Vec<CursorData>,
-    pub rectangles: Vec<RectPayload>,
-    pub scribbles: Vec<ScribblePayload>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub speech_bubble: Option<CaptionPayload>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub agent_dock: Option<String>,
-}
 
 pub fn init_manager() -> Mutex<AnnotationManager> {
     #[cfg(target_os = "linux")]
@@ -136,14 +127,6 @@ pub fn start_lifecycle_sweep<R: Runtime>(
     });
 }
 
-pub fn set_click_through<R: Runtime>(
-    window: &WebviewWindow<R>,
-    enabled: bool,
-) -> Result<(), String> {
-    window
-        .set_ignore_cursor_events(enabled)
-        .map_err(|e| format!("set_ignore_cursor_events: {e}"))
-}
 
 pub fn show_overlay<R: Runtime>(app: &AppHandle<R>) -> Result<(), String> {
     // Show all per-screen overlay windows
@@ -782,35 +765,9 @@ pub fn start_hotplug_poll<R: Runtime>(app: AppHandle<R>, url: &str) {
     });
 }
 
-pub fn get_screen_for_point(x: f64, y: f64) -> usize {
-    if let Ok(all) = xcap::Monitor::all() {
-        for (i, m) in all.iter().enumerate() {
-            if x >= m.x().unwrap_or(0) as f64
-                && x < (m.x().unwrap_or(0) + m.width().unwrap_or(0) as i32) as f64
-                && y >= m.y().unwrap_or(0) as f64
-                && y < (m.y().unwrap_or(0) + m.height().unwrap_or(0) as i32) as f64
-            {
-                return i;
-            }
         }
     }
     0
 }
 
 /// Get the screen index for a point using cached ScreenManager.
-pub fn get_screen_for_point_cached(
-    x: f64,
-    y: f64,
-    manager: &crate::overlay::screen_router::ScreenManager,
-) -> usize {
-    manager
-        .monitors()
-        .iter()
-        .position(|m| {
-            x >= m.x as f64
-                && x < (m.x + m.width as i32) as f64
-                && y >= m.y as f64
-                && y < (m.y + m.height as i32) as f64
-        })
-        .unwrap_or(0)
-}

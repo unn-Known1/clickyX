@@ -62,6 +62,7 @@ rand = "0.8.5"
 hex = "0.4.3"
 semver = "1.0.28"
 minisign-verify = "0.2.5"
+keyring = "4.2.0"
 
 [dev-dependencies]
 actix-http = "3.13.6"

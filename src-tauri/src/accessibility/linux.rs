@@ -342,62 +342,6 @@ impl AccessibilityApi for LinuxAccessibility {
         })
     }
 
-    fn get_children(
-        &self,
-        element: &AccessibilityElement,
-    ) -> Result<Vec<AccessibilityElement>, String> {
-        if !element.children.is_empty() {
-            return Ok(element.children.clone());
-        }
-        if element.role == "window" || element.role == "desktop" {
-            return Ok(list_visible_windows()
-                .iter()
-                .take(8)
-                .map(|id| build_element_from_window(id))
-                .collect());
-        }
-        Ok(Vec::new())
-    }
-
-    fn get_ancestors(
-        &self,
-        _element: &AccessibilityElement,
-    ) -> Result<Vec<AccessibilityElement>, String> {
-        Ok(vec![AccessibilityElement {
-            role: "desktop".into(),
-            name: "Linux Desktop".into(),
-            x: 0,
-            y: 0,
-            width: 0,
-            height: 0,
-            enabled: true,
-            focused: false,
-            visible: true,
-            children: Vec::new(),
-            pid: None,
-            description: None,
-            value: None,
-            help_text: None,
-        }])
-    }
-
-    fn get_all_elements_matching(
-        &self,
-        role: &str,
-        name: &str,
-    ) -> Result<Vec<AccessibilityElement>, String> {
-        let windows = list_visible_windows();
-        let matches: Vec<AccessibilityElement> = windows
-            .iter()
-            .map(|id| build_element_from_window(id))
-            .filter(|elem| {
-                (role.is_empty() || elem.role.contains(role))
-                    && (name.is_empty() || elem.name.to_lowercase().contains(&name.to_lowercase()))
-            })
-            .collect();
-        Ok(matches)
-    }
-
     fn snapshot(&self) -> Result<AccessibilityTree, String> {
         let now = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)

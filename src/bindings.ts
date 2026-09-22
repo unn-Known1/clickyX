@@ -59,8 +59,6 @@ export function invoke<T>(cmd: string, args?: any): Promise<T> {
           selected_voice_id: "21m00Tcm4TlvDq8ikWAM",
         },
         agent: {
-          codex_path: null,
-          codex_home: "",
           max_workers: 2,
           agent_dock_position: "bottom",
           enabled_skills: ["file_reader"],
@@ -77,6 +75,8 @@ export function invoke<T>(cmd: string, args?: any): Promise<T> {
         type_mode: { enabled: true, double_tap_timeout_ms: 400, indicator_color: "#4fc3f7" },
         bridge_token: null,
         bridge_auth_disabled: false,
+        check_updates_on_startup: true,
+        secrets_in_keychain: false,
       } as any);
     }
     if (cmd === "get_bridge_status") {
@@ -267,6 +267,7 @@ export interface AppConfig {
   bridge_token: string | null;
   bridge_auth_disabled: boolean;
   check_updates_on_startup: boolean;
+  secrets_in_keychain: boolean;
 }
 
 export interface BridgeStatus {

@@ -44,16 +44,6 @@ impl AgentSession {
         }
     }
 
-    pub fn state_label(&self) -> String {
-        match &self.state {
-            SessionState::Created => "created".into(),
-            SessionState::Running => "running".into(),
-            SessionState::Paused => "paused".into(),
-            SessionState::Completed { .. } => "done".into(),
-            SessionState::Failed { .. } => "error".into(),
-            SessionState::Archived => "archived".into(),
-        }
-    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

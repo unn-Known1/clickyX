@@ -129,6 +129,9 @@ impl TypeModeEngine {
         }
     }
 
+    // P3: exercised by test_config_roundtrip; kept as the read half of the
+    // config API (set_config is the write half, used by commands).
+    #[allow(dead_code)]
     pub fn get_config(&self) -> TypeModeConfig {
         match self.config.lock() {
             Ok(g) => g.clone(),
@@ -167,55 +170,6 @@ impl TypeModeEngine {
         }
         let mut enigo = Enigo::new(&Settings::default()).map_err(|e| format!("enigo: {e}"))?;
         enigo.text(text).map_err(|e| format!("type_text: {e}"))
-    }
-
-    pub fn key_press(&self, key: Key) -> Result<(), String> {
-        if !self.is_active() {
-            return Err("Type mode not active".into());
-        }
-        #[cfg(target_os = "windows")]
-        ensure_com();
-        #[cfg(target_os = "linux")]
-        if is_wayland() {
-            return Err(
-                "key_press not supported on Wayland. Install wtype and use type_text instead."
-                    .to_string(),
-            );
-        }
-        let mut enigo = Enigo::new(&Settings::default()).map_err(|e| format!("enigo: {e}"))?;
-        enigo
-            .key(key, Direction::Click)
-            .map_err(|e| format!("key_press: {e}"))
-    }
-
-    fn reset_timeout_if_idle(&self) {
-        let state = match self.state.lock() {
-            Ok(g) => *g,
-            Err(e) => {
-                log::error!("TypeModeEngine::reset_timeout_if_idle: state lock poisoned: {e}");
-                return;
-            }
-        };
-        if state == TypeModeState::CtrlTapped {
-            let cfg = match self.config.lock() {
-                Ok(g) => g,
-                Err(e) => {
-                    log::error!("TypeModeEngine::reset_timeout_if_idle: config lock poisoned: {e}");
-                    return;
-                }
-            };
-            let timeout = cfg.double_tap_timeout_ms;
-            drop(cfg);
-            let now = Self::now_ms();
-            let last = self.last_ctrl_time.load(Ordering::SeqCst);
-            if last > 0 && now.saturating_sub(last) > timeout {
-                self.last_ctrl_time.store(0, Ordering::SeqCst);
-                if let Ok(mut s) = self.state.lock() {
-                    *s = TypeModeState::Idle;
-                }
-                log::info!("Type mode: single-tap timeout expired");
-            }
-        }
     }
 }
 

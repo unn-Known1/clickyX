@@ -74,6 +74,9 @@ pub fn load_skills() -> Vec<Skill> {
     skills
 }
 
+// P3: exercised by unit tests; kept as the public skills API (list_skills
+// command serves the curated list, these two serve ad-hoc lookups).
+#[allow(dead_code)]
 pub fn load_skill(name: &str) -> Option<Skill> {
     for dir in skills_dirs() {
         if !dir.exists() {
@@ -103,6 +106,8 @@ pub fn load_skill(name: &str) -> Option<Skill> {
     None
 }
 
+// P3: exercised by unit tests; kept as the public skills API.
+#[allow(dead_code)]
 pub fn discover_skills() -> Vec<String> {
     load_skills().into_iter().map(|s| s.name).collect()
 }

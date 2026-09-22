@@ -5,15 +5,6 @@ use tauri::{AppHandle, Emitter, Runtime, WebviewWindow, WebviewWindowBuilder};
 use super::screen_router::{CoordinateNormalizer, MonitorInfo, ScreenManager};
 
 #[derive(Debug, Clone, Serialize)]
-pub struct OverlayWindowInfo {
-    pub screen_name: String,
-    pub screen_idx: usize,
-    pub x: i32,
-    pub y: i32,
-    pub width: u32,
-    pub height: u32,
-    pub url: String,
-}
 
 /// Per-screen overlay window manager.
 ///
@@ -40,14 +31,6 @@ impl<R: Runtime> OverlayWindowManager<R> {
             screen_mgr,
             coord,
         }
-    }
-
-    pub fn screen_manager(&self) -> &ScreenManager {
-        &self.screen_mgr
-    }
-
-    pub fn coord(&self) -> &CoordinateNormalizer {
-        &self.coord
     }
 
     pub fn create_per_screen_windows(
@@ -188,14 +171,4 @@ impl<R: Runtime> Default for OverlayWindowManager<R> {
     fn default() -> Self {
         Self::new()
     }
-}
-
-pub fn get_screen_tag(x: f64, y: f64, monitors: &[MonitorInfo]) -> String {
-    let idx = monitors.iter().position(|m| {
-        x >= m.x as f64
-            && x < (m.x + m.width as i32) as f64
-            && y >= m.y as f64
-            && y < (m.y + m.height as i32) as f64
-    });
-    format!("screen{}", idx.unwrap_or(0) + 1)
 }

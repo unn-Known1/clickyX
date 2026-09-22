@@ -1,5 +1,4 @@
 pub mod anthropic;
-pub mod app_contexts;
 pub mod catalog;
 pub mod guidance;
 pub mod openai;
@@ -89,34 +88,6 @@ You have Computer Use capabilities. You can interact with the user's screen by o
 - To draw an arrow or curve, output: [SHAPE:arrow:x1,y1:x2,y2:optional_label]
 Only use these tags when you explicitly need to interact with the screen.
 "#;
-
-pub fn create_provider(config: &AiConfig) -> Result<Box<dyn AiProvider>, AiError> {
-    let full_prompt = format!("{}\n{}", config.system_prompt, CUA_SYSTEM_PROMPT);
-    match config.default_provider.as_str() {
-        "anthropic" => {
-            let api_key = config
-                .anthropic_api_key
-                .clone()
-                .ok_or_else(|| AiError::Config("Anthropic API key not configured".into()))?;
-            Ok(Box::new(anthropic::AnthropicProvider::new(
-                api_key,
-                full_prompt,
-            )))
-        }
-        "openai" => {
-            let api_key = config
-                .openai_api_key
-                .clone()
-                .ok_or_else(|| AiError::Config("OpenAI API key not configured".into()))?;
-            Ok(Box::new(openai::OpenAIProvider::new(
-                api_key,
-                full_prompt,
-                config.openai_base_url.clone(),
-            )))
-        }
-        p => Err(AiError::Config(format!("Unknown provider: {p}"))),
-    }
-}
 
 pub fn resolve_provider_for_model(model: &str) -> &str {
     if model.contains("claude") || model.contains("anthropic") {

@@ -130,10 +130,6 @@ impl ModelCatalog {
             .collect()
     }
 
-    pub fn get_model(&self, id: &str) -> Option<&ModelInfo> {
-        self.models.iter().find(|m| m.id == id)
-    }
-
     pub fn get_provider_models(&self, provider: &str) -> Vec<&ModelInfo> {
         self.models
             .iter()

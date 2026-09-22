@@ -17,6 +17,8 @@ pub struct UpdateInfo {
 struct UpdaterResponse {
     version: String,
     notes: Option<String>,
+    // P3: wire-format compat — the server sends it, we don't read it.
+    #[allow(dead_code)]
     pub_date: String,
     platforms: std::collections::HashMap<String, PlatformInfo>,
 }
@@ -434,6 +436,8 @@ struct GithubRelease {
 struct GithubAsset {
     name: String,
     browser_download_url: String,
+    // P3: wire-format compat — the API sends it, we don't read it.
+    #[allow(dead_code)]
     size: u64,
 }
 

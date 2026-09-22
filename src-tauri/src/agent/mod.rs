@@ -1,4 +1,3 @@
-pub mod codex;
 pub mod dock;
 pub mod session;
 pub mod skills;

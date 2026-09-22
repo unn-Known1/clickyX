@@ -199,15 +199,6 @@ impl AnnotationManager {
     }
 }
 
-pub fn format_lifecycle_event(action: &str, id: &str, state: &AnnotationState) -> String {
-    serde_json::json!({
-        "action": action,
-        "id": id,
-        "state": state,
-    })
-    .to_string()
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -373,12 +364,5 @@ mod tests {
         };
         mgr.add_rect("r".into(), rd);
         assert!(mgr.has_active());
-    }
-
-    #[test]
-    fn test_format_lifecycle_event() {
-        let s = format_lifecycle_event("test", "id-1", &AnnotationState::Completed);
-        assert!(s.contains("completed") || s.contains("Completed"));
-        assert!(s.contains("id-1"));
     }
 }
