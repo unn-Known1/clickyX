@@ -1,6 +1,6 @@
 #![allow(dead_code)]
 
-use super::{AccessibilityElement, AccessibilityTree, AccessibilityApi};
+use super::{AccessibilityApi, AccessibilityElement, AccessibilityTree};
 use std::process::Command;
 
 use crate::platform::display_server;
@@ -58,7 +58,11 @@ fn get_focused_window_id() -> Option<String> {
         return None;
     }
     let id = String::from_utf8_lossy(&out.stdout).trim().to_string();
-    if id.is_empty() { None } else { Some(id) }
+    if id.is_empty() {
+        None
+    } else {
+        Some(id)
+    }
 }
 
 fn get_window_name(win_id: &str) -> String {
@@ -83,10 +87,18 @@ fn get_window_geometry(win_id: &str) -> (i32, i32, u32, u32) {
     if let Ok(o) = out {
         let s = String::from_utf8_lossy(&o.stdout);
         for line in s.lines() {
-            if let Some(v) = line.strip_prefix("X=") { x = v.trim().parse().unwrap_or(0); }
-            if let Some(v) = line.strip_prefix("Y=") { y = v.trim().parse().unwrap_or(0); }
-            if let Some(v) = line.strip_prefix("WIDTH=") { w = v.trim().parse().unwrap_or(0); }
-            if let Some(v) = line.strip_prefix("HEIGHT=") { h = v.trim().parse().unwrap_or(0); }
+            if let Some(v) = line.strip_prefix("X=") {
+                x = v.trim().parse().unwrap_or(0);
+            }
+            if let Some(v) = line.strip_prefix("Y=") {
+                y = v.trim().parse().unwrap_or(0);
+            }
+            if let Some(v) = line.strip_prefix("WIDTH=") {
+                w = v.trim().parse().unwrap_or(0);
+            }
+            if let Some(v) = line.strip_prefix("HEIGHT=") {
+                h = v.trim().parse().unwrap_or(0);
+            }
         }
     }
     (x, y, w, h)
@@ -138,13 +150,11 @@ fn list_visible_windows() -> Vec<String> {
         .args(["search", "--onlyvisible", "--class", ""])
         .output();
     match out {
-        Ok(o) if o.status.success() => {
-            String::from_utf8_lossy(&o.stdout)
-                .lines()
-                .map(|l| l.trim().to_string())
-                .filter(|l| !l.is_empty())
-                .collect()
-        }
+        Ok(o) if o.status.success() => String::from_utf8_lossy(&o.stdout)
+            .lines()
+            .map(|l| l.trim().to_string())
+            .filter(|l| !l.is_empty())
+            .collect(),
         _ => Vec::new(),
     }
 }
@@ -181,24 +191,30 @@ fn mouse_location() -> Option<(i32, i32)> {
             .and_then(|o| {
                 let s = String::from_utf8_lossy(&o.stdout).to_string();
                 let (x, y) = parse_mouse_location(&s);
-                if x == 0 && y == 0 { None } else { Some((x, y)) }
+                if x == 0 && y == 0 {
+                    None
+                } else {
+                    Some((x, y))
+                }
             });
     }
     Command::new("xdotool")
         .args(["getmouselocation", "--shell"])
         .output()
         .ok()
-        .and_then(|o| {
+        .map(|o| {
             let s = String::from_utf8_lossy(&o.stdout).to_string();
-            let (x, y) = parse_mouse_location(&s);
-            Some((x, y))
+            parse_mouse_location(&s)
         })
 }
 
 impl AccessibilityApi for LinuxAccessibility {
     fn get_element_at_point(&self, x: i32, y: i32) -> Result<AccessibilityElement, String> {
         if display_server() == "wayland" {
-            return Err("Wayland does not support xdotool window queries. Install ydotool or use X11.".into());
+            return Err(
+                "Wayland does not support xdotool window queries. Install ydotool or use X11."
+                    .into(),
+            );
         }
 
         let out = Command::new("xdotool")
@@ -258,15 +274,22 @@ impl AccessibilityApi for LinuxAccessibility {
                     let mut elem = AccessibilityElement {
                         role: "window".into(),
                         name: "Focused Wayland Window".into(),
-                        x: 0, y: 0, width: 0, height: 0,
-                        enabled: true, focused: true, visible: true,
+                        x: 0,
+                        y: 0,
+                        width: 0,
+                        height: 0,
+                        enabled: true,
+                        focused: true,
+                        visible: true,
                         children: Vec::new(),
                         pid: None,
                         description: Some("wayland-focus (limited)".to_string()),
-                        value: None, help_text: None,
+                        value: None,
+                        help_text: None,
                     };
                     if let Some((mx, my)) = mouse_location() {
-                        elem.description = Some(format!("wayland-focus (limited) | mouse:({},{})", mx, my));
+                        elem.description =
+                            Some(format!("wayland-focus (limited) | mouse:({},{})", mx, my));
                     }
                     return Ok(Some(elem));
                 }
@@ -319,7 +342,10 @@ impl AccessibilityApi for LinuxAccessibility {
         })
     }
 
-    fn get_children(&self, element: &AccessibilityElement) -> Result<Vec<AccessibilityElement>, String> {
+    fn get_children(
+        &self,
+        element: &AccessibilityElement,
+    ) -> Result<Vec<AccessibilityElement>, String> {
         if !element.children.is_empty() {
             return Ok(element.children.clone());
         }
@@ -333,22 +359,33 @@ impl AccessibilityApi for LinuxAccessibility {
         Ok(Vec::new())
     }
 
-    fn get_ancestors(&self, _element: &AccessibilityElement) -> Result<Vec<AccessibilityElement>, String> {
-        Ok(vec![
-            AccessibilityElement {
-                role: "desktop".into(),
-                name: "Linux Desktop".into(),
-                x: 0, y: 0, width: 0, height: 0,
-                enabled: true, focused: false, visible: true,
-                children: Vec::new(),
-                pid: None,
-                description: None,
-                value: None, help_text: None,
-            },
-        ])
+    fn get_ancestors(
+        &self,
+        _element: &AccessibilityElement,
+    ) -> Result<Vec<AccessibilityElement>, String> {
+        Ok(vec![AccessibilityElement {
+            role: "desktop".into(),
+            name: "Linux Desktop".into(),
+            x: 0,
+            y: 0,
+            width: 0,
+            height: 0,
+            enabled: true,
+            focused: false,
+            visible: true,
+            children: Vec::new(),
+            pid: None,
+            description: None,
+            value: None,
+            help_text: None,
+        }])
     }
 
-    fn get_all_elements_matching(&self, role: &str, name: &str) -> Result<Vec<AccessibilityElement>, String> {
+    fn get_all_elements_matching(
+        &self,
+        role: &str,
+        name: &str,
+    ) -> Result<Vec<AccessibilityElement>, String> {
         let windows = list_visible_windows();
         let matches: Vec<AccessibilityElement> = windows
             .iter()
@@ -396,18 +433,35 @@ impl AccessibilityApi for LinuxAccessibility {
                 let y = element.y + element.height as i32 / 2;
                 if is_wayland {
                     return Command::new("ydotool")
-                        .args(["mousemove", "--", &x.to_string(), &y.to_string(), "click", "0xC0"])
+                        .args([
+                            "mousemove",
+                            "--",
+                            &x.to_string(),
+                            &y.to_string(),
+                            "click",
+                            "0xC0",
+                        ])
                         .output()
                         .map(|_| ())
                         .map_err(|e| format!("click via ydotool failed: {e}"));
                 }
                 let _ = Command::new("xdotool")
-                    .args(["mousemove", "--sync", &x.to_string(), &y.to_string(), "click", "1"])
+                    .args([
+                        "mousemove",
+                        "--sync",
+                        &x.to_string(),
+                        &y.to_string(),
+                        "click",
+                        "1",
+                    ])
                     .output();
                 Ok(())
             }
             _ => {
-                log::warn!("LinuxAccessibility::perform_action: unsupported action '{}'", action);
+                log::warn!(
+                    "LinuxAccessibility::perform_action: unsupported action '{}'",
+                    action
+                );
                 Ok(())
             }
         }

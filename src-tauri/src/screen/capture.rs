@@ -1,8 +1,8 @@
-use serde::Serialize;
-use xcap::{Monitor, Window};
+use base64::Engine;
 use image::codecs::jpeg::JpegEncoder;
 use image::ColorType;
-use base64::Engine;
+use serde::Serialize;
+use xcap::{Monitor, Window};
 
 #[derive(Debug, Clone, Serialize)]
 pub struct ScreenImage {
@@ -16,7 +16,12 @@ pub struct ScreenImage {
 fn encode_rgba_as_jpeg_base64(img: &image::RgbaImage, quality: u8) -> Result<String, String> {
     let mut buf = Vec::new();
     JpegEncoder::new_with_quality(&mut buf, quality)
-        .encode(img.as_raw(), img.width(), img.height(), ColorType::Rgba8.into())
+        .encode(
+            img.as_raw(),
+            img.width(),
+            img.height(),
+            ColorType::Rgba8.into(),
+        )
         .map_err(|e| format!("jpeg encoding failed: {e}"))?;
     Ok(base64::engine::general_purpose::STANDARD.encode(&buf))
 }
@@ -49,15 +54,27 @@ fn with_capture_guide<T>(result: Result<T, String>) -> Result<T, String> {
 fn capture_monitor(monitor: &Monitor) -> Result<ScreenImage, String> {
     let id = monitor.id().map_err(|e| format!("monitor id: {e}"))?;
     let width = monitor.width().map_err(|e| format!("monitor width: {e}"))?;
-    let height = monitor.height().map_err(|e| format!("monitor height: {e}"))?;
-    let img = monitor.capture_image().map_err(|e| format!("monitor capture: {e}"))?;
+    let height = monitor
+        .height()
+        .map_err(|e| format!("monitor height: {e}"))?;
+    let img = monitor
+        .capture_image()
+        .map_err(|e| format!("monitor capture: {e}"))?;
     let data_base64 = encode_rgba_as_jpeg_base64(&img, 85)?;
-    Ok(ScreenImage { id, width, height, data_base64 })
+    Ok(ScreenImage {
+        id,
+        width,
+        height,
+        data_base64,
+    })
 }
 
 pub fn capture_all_screens() -> Result<Vec<ScreenImage>, String> {
     let monitors = Monitor::all().map_err(|e| format!("enumerate monitors: {e}"))?;
-    monitors.iter().map(capture_monitor).collect::<Result<Vec<_>, _>>()
+    monitors
+        .iter()
+        .map(capture_monitor)
+        .collect::<Result<Vec<_>, _>>()
         .map_or_else(|e| with_capture_guide(Err(e)), Ok)
 }
 
@@ -78,7 +95,10 @@ pub fn capture_cursor_screen() -> Result<ScreenImage, String> {
             return capture_monitor(m);
         }
     }
-    monitors.first().ok_or_else(|| "no monitors found".into()).and_then(capture_monitor)
+    monitors
+        .first()
+        .ok_or_else(|| "no monitors found".into())
+        .and_then(capture_monitor)
         .map_or_else(|e| with_capture_guide(Err(e)), Ok)
 }
 
@@ -100,7 +120,12 @@ pub fn capture_focused_window() -> Result<Option<ScreenImage>, String> {
             let width = img.width();
             let height = img.height();
             let data_base64 = encode_rgba_as_jpeg_base64(&img, 85)?;
-            return Ok(Some(ScreenImage { id, width, height, data_base64 }));
+            return Ok(Some(ScreenImage {
+                id,
+                width,
+                height,
+                data_base64,
+            }));
         }
     }
     log::warn!("capture_focused_window: no focused window found, falling back to primary monitor");
@@ -110,5 +135,8 @@ pub fn capture_focused_window() -> Result<Option<ScreenImage>, String> {
             return capture_monitor(m).map(Some);
         }
     }
-    monitors.first().ok_or_else(|| "no monitors found".into()).and_then(|m| capture_monitor(m).map(Some))
+    monitors
+        .first()
+        .ok_or_else(|| "no monitors found".into())
+        .and_then(|m| capture_monitor(m).map(Some))
 }

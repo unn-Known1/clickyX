@@ -1,5 +1,6 @@
 import { useState, useCallback, useRef } from "react";
 import { commands } from "../bindings";
+import type { TodayStats } from "../bindings";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAppContext } from "../context/AppContext";
 import { SkeletonList } from "./SkeletonLoader";
@@ -37,15 +38,6 @@ interface AutomationRun {
   duration_ms?: number;
   error?: string;
 }
-
-interface WorkspaceStatus {
-  available: boolean;
-  authenticated: boolean;
-  email?: string;
-  scopes?: string[];
-}
-
-
 
 interface ActiveAgent {
   id: string;
@@ -187,13 +179,6 @@ function ConnectionsTab() {
     staleTime: 30_000,
   });
 
-  const { data: workspace } = useQuery<WorkspaceStatus>({
-    queryKey: ["google-workspace"],
-    queryFn: () => commands.checkGoogleWorkspace()
-      .catch(() => ({ available: false, authenticated: false })),
-    staleTime: 60_000,
-  });
-
   const initialLoading = mcpLoading || automationsLoading;
 
   const [mcpSearch, setMcpSearch] = useState("");
@@ -225,9 +210,6 @@ function ConnectionsTab() {
   // F-023: Run history state
   const [expandedHistory, setExpandedHistory] = useState<string | null>(null);
   const [runHistory, setRunHistory] = useState<Record<string, AutomationRun[]>>({});
-
-  // F-012: Google Workspace OAuth state
-  const [workspaceConnecting, setWorkspaceConnecting] = useState(false);
 
   /* ── MCP ─────────────────────────────────────────────────────────────────── */
   const addMcpServer = async () => {
@@ -344,31 +326,15 @@ function ConnectionsTab() {
     }
   }, [expandedHistory]);
 
-  /* ── F-012: Google Workspace auth ────────────────────────────────────────── */
-  const startGoogleAuth = async () => {
-    setWorkspaceConnecting(true);
-    try {
-      await commands.googleWorkspaceAuthStart();
-      queryClient.invalidateQueries({ queryKey: ["google-workspace"] });
-      showToast("Google Workspace connected", "success");
-    } catch (e) {
-      showToast(`Google auth failed: ${e}`, "error");
-    } finally {
-      setWorkspaceConnecting(false);
-    }
-  };
-
-  const disconnectGoogle = async () => {
-    try {
-      await commands.googleWorkspaceAuthRevoke();
-      queryClient.invalidateQueries({ queryKey: ["google-workspace"] });
-      showToast("Google Workspace disconnected", "success");
-    } catch (e) {
-      showToast(`Disconnect failed: ${e}`, "error");
-    }
-  };
-
   /* ── Widget data ─────────────────────────────────────────────────────────── */
+  // P1 (H-6/H-11): real today-stats from the backend (shared ["today-stats"]
+  // cache entry with StatusBar) — the old code fed fabricated props
+  // (runningCount as "agents run", voiceCommands hardcoded 0).
+  const { data: todayStats } = useQuery<TodayStats>({
+    queryKey: ["today-stats"],
+    queryFn: () => commands.getTodayStats(),
+    staleTime: 25_000,
+  });
   const activeAgents: ActiveAgent[] = agents.map((a) => ({
     id: a.id,
     title: a.name,
@@ -376,12 +342,7 @@ function ConnectionsTab() {
       ? a.state.toLowerCase() : "idle") as "running" | "idle" | "error",
   }));
 
-  const runningCount = activeAgents.filter((a) => a.status === "running").length;
-  const idleCount   = activeAgents.filter((a) => a.status === "idle").length;
-
   const needsAttention: NeedsAttentionItem[] = [];
-  if (workspace && !workspace.authenticated)
-    needsAttention.push({ type: "warning", message: "Google Workspace not authenticated" });
   if (agents.some((a) => ["error", "failed"].includes(a.state.toLowerCase())))
     needsAttention.push({
       type: "error",
@@ -410,67 +371,12 @@ function ConnectionsTab() {
       {/* Widgets */}
       <section className="widgets-dashboard">
         <ActiveAgentsWidget agents={activeAgents} />
-        <TodayStatsWidget agentsRun={runningCount} voiceCommands={0} itemsForReview={idleCount} />
+        <TodayStatsWidget
+          agentsRun={todayStats?.agents_run ?? 0}
+          voiceCommands={todayStats?.voice_commands ?? 0}
+          itemsForReview={todayStats?.items_for_review ?? needsAttention.length}
+        />
         <NeedsAttentionWidget items={needsAttention} />
-      </section>
-
-      {/* F-012: Google Workspace */}
-      <section className="connections-section">
-        <h3>Google Workspace</h3>
-        {workspace ? (
-          <div className="google-workspace-panel">
-            <div className="connection-status">
-              <span className={`status-badge ${workspace.available ? "available" : "unavailable"}`}>
-                {workspace.available ? "Available" : "Not Available"}
-              </span>
-              <span className={`status-badge ${workspace.authenticated ? "authenticated" : "unauthenticated"}`}>
-                {workspace.authenticated ? "Connected" : "Not Connected"}
-              </span>
-              {workspace.authenticated && workspace.email && (
-                <span className="google-email-badge">{workspace.email}</span>
-              )}
-            </div>
-
-            {workspace.authenticated ? (
-              <div className="google-connected-panel">
-                {workspace.scopes && workspace.scopes.length > 0 && (
-                  <div className="google-scopes">
-                    <span className="google-scopes-label">Scopes:</span>
-                    {workspace.scopes.map((scope) => (
-                      <span key={scope} className="google-scope-badge">{scope}</span>
-                    ))}
-                  </div>
-                )}
-                <button className="btn btn-small btn-danger" onClick={disconnectGoogle}>
-                  Disconnect
-                </button>
-              </div>
-            ) : workspace.available ? (
-              <div className="google-auth-options">
-                <button
-                  className="btn btn-primary google-oauth-btn"
-                  onClick={startGoogleAuth}
-                  disabled={workspaceConnecting}
-                >
-                  {workspaceConnecting ? "Connecting…" : "Connect with Google"}
-                </button>
-              </div>
-            ) : (
-              <div className="google-unavailable">
-                <p className="section-empty" style={{ marginBottom: 8 }}>
-                  Google Workspace integration is not yet configured in this build.
-                </p>
-                <p style={{ fontSize: 12, opacity: 0.6, margin: 0 }}>
-                  To enable Google Workspace, OAuth2 credentials must be configured.
-                  Check the project documentation for setup instructions.
-                </p>
-              </div>
-            )}
-
-          </div>
-        ) : (
-          <p className="section-empty">Checking…</p>
-        )}
       </section>
 
       {/* MCP Servers */}

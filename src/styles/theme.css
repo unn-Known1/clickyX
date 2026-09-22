@@ -156,8 +156,10 @@
 
 /* ── Accent/color variants (Appearance settings) ─────────────────────────────── */
 [data-theme="sunset"] {
+  /* NOTE (P0): --accent/--accent-hover are owned by the "Theme Variants"
+     block below (later in the cascade wins); surfaces only here. */
   --bg-primary: #2a1a1e; --bg-secondary: #3a2025; --bg-surface: #4a2a30;
-  --accent: #ff8a65; --accent-hover: #ff7043; --border: #4a3038;
+  --border: #4a3038;
   --panel-bg: rgba(42, 26, 30, 0.85);
   --focus-ring: rgba(255, 138, 101, 0.25);
   --grad-a: #ffd0c0; --grad-b: #ff8a65;
@@ -166,7 +168,7 @@
 
 [data-theme="forest"] {
   --bg-primary: #16241a; --bg-secondary: #1b2f21; --bg-surface: #24402c;
-  --accent: #66bb6a; --accent-hover: #4caf50; --border: #2c4a36;
+  --border: #2c4a36;
   --panel-bg: rgba(22, 36, 26, 0.85);
   --focus-ring: rgba(102, 187, 106, 0.25);
   --grad-a: #c8e6c9; --grad-b: #66bb6a;
@@ -175,7 +177,7 @@
 
 [data-theme="ocean"] {
   --bg-primary: #0e2a3a; --bg-secondary: #12364c; --bg-surface: #17445e;
-  --accent: #4dd0e1; --accent-hover: #26c6da; --border: #1c4e6b;
+  --border: #1c4e6b;
   --panel-bg: rgba(14, 42, 58, 0.85);
   --focus-ring: rgba(77, 208, 225, 0.25);
   --grad-a: #b2ebf2; --grad-b: #4dd0e1;
@@ -184,7 +186,7 @@
 
 [data-theme="lavender"] {
   --bg-primary: #1e1a2e; --bg-secondary: #262043; --bg-surface: #312a56;
-  --accent: #b39ddb; --accent-hover: #ab47bc; --border: #3a3162;
+  --border: #3a3162;
   --panel-bg: rgba(30, 26, 46, 0.85);
   --focus-ring: rgba(179, 157, 219, 0.25);
   --grad-a: #e1bee7; --grad-b: #b39ddb;
@@ -193,7 +195,7 @@
 
 [data-theme="rose"] {
   --bg-primary: #2e1620; --bg-secondary: #3d1d2a; --bg-surface: #4e2436;
-  --accent: #f48fb1; --accent-hover: #ec407a; --border: #552b3d;
+  --border: #552b3d;
   --panel-bg: rgba(46, 22, 32, 0.85);
   --focus-ring: rgba(244, 143, 177, 0.25);
   --grad-a: #f8bbd0; --grad-b: #f48fb1;
@@ -202,7 +204,7 @@
 
 [data-theme="amber"] {
   --bg-primary: #2a2014; --bg-secondary: #3a2c18; --bg-surface: #4a3a1e;
-  --accent: #ffd54f; --accent-hover: #ffca28; --border: #55441f;
+  --border: #55441f;
   --panel-bg: rgba(42, 32, 20, 0.85);
   --focus-ring: rgba(255, 213, 79, 0.25);
   --grad-a: #ffe082; --grad-b: #ffd54f;

@@ -1,15 +1,59 @@
-import { useEffect } from "react";
-import { listen } from "../bindings";
+import { useEffect, useState, useCallback } from "react";
+import { useTauriEvent } from "../hooks/useTauriEvent";
 import { useStore } from "../store/appStore";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { commands } from "../bindings";
+import { useAppContext } from "../context/AppContext";
 import { useAgents } from "../hooks/useAgents";
 import { Icon } from "./Icon";
 import type { AutoCaptureStatus, AudioLevelResponse, TodayStats } from "../bindings";
 
 export default function StatusBar({ typeModeActive }: { typeModeActive?: boolean }) {
   const queryClient = useQueryClient();
-  const { audioStatus, audioLevel, attentionItems, setAudioStatus, setAudioLevel, setAttentionItems, todayStats, setTodayStats } = useStore();
+  const { showToast } = useAppContext();
+  // P1 (H-8): selectors, not whole-store subscription — audio-level ticks
+  // (every 2s) must not re-render unrelated subscribers.
+  const audioStatus = useStore((s) => s.audioStatus);
+  const audioLevel = useStore((s) => s.audioLevel);
+  const attentionItems = useStore((s) => s.attentionItems);
+  const todayStats = useStore((s) => s.todayStats);
+  const setAudioStatus = useStore((s) => s.setAudioStatus);
+  const setAudioLevel = useStore((s) => s.setAudioLevel);
+  const setAttentionItems = useStore((s) => s.setAttentionItems);
+  const setTodayStats = useStore((s) => s.setTodayStats);
+  // P1 (H-4): visible hold-to-talk. Recording was hotkey-only — a first-time
+  // user could finish onboarding with zero discoverable path to speak.
+  const [pttHeld, setPttHeld] = useState(false);
+  const [transcribing, setTranscribing] = useState(false);
+
+  const startHold = useCallback(async () => {
+    if (pttHeld || transcribing) return;
+    try {
+      await commands.startRecording();
+      setPttHeld(true);
+    } catch (e) {
+      console.error("Failed to start recording:", e);
+      showToast("Could not start microphone", "error");
+    }
+  }, [pttHeld, transcribing, showToast]);
+
+  const endHold = useCallback(async () => {
+    if (!pttHeld || transcribing) return;
+    setPttHeld(false);
+    setTranscribing(true);
+    try {
+      const transcript = await commands.stopRecording();
+      const text = (transcript ?? "").trim();
+      if (text) {
+        showToast(`Voice: ${text.slice(0, 80)}${text.length > 80 ? "…" : ""}`, "success");
+      }
+    } catch (e) {
+      console.error("Failed to stop/transcribe:", e);
+      showToast("Transcription failed", "error");
+    } finally {
+      setTranscribing(false);
+    }
+  }, [pttHeld, transcribing, showToast]);
 
   // Auto-capture: react-query with refetchInterval + event-driven cache update
   const { data: acStatus } = useQuery<AutoCaptureStatus>({
@@ -19,13 +63,10 @@ export default function StatusBar({ typeModeActive }: { typeModeActive?: boolean
     staleTime: 4000,
   });
 
-  useEffect(() => {
-    let unlisten: (() => void) | null = null;
-    listen<AutoCaptureStatus>("auto-capture-status", (e) => {
-      queryClient.setQueryData(["auto-capture-status"], e.payload);
-    }).then((fn) => { unlisten = fn; });
-    return () => { if (unlisten) unlisten(); };
-  }, [queryClient]);
+  // P1 (H-4): shared listener helper — no unmount race.
+  useTauriEvent<AutoCaptureStatus>("auto-capture-status", (e) => {
+    queryClient.setQueryData(["auto-capture-status"], e.payload);
+  });
 
   // Audio status + level: react-query with refetchInterval → sync to Zustand
   const { data: fetchedAudioStatus } = useQuery<{ listening: boolean; mode: string }>({
@@ -82,12 +123,24 @@ export default function StatusBar({ typeModeActive }: { typeModeActive?: boolean
 
   return (
     <div className="status-bar" role="status" aria-label="Application status">
-      {/* Listening / audio level */}
-      <div className="status-bar-item" title={isListening ? `Listening (${audioStatus?.mode})` : "Microphone idle"}>
-        <span className={`status-bar-dot ${isListening ? "status-bar-dot-active" : ""}`} />
-        <AudioMeter level={audioLevel} active={isListening} />
-        <span className="status-bar-label">{isListening ? "Listening" : "Mic idle"}</span>
-      </div>
+      {/* Listening / audio level + hold-to-talk mic button */}
+      <button
+        className={`status-bar-item status-bar-mic ${pttHeld ? "status-bar-mic-active" : ""}`}
+        title={transcribing ? "Transcribing…" : "Hold to talk (or use your push-to-talk hotkey)"}
+        aria-label={transcribing ? "Transcribing" : "Hold to talk"}
+        aria-pressed={pttHeld}
+        disabled={transcribing}
+        onPointerDown={(e) => { e.preventDefault(); void startHold(); }}
+        onPointerUp={() => { void endHold(); }}
+        onPointerLeave={() => { void endHold(); }}
+        onContextMenu={(e) => e.preventDefault()}
+      >
+        <span className={`status-bar-dot ${isListening || pttHeld ? "status-bar-dot-active" : ""}`} />
+        <AudioMeter level={audioLevel} active={isListening || pttHeld} />
+        <span className="status-bar-label">
+          {transcribing ? "Transcribing…" : pttHeld ? "Listening…" : isListening ? "Listening" : "Hold to talk"}
+        </span>
+      </button>
 
       <div className="status-bar-divider" />
 

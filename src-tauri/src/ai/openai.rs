@@ -116,7 +116,10 @@ impl AiProvider for OpenAIProvider {
             .map_err(|e| AiError::Decode(e.to_string()))?;
 
         if !status.is_success() {
-            return Err(AiError::Api(format!("OpenAI API error ({}): {}", status, text)));
+            return Err(AiError::Api(format!(
+                "OpenAI API error ({}): {}",
+                status, text
+            )));
         }
 
         let json: serde_json::Value =
@@ -177,7 +180,10 @@ impl AiProvider for OpenAIProvider {
             .map_err(|e| AiError::Decode(e.to_string()))?;
 
         if !status.is_success() {
-            return Err(AiError::Api(format!("OpenAI API error ({}): {}", status, text)));
+            return Err(AiError::Api(format!(
+                "OpenAI API error ({}): {}",
+                status, text
+            )));
         }
 
         let json: serde_json::Value =
@@ -217,7 +223,10 @@ impl OpenAIProvider {
         if !status.is_success() {
             let text = response.text().await.unwrap_or_default();
             let _ = sender
-                .send(StreamEvent::Error { message: format!("API error ({}): {}", status, text), session_id: None })
+                .send(StreamEvent::Error {
+                    message: format!("API error ({}): {}", status, text),
+                    session_id: None,
+                })
                 .await;
             return Ok(());
         }
@@ -231,7 +240,12 @@ impl OpenAIProvider {
             let chunk = match chunk {
                 Ok(c) => c,
                 Err(e) => {
-                    let _ = sender.send(StreamEvent::Error { message: e.to_string(), session_id: None }).await;
+                    let _ = sender
+                        .send(StreamEvent::Error {
+                            message: e.to_string(),
+                            session_id: None,
+                        })
+                        .await;
                     return Ok(());
                 }
             };
@@ -244,7 +258,12 @@ impl OpenAIProvider {
 
                 if let Some(data) = line.strip_prefix("data: ") {
                     if data.trim() == "[DONE]" {
-                        let _ = sender.send(StreamEvent::TextDone { text: full_text.clone(), session_id: None }).await;
+                        let _ = sender
+                            .send(StreamEvent::TextDone {
+                                text: full_text.clone(),
+                                session_id: None,
+                            })
+                            .await;
                         let _ = sender.send(StreamEvent::Done { session_id: None }).await;
                         return Ok(());
                     }
@@ -256,7 +275,10 @@ impl OpenAIProvider {
                         {
                             full_text.push_str(delta);
                             let _ = sender
-                                .send(StreamEvent::TextDelta { text: delta.to_string(), session_id: None })
+                                .send(StreamEvent::TextDelta {
+                                    text: delta.to_string(),
+                                    session_id: None,
+                                })
                                 .await;
                         }
                     }
@@ -268,7 +290,12 @@ impl OpenAIProvider {
         let line = buf.trim().to_string();
         if let Some(data) = line.strip_prefix("data: ") {
             if data.trim() == "[DONE]" {
-                let _ = sender.send(StreamEvent::TextDone { text: full_text.clone(), session_id: None }).await;
+                let _ = sender
+                    .send(StreamEvent::TextDone {
+                        text: full_text.clone(),
+                        session_id: None,
+                    })
+                    .await;
                 let _ = sender.send(StreamEvent::Done { session_id: None }).await;
                 return Ok(());
             }
@@ -279,13 +306,21 @@ impl OpenAIProvider {
                 {
                     full_text.push_str(delta);
                     let _ = sender
-                        .send(StreamEvent::TextDelta { text: delta.to_string(), session_id: None })
+                        .send(StreamEvent::TextDelta {
+                            text: delta.to_string(),
+                            session_id: None,
+                        })
                         .await;
                 }
             }
         }
 
-        let _ = sender.send(StreamEvent::TextDone { text: full_text, session_id: None }).await;
+        let _ = sender
+            .send(StreamEvent::TextDone {
+                text: full_text,
+                session_id: None,
+            })
+            .await;
         let _ = sender.send(StreamEvent::Done { session_id: None }).await;
 
         Ok(())

@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect, lazy, Suspense, Component, ReactNode, useRef } from "react";
-import { getCurrentWindow, listen } from "./bindings";
+import { getCurrentWindow } from "./bindings";
+import { useTauriEvent } from "./hooks/useTauriEvent";
 import OnboardingWizard from "./components/OnboardingWizard";
 import UpdateBanner from "./components/UpdateBanner";
 import AboutDialog from "./components/AboutDialog";
@@ -180,74 +181,62 @@ function AppInner() {
     return () => window.removeEventListener("keydown", handler);
   }, []);
 
-  // Listen for voice-transcript events from always-on VAD
-  useEffect(() => {
-    let unlisten: (() => void) | null = null;
-    listen("voice-transcript", (e) => {
-      const payload = e.payload as { type: string; text: string };
-      if (payload.type === "auto_transcript" && payload.text) {
-        showToast(`Voice: ${payload.text.slice(0, 80)}${payload.text.length > 80 ? "…" : ""}`, "info");
-      }
-    }).then((fn) => { unlisten = fn; });
-    return () => { if (unlisten) unlisten(); };
-  }, [showToast]);
+  // Listen for voice-transcript events from always-on VAD.
+  // P1 (H-4): shared listener helper — no unmount race.
+  useTauriEvent("voice-transcript", (e) => {
+    const payload = e.payload as { type: string; text: string };
+    if (payload.type === "auto_transcript" && payload.text) {
+      showToast(`Voice: ${payload.text.slice(0, 80)}${payload.text.length > 80 ? "…" : ""}`, "info");
+    }
+  });
 
   // Listen for type-mode-changed events — used to show indicator in status bar
   const [typeModeActive, setTypeModeActive] = useState(false);
-  useEffect(() => {
-    let unlisten: (() => void) | null = null;
-    listen<string>("type-mode-changed", (e) => {
-      const state = e.payload;
-      setTypeModeActive(state === "active");
-      if (state === "active") {
-        showToast("Type mode activated — typing will be simulated", "info");
-      }
-    }).then((fn) => { unlisten = fn; });
-    return () => { if (unlisten) unlisten(); };
-  }, [showToast]);
+  useTauriEvent<string>("type-mode-changed", (e) => {
+    const state = e.payload;
+    setTypeModeActive(state === "active");
+    if (state === "active") {
+      showToast("Type mode activated — typing will be simulated", "info");
+    }
+  });
 
   // Listen for voice-selected events
-  useEffect(() => {
-    let unlisten: (() => void) | null = null;
-    listen("voice-selected", (e) => {
-      const voiceId = e.payload as string;
-      console.log("[voice] Selected voice:", voiceId);
-    }).then((fn) => { unlisten = fn; });
-    return () => { if (unlisten) unlisten(); };
-  }, []);
+  useTauriEvent("voice-selected", (e) => {
+    const voiceId = e.payload as string;
+    console.log("[voice] Selected voice:", voiceId);
+  });
 
   // F-015: Deep-link handler for openclicky:// URLs
-  useEffect(() => {
-    const unlisten = listen("deep-link-opened", (e) => {
-      const url = e.payload as string;
-      try {
-        const parsed = new URL(url);
-        // hostname + pathname gives us "agents", "settings/voice", etc.
-        const path = parsed.hostname + parsed.pathname;
-        const parts = path.split("/").filter(Boolean);
-        if (parts[0] === "agents") {
-          setActiveTab("agents");
-          // parts[1] could be an agent slug — stored for AgentsTab to pick up
-          if (parts[1]) {
-            sessionStorage.setItem("deep_link_agent_slug", parts[1]);
-          }
-        } else if (parts[0] === "settings") {
-          setActiveTab("settings");
-          if (parts[1]) {
-            // Signal SettingsTab to open a sub-section
-            window.__paletteSection = parts[1];
-          }
-        } else if (parts[0] === "connections") {
-          setActiveTab("connections");
-        } else if (parts[0] === "home") {
-          setActiveTab("home");
+  useTauriEvent("deep-link-opened", (e) => {
+    const url = e.payload as string;
+    try {
+      const parsed = new URL(url);
+      // hostname + pathname gives us "agents", "settings/voice", etc.
+      const path = parsed.hostname + parsed.pathname;
+      const parts = path.split("/").filter(Boolean);
+      if (parts[0] === "agents") {
+        setActiveTab("agents");
+      } else if (parts[0] === "settings") {
+        setActiveTab("settings");
+        if (parts[1]) {
+          // Signal SettingsTab to open a sub-section
+          window.__paletteSection = parts[1];
         }
-      } catch (err) {
-        console.warn("[deep-link] Failed to parse URL:", url, err);
+      } else if (parts[0] === "connections") {
+        setActiveTab("connections");
+      } else if (parts[0] === "home") {
+        setActiveTab("home");
       }
-    });
-    return () => { unlisten.then(fn => fn()); };
-  }, [setActiveTab]);
+    } catch (err) {
+      console.warn("[deep-link] Failed to parse URL:", url, err);
+    }
+  });
+
+  // P1 (H-4): tray "Settings" menu entry emits this (replaces the broken
+  // window.__setActiveTab eval that was never defined in the frontend).
+  useTauriEvent("open-settings", () => {
+    setActiveTab("settings");
+  });
 
   const finishOnboarding = useCallback(async () => {
     setShowOnboarding(false);

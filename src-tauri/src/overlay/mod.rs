@@ -109,7 +109,10 @@ pub fn init_manager() -> Mutex<AnnotationManager> {
     Mutex::new(AnnotationManager::new())
 }
 
-pub fn start_lifecycle_sweep<R: Runtime>(app: AppHandle<R>, manager: std::sync::Arc<Mutex<AnnotationManager>>) {
+pub fn start_lifecycle_sweep<R: Runtime>(
+    app: AppHandle<R>,
+    manager: std::sync::Arc<Mutex<AnnotationManager>>,
+) {
     std::thread::spawn(move || loop {
         std::thread::sleep(std::time::Duration::from_secs(1));
         let expired_ids = if let Ok(mut mgr) = manager.lock() {
@@ -133,8 +136,12 @@ pub fn start_lifecycle_sweep<R: Runtime>(app: AppHandle<R>, manager: std::sync::
     });
 }
 
-pub fn set_click_through<R: Runtime>(window: &WebviewWindow<R>, enabled: bool) -> Result<(), String> {
-    window.set_ignore_cursor_events(enabled)
+pub fn set_click_through<R: Runtime>(
+    window: &WebviewWindow<R>,
+    enabled: bool,
+) -> Result<(), String> {
+    window
+        .set_ignore_cursor_events(enabled)
         .map_err(|e| format!("set_ignore_cursor_events: {e}"))
 }
 
@@ -144,7 +151,9 @@ pub fn show_overlay<R: Runtime>(app: &AppHandle<R>) -> Result<(), String> {
     for i in 0.. {
         let label = format!("overlay-{}", i);
         if let Some(window) = app.get_webview_window(&label) {
-            window.show().map_err(|e| format!("show overlay {label}: {e}"))?;
+            window
+                .show()
+                .map_err(|e| format!("show overlay {label}: {e}"))?;
             shown = true;
         } else {
             break;
@@ -248,24 +257,41 @@ pub fn hide_overlay<R: Runtime>(app: &AppHandle<R>) -> Result<(), String> {
     for i in 0.. {
         let label = format!("overlay-{}", i);
         if let Some(window) = app.get_webview_window(&label) {
-            window.hide().map_err(|e| format!("hide overlay {label}: {e}"))?;
+            window
+                .hide()
+                .map_err(|e| format!("hide overlay {label}: {e}"))?;
             hidden = true;
         } else {
             break;
         }
     }
-    if hidden { Ok(()) } else { Err("no overlay windows found".into()) }
+    if hidden {
+        Ok(())
+    } else {
+        Err("no overlay windows found".into())
+    }
 }
 
-fn emit_overlay_event<R: Runtime>(app: &AppHandle<R>, event: &str, payload: impl Serialize + Clone) -> Result<(), String> {
-    app.emit(event, payload).map_err(|e| format!("emit {event}: {e}"))
+fn emit_overlay_event<R: Runtime>(
+    app: &AppHandle<R>,
+    event: &str,
+    payload: impl Serialize + Clone,
+) -> Result<(), String> {
+    app.emit(event, payload)
+        .map_err(|e| format!("emit {event}: {e}"))
 }
 
-pub fn show_cursor<R: Runtime>(app: &AppHandle<R>, x: f64, y: f64, label: Option<String>) -> Result<(), String> {
+pub fn show_cursor<R: Runtime>(
+    app: &AppHandle<R>,
+    x: f64,
+    y: f64,
+    label: Option<String>,
+) -> Result<(), String> {
     let id = next_id("cursor");
     let payload = CursorPayload {
         id: id.clone(),
-        x, y,
+        x,
+        y,
         label: label.clone(),
         accent: None,
         animation: "none".into(),
@@ -293,7 +319,13 @@ pub fn show_cursor<R: Runtime>(app: &AppHandle<R>, x: f64, y: f64, label: Option
     register_cursor_annotation(
         app,
         id,
-        CursorData { x, y, label: payload.label.clone(), accent: None, duration_ms: 5000 },
+        CursorData {
+            x,
+            y,
+            label: payload.label.clone(),
+            accent: None,
+            duration_ms: 5000,
+        },
     );
     emit_overlay_event(app, "show-cursor", payload)
 }
@@ -310,6 +342,9 @@ fn compute_arc_control_point(from_x: f64, from_y: f64, to_x: f64, to_y: f64) -> 
     (mid_x + perp_x * offset, mid_y + perp_y * offset)
 }
 
+// P2 (clippy): 8-arg cursor signature kept stable for callers; grouped
+// in P3 with the overlay render refactor.
+#[allow(clippy::too_many_arguments)]
 pub fn show_animated_cursor<R: Runtime>(
     app: &AppHandle<R>,
     x: f64,
@@ -329,7 +364,8 @@ pub fn show_animated_cursor<R: Runtime>(
     };
     let payload = CursorPayload {
         id: next_id("cursor"),
-        x, y,
+        x,
+        y,
         label,
         accent,
         animation: animation.into(),
@@ -342,7 +378,10 @@ pub fn show_animated_cursor<R: Runtime>(
     emit_overlay_event(app, "show-cursor", payload)
 }
 
-pub fn show_agent_dock<R: Runtime>(app: &AppHandle<R>, state: &AgentDockState) -> Result<(), String> {
+pub fn show_agent_dock<R: Runtime>(
+    app: &AppHandle<R>,
+    state: &AgentDockState,
+) -> Result<(), String> {
     emit_overlay_event(app, "show-agent-dock", state)
 }
 
@@ -350,11 +389,22 @@ pub fn hide_agent_dock<R: Runtime>(app: &AppHandle<R>) -> Result<(), String> {
     emit_overlay_event(app, "hide-agent-dock", serde_json::json!({}))
 }
 
-pub fn show_rect<R: Runtime>(app: &AppHandle<R>, x: f64, y: f64, w: f64, h: f64, label: Option<String>) -> Result<(), String> {
+pub fn show_rect<R: Runtime>(
+    app: &AppHandle<R>,
+    x: f64,
+    y: f64,
+    w: f64,
+    h: f64,
+    label: Option<String>,
+) -> Result<(), String> {
     let id = next_id("rect");
     let payload = RectPayload {
         id: id.clone(),
-        x, y, w, h, label: label.clone(),
+        x,
+        y,
+        w,
+        h,
+        label: label.clone(),
         state: AnnotationState::Armed,
     };
     ensure_overlay_visible(app);
@@ -374,16 +424,30 @@ pub fn show_rect<R: Runtime>(app: &AppHandle<R>, x: f64, y: f64, w: f64, h: f64,
     emit_overlay_event(app, "show-rect", payload)
 }
 
-pub fn show_scribble<R: Runtime>(app: &AppHandle<R>, points: Vec<[f64; 2]>, label: Option<String>) -> Result<(), String> {
+pub fn show_scribble<R: Runtime>(
+    app: &AppHandle<R>,
+    points: Vec<[f64; 2]>,
+    label: Option<String>,
+) -> Result<(), String> {
     let id = next_id("scribble");
-    let payload = ScribblePayload { points: points.clone(), label: label.clone(), state: AnnotationState::Armed };
+    let payload = ScribblePayload {
+        points: points.clone(),
+        label: label.clone(),
+        state: AnnotationState::Armed,
+    };
     ensure_overlay_visible(app);
     // Glow over the scribble's bounding box.
     if !points.is_empty() {
         let min_x = points.iter().map(|p| p[0]).fold(f64::INFINITY, f64::min);
-        let max_x = points.iter().map(|p| p[0]).fold(f64::NEG_INFINITY, f64::max);
+        let max_x = points
+            .iter()
+            .map(|p| p[0])
+            .fold(f64::NEG_INFINITY, f64::max);
         let min_y = points.iter().map(|p| p[1]).fold(f64::INFINITY, f64::min);
-        let max_y = points.iter().map(|p| p[1]).fold(f64::NEG_INFINITY, f64::max);
+        let max_y = points
+            .iter()
+            .map(|p| p[1])
+            .fold(f64::NEG_INFINITY, f64::max);
         let _ = emit_overlay_event(
             app,
             "show-glow",
@@ -401,11 +465,17 @@ pub fn show_scribble<R: Runtime>(app: &AppHandle<R>, points: Vec<[f64; 2]>, labe
     emit_overlay_event(app, "show-scribble", payload)
 }
 
-pub fn show_caption<R: Runtime>(app: &AppHandle<R>, text: &str, x: f64, y: f64) -> Result<(), String> {
+pub fn show_caption<R: Runtime>(
+    app: &AppHandle<R>,
+    text: &str,
+    x: f64,
+    y: f64,
+) -> Result<(), String> {
     let id = next_id("caption");
     let payload = CaptionPayload {
         text: text.to_string(),
-        x, y,
+        x,
+        y,
         state: AnnotationState::Armed,
     };
     ensure_overlay_visible(app);
@@ -451,7 +521,11 @@ pub fn show_shape<R: Runtime>(
     label: Option<String>,
 ) -> Result<(), String> {
     let id = next_id("shape");
-    let shape_type = if shape_type == "curve" { "curve" } else { "arrow" };
+    let shape_type = if shape_type == "curve" {
+        "curve"
+    } else {
+        "arrow"
+    };
     ensure_overlay_visible(app);
     emit_overlay_event(
         app,
@@ -474,7 +548,10 @@ pub fn clear_overlays<R: Runtime>(app: &AppHandle<R>) -> Result<(), String> {
     emit_overlay_event(app, "clear-overlays", serde_json::json!({}))
 }
 
-pub fn clear_overlays_on_screen<R: Runtime>(app: &AppHandle<R>, screen_idx: usize) -> Result<(), String> {
+pub fn clear_overlays_on_screen<R: Runtime>(
+    app: &AppHandle<R>,
+    screen_idx: usize,
+) -> Result<(), String> {
     let window_label = format!("overlay-{}", screen_idx);
     if let Some(window) = app.get_webview_window(&window_label) {
         window
@@ -494,7 +571,8 @@ pub fn show_cursor_on_screen<R: Runtime>(
 ) -> Result<(), String> {
     let payload = CursorPayload {
         id: next_id("cursor"),
-        x, y,
+        x,
+        y,
         label,
         accent: None,
         animation: "none".into(),
@@ -525,7 +603,11 @@ pub fn show_rect_on_screen<R: Runtime>(
 ) -> Result<(), String> {
     let payload = RectPayload {
         id: next_id("rect"),
-        x, y, w, h, label,
+        x,
+        y,
+        w,
+        h,
+        label,
         state: AnnotationState::Armed,
     };
     let window_label = format!("overlay-{}", screen_idx);
@@ -544,7 +626,11 @@ pub fn show_scribble_on_screen<R: Runtime>(
     label: Option<String>,
     screen_idx: usize,
 ) -> Result<(), String> {
-    let payload = ScribblePayload { points, label, state: AnnotationState::Armed };
+    let payload = ScribblePayload {
+        points,
+        label,
+        state: AnnotationState::Armed,
+    };
     let window_label = format!("overlay-{}", screen_idx);
     if let Some(window) = app.get_webview_window(&window_label) {
         window
@@ -564,7 +650,8 @@ pub fn show_caption_on_screen<R: Runtime>(
 ) -> Result<(), String> {
     let payload = CaptionPayload {
         text: text.to_string(),
-        x, y,
+        x,
+        y,
         state: AnnotationState::Armed,
     };
     let window_label = format!("overlay-{}", screen_idx);
@@ -577,6 +664,9 @@ pub fn show_caption_on_screen<R: Runtime>(
     }
 }
 
+// P2 (clippy): 9-arg cursor signature kept stable for callers; grouped
+// in P3 with the overlay render refactor.
+#[allow(clippy::too_many_arguments)]
 pub fn show_animated_cursor_on_screen<R: Runtime>(
     app: &AppHandle<R>,
     x: f64,
@@ -597,7 +687,8 @@ pub fn show_animated_cursor_on_screen<R: Runtime>(
     };
     let payload = CursorPayload {
         id: next_id("cursor"),
-        x, y,
+        x,
+        y,
         label,
         accent,
         animation: animation.into(),
@@ -624,8 +715,16 @@ pub fn start_hotplug_poll<R: Runtime>(app: AppHandle<R>, url: &str) {
         // Initialize with current state so first tick doesn't trigger creation
         let (mut last_count, mut last_geoms) = match xcap::Monitor::all() {
             Ok(m) => {
-                let geoms: Vec<_> = m.iter()
-                    .map(|mon| (mon.x().unwrap_or(0), mon.y().unwrap_or(0), mon.width().unwrap_or(0), mon.height().unwrap_or(0)))
+                let geoms: Vec<_> = m
+                    .iter()
+                    .map(|mon| {
+                        (
+                            mon.x().unwrap_or(0),
+                            mon.y().unwrap_or(0),
+                            mon.width().unwrap_or(0),
+                            mon.height().unwrap_or(0),
+                        )
+                    })
                     .collect();
                 let count = geoms.len();
                 (count, geoms)
@@ -638,7 +737,14 @@ pub fn start_hotplug_poll<R: Runtime>(app: AppHandle<R>, url: &str) {
             let current = match xcap::Monitor::all() {
                 Ok(m) => m
                     .iter()
-                    .map(|mon| (mon.x().unwrap_or(0), mon.y().unwrap_or(0), mon.width().unwrap_or(0), mon.height().unwrap_or(0)))
+                    .map(|mon| {
+                        (
+                            mon.x().unwrap_or(0),
+                            mon.y().unwrap_or(0),
+                            mon.width().unwrap_or(0),
+                            mon.height().unwrap_or(0),
+                        )
+                    })
                     .collect::<Vec<_>>(),
                 Err(_) => continue,
             };
@@ -692,11 +798,19 @@ pub fn get_screen_for_point(x: f64, y: f64) -> usize {
 }
 
 /// Get the screen index for a point using cached ScreenManager.
-pub fn get_screen_for_point_cached(x: f64, y: f64, manager: &crate::overlay::screen_router::ScreenManager) -> usize {
-    manager.monitors().iter().position(|m| {
-        x >= m.x as f64
-            && x < (m.x + m.width as i32) as f64
-            && y >= m.y as f64
-            && y < (m.y + m.height as i32) as f64
-    }).unwrap_or(0)
+pub fn get_screen_for_point_cached(
+    x: f64,
+    y: f64,
+    manager: &crate::overlay::screen_router::ScreenManager,
+) -> usize {
+    manager
+        .monitors()
+        .iter()
+        .position(|m| {
+            x >= m.x as f64
+                && x < (m.x + m.width as i32) as f64
+                && y >= m.y as f64
+                && y < (m.y + m.height as i32) as f64
+        })
+        .unwrap_or(0)
 }

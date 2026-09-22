@@ -1,6 +1,5 @@
 /// Shared cross-platform utilities.
 /// Consolidates duplicated platform detection functions.
-
 /// Detect the current display server on Linux (Wayland vs X11 vs unknown).
 /// On non-Linux platforms, returns a platform-specific default.
 #[cfg(target_os = "linux")]

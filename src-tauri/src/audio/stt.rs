@@ -76,7 +76,10 @@ pub async fn transcribe(
     sample_rate: u32,
 ) -> Result<String, String> {
     if config.api_key.is_empty() {
-        return Err(format!("No API key for provider {}", config.provider.name()));
+        return Err(format!(
+            "No API key for provider {}",
+            config.provider.name()
+        ));
     }
 
     let wav_bytes = pcm_to_wav(audio_data, sample_rate)?;
@@ -130,8 +133,10 @@ async fn transcribe_deepgram(wav_data: &[u8], config: &SttConfig) -> Result<Stri
             Err(e) => {
                 last_error = format!("Deepgram request error: {e}");
                 if attempt + 1 < config.max_retries {
-                    tokio::time::sleep(std::time::Duration::from_millis(500 * (attempt + 1) as u64))
-                        .await;
+                    tokio::time::sleep(std::time::Duration::from_millis(
+                        500 * (attempt + 1) as u64,
+                    ))
+                    .await;
                 }
             }
         }
@@ -145,9 +150,13 @@ async fn transcribe_whisper(wav_data: &[u8], config: &SttConfig) -> Result<Strin
     let mut last_error = String::new();
     for attempt in 0..config.max_retries {
         let form = reqwest::multipart::Form::new()
-            .part("file", reqwest::multipart::Part::bytes(wav_data.to_vec())
-                .file_name("audio.wav")
-                .mime_str("audio/wav").map_err(|e| format!("Mime error: {e}"))?)
+            .part(
+                "file",
+                reqwest::multipart::Part::bytes(wav_data.to_vec())
+                    .file_name("audio.wav")
+                    .mime_str("audio/wav")
+                    .map_err(|e| format!("Mime error: {e}"))?,
+            )
             .text("model", "whisper-1")
             .text("language", config.language.clone());
 
@@ -180,8 +189,10 @@ async fn transcribe_whisper(wav_data: &[u8], config: &SttConfig) -> Result<Strin
             Err(e) => {
                 last_error = format!("Whisper request error: {e}");
                 if attempt + 1 < config.max_retries {
-                    tokio::time::sleep(std::time::Duration::from_millis(500 * (attempt + 1) as u64))
-                        .await;
+                    tokio::time::sleep(std::time::Duration::from_millis(
+                        500 * (attempt + 1) as u64,
+                    ))
+                    .await;
                 }
             }
         }
@@ -294,8 +305,10 @@ async fn transcribe_assemblyai(wav_data: &[u8], config: &SttConfig) -> Result<St
             Err(e) => {
                 last_error = format!("AssemblyAI request error: {e}");
                 if attempt + 1 < config.max_retries {
-                    tokio::time::sleep(std::time::Duration::from_millis(500 * (attempt + 1) as u64))
-                        .await;
+                    tokio::time::sleep(std::time::Duration::from_millis(
+                        500 * (attempt + 1) as u64,
+                    ))
+                    .await;
                 }
             }
         }

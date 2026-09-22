@@ -76,8 +76,7 @@ impl AutomationEngine {
         }
         let content = serde_json::to_string_pretty(&self.automations)
             .map_err(|e| format!("failed to serialize automations: {e}"))?;
-        fs::write(&self.file_path, content)
-            .map_err(|e| format!("failed to write automations: {e}"))
+        fs::write(&self.file_path, content).map_err(|e| format!("failed to write automations: {e}"))
     }
 
     pub fn add(&mut self, automation: Automation) {
@@ -121,17 +120,14 @@ impl AutomationEngine {
                 continue;
             }
             let should_run = match &automation.schedule {
-                Schedule::Interval { seconds } => {
-                    let due = match &automation.last_run {
-                        Some(last) => {
-                            let last_secs = parse_rfc3339_secs(last).unwrap_or(0);
-                            let now_secs = parse_rfc3339_secs(&now).unwrap_or(0);
-                            now_secs >= last_secs + *seconds
-                        }
-                        None => true,
-                    };
-                    due
-                }
+                Schedule::Interval { seconds } => match &automation.last_run {
+                    Some(last) => {
+                        let last_secs = parse_rfc3339_secs(last).unwrap_or(0);
+                        let now_secs = parse_rfc3339_secs(&now).unwrap_or(0);
+                        now_secs >= last_secs + *seconds
+                    }
+                    None => true,
+                },
                 Schedule::Cron { expression } => {
                     if matches_cron(expression, dt) {
                         // #14: only fire once per matching minute — never re-fire
@@ -191,7 +187,9 @@ impl AutomationEngine {
                     let mut eng = match engine.lock() {
                         Ok(g) => g,
                         Err(e) => {
-                            log::warn!("AutomationEngine tick: engine lock poisoned, recovering: {e}");
+                            log::warn!(
+                                "AutomationEngine tick: engine lock poisoned, recovering: {e}"
+                            );
                             e.into_inner()
                         }
                     };
@@ -341,8 +339,7 @@ fn matches_cron(expression: &str, dt: ChronoDatetime) -> bool {
         && cron_field_matches(fields[1], h, 0, 23)
         && cron_field_matches(fields[2], d, 1, 31)
         && cron_field_matches(fields[3], mo, 1, 12)
-        && (cron_field_matches(fields[4], dw, 0, 6)
-            || cron_field_matches(fields[4], dw_norm, 0, 7))
+        && (cron_field_matches(fields[4], dw, 0, 6) || cron_field_matches(fields[4], dw_norm, 0, 7))
 }
 
 fn cron_field_matches(field: &str, value: u32, min: u32, max: u32) -> bool {
@@ -355,7 +352,10 @@ fn cron_field_matches(field: &str, value: u32, min: u32, max: u32) -> bool {
             return true;
         }
         let (range_part, step) = if let Some(pos) = segment.find('/') {
-            (&segment[..pos], segment[pos + 1..].parse::<u32>().unwrap_or(1))
+            (
+                &segment[..pos],
+                segment[pos + 1..].parse::<u32>().unwrap_or(1),
+            )
         } else {
             (segment, 1)
         };
@@ -375,7 +375,7 @@ fn cron_field_matches(field: &str, value: u32, min: u32, max: u32) -> bool {
                 Err(_) => continue,
             }
         };
-        if value >= lo && value <= hi && (value - lo) % step == 0 {
+        if value >= lo && value <= hi && (value - lo).is_multiple_of(step) {
             return true;
         }
     }
@@ -495,7 +495,9 @@ mod tests {
             id: "c1".into(),
             name: "Cron Job".into(),
             prompt: "Run at midnight".into(),
-            schedule: Schedule::Cron { expression: "0 0 * * *".into() },
+            schedule: Schedule::Cron {
+                expression: "0 0 * * *".into(),
+            },
             agent_slug: Some("my-agent".into()),
             enabled: true,
             last_run: None,

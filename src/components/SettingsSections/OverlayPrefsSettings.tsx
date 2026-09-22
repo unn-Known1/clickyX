@@ -1,31 +1,19 @@
 import { useCallback } from "react";
-import { invoke } from "../../bindings";
-
-interface OverlayPrefs {
-  cursor_accent: string;
-  cursor_size: number;
-  show_cursor: boolean;
-  tutor_mode: boolean;
-  agent_dock_position: string;
-  accent_presets: string[];
-}
-
-interface AppConfig {
-  theme: string;
-  overlay: OverlayPrefs;
-}
+import { commands } from "../../bindings";
+import type { AppConfig } from "../../bindings";
 
 interface Props {
   config: AppConfig;
+  // Cache sync ONLY — the caller never re-invokes. Each handler below
+  // performs exactly one backend write (P1/H-3 single-write path).
   onConfigUpdate: (updated: AppConfig) => void;
 }
 
 export function OverlayPrefsSettings({ config, onConfigUpdate }: Props) {
-  const updateOverlay = useCallback(async (key: string, value: unknown) => {
+  const updateOverlay = useCallback(async (key: string, value: string | number | boolean) => {
     try {
-      const updated = await invoke<AppConfig>("update_config", {
-        partial: { overlay: { ...config.overlay, [key]: value } },
-      });
+      const overlay = { ...config.overlay, [key]: value } as AppConfig["overlay"];
+      const updated = await commands.updateConfig({ overlay });
       onConfigUpdate(updated);
     } catch (e) {
       console.error("Failed to update overlay:", e);
@@ -34,7 +22,8 @@ export function OverlayPrefsSettings({ config, onConfigUpdate }: Props) {
 
   const toggleTutorMode = useCallback(async () => {
     try {
-      const newState = await invoke<boolean>("toggle_tutor_mode");
+      // toggle_tutor_mode persists server-side — sync cache, no second write.
+      const newState = await commands.toggleTutorMode();
       onConfigUpdate({ ...config, overlay: { ...config.overlay, tutor_mode: newState } });
     } catch (e) {
       console.error("Failed to toggle tutor mode:", e);

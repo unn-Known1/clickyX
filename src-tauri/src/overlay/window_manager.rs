@@ -50,28 +50,38 @@ impl<R: Runtime> OverlayWindowManager<R> {
         &self.coord
     }
 
-    pub fn create_per_screen_windows(&mut self, app: &AppHandle<R>, url: &str) -> Result<(), String> {
+    pub fn create_per_screen_windows(
+        &mut self,
+        app: &AppHandle<R>,
+        url: &str,
+    ) -> Result<(), String> {
         let monitors = self.screen_mgr.monitors().to_vec();
         for (idx, monitor) in monitors.iter().enumerate() {
             let label = format!("overlay-{}", idx);
             if self.windows.contains_key(&label) {
                 continue;
             }
-            let builder = WebviewWindowBuilder::new(app, &label, tauri::WebviewUrl::App(url.into()))
-                .position(monitor.x as f64, monitor.y as f64)
-                .inner_size(monitor.width as f64, monitor.height as f64)
-                .decorations(false)
-                .always_on_top(true)
-                .skip_taskbar(true)
-                .resizable(false)
-                .fullscreen(false)
-                .transparent(true)
-                .visible(false); // B-012: start hidden; shown explicitly via show_overlay
-            let window = builder.build()
+            let builder =
+                WebviewWindowBuilder::new(app, &label, tauri::WebviewUrl::App(url.into()))
+                    .position(monitor.x as f64, monitor.y as f64)
+                    .inner_size(monitor.width as f64, monitor.height as f64)
+                    .decorations(false)
+                    .always_on_top(true)
+                    .skip_taskbar(true)
+                    .resizable(false)
+                    .fullscreen(false)
+                    .transparent(true)
+                    .visible(false); // B-012: start hidden; shown explicitly via show_overlay
+            let window = builder
+                .build()
                 .map_err(|e| format!("create overlay window {label}: {e}"))?;
             let _ = window.set_ignore_cursor_events(true);
             self.windows.insert(label, window);
-            log::info!("Created overlay window for screen {} ({})", idx, monitor.name);
+            log::info!(
+                "Created overlay window for screen {} ({})",
+                idx,
+                monitor.name
+            );
         }
         Ok(())
     }
@@ -81,20 +91,27 @@ impl<R: Runtime> OverlayWindowManager<R> {
     }
 
     pub fn show_all(&self) {
-        for (_label, window) in &self.windows {
+        for window in self.windows.values() {
             let _ = window.show();
         }
     }
 
     pub fn hide_all(&self) {
-        for (_label, window) in &self.windows {
+        for window in self.windows.values() {
             let _ = window.hide();
         }
     }
 
-    pub fn emit_on_screen(&self, screen_idx: usize, event: &str, payload: impl Serialize + Clone) -> Result<(), String> {
+    pub fn emit_on_screen(
+        &self,
+        screen_idx: usize,
+        event: &str,
+        payload: impl Serialize + Clone,
+    ) -> Result<(), String> {
         if let Some(window) = self.get_window(screen_idx) {
-            window.emit(event, payload).map_err(|e| format!("emit on screen {screen_idx}: {e}"))
+            window
+                .emit(event, payload)
+                .map_err(|e| format!("emit on screen {screen_idx}: {e}"))
         } else {
             Err(format!("no overlay window for screen {screen_idx}"))
         }
@@ -120,25 +137,32 @@ impl<R: Runtime> OverlayWindowManager<R> {
             kept.insert(label.clone());
             if let Some(window) = self.windows.get(&label) {
                 let _ = window.set_position(tauri::PhysicalPosition::new(monitor.x, monitor.y));
-                let _ = window.set_size(tauri::Size::Physical(tauri::PhysicalSize::new(monitor.width, monitor.height)));
+                let _ = window.set_size(tauri::Size::Physical(tauri::PhysicalSize::new(
+                    monitor.width,
+                    monitor.height,
+                )));
             } else {
-                let builder = WebviewWindowBuilder::new(app, &label, tauri::WebviewUrl::App(url.into()))
-                    .position(monitor.x as f64, monitor.y as f64)
-                    .inner_size(monitor.width as f64, monitor.height as f64)
-                    .decorations(false)
-                    .always_on_top(true)
-                    .skip_taskbar(true)
-                    .resizable(false)
-                    .transparent(true)
-                    .visible(false); // B-012: start hidden
-                let window = builder.build()
+                let builder =
+                    WebviewWindowBuilder::new(app, &label, tauri::WebviewUrl::App(url.into()))
+                        .position(monitor.x as f64, monitor.y as f64)
+                        .inner_size(monitor.width as f64, monitor.height as f64)
+                        .decorations(false)
+                        .always_on_top(true)
+                        .skip_taskbar(true)
+                        .resizable(false)
+                        .transparent(true)
+                        .visible(false); // B-012: start hidden
+                let window = builder
+                    .build()
                     .map_err(|e| format!("refresh create {label}: {e}"))?;
                 let _ = window.set_ignore_cursor_events(true);
                 self.windows.insert(label, window);
             }
         }
 
-        let to_remove: Vec<String> = self.windows.keys()
+        let to_remove: Vec<String> = self
+            .windows
+            .keys()
             .filter(|k| !kept.contains(k.as_str()))
             .cloned()
             .collect();

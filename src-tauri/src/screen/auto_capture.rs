@@ -1,5 +1,6 @@
 use image::codecs::jpeg::JpegEncoder;
 use serde::{Deserialize, Serialize};
+use std::collections::VecDeque;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
@@ -37,25 +38,29 @@ pub struct CapturedFrame {
     pub height: u32,
 }
 
+/// Callback invoked for every captured frame that passes the diff threshold.
+type OnCaptureCallback = Box<dyn Fn(CapturedFrame) + Send + 'static>;
+
 /// Auto-capture engine with diff-based filtering.
 ///
 /// Memory note: Each CapturedFrame stores raw JPEG bytes (~100-300KB per 1080p frame).
 /// With default `max_cache: 10`, peak memory is ~1-3MB. For long-running sessions,
 /// consider reducing `max_cache` or implementing disk spillover.
 pub struct AutoCaptureEngine {
-    captures: Arc<Mutex<Vec<CapturedFrame>>>,
+    // P1: VecDeque — front eviction is O(1) (was Vec::remove(0), O(n)).
+    captures: Arc<Mutex<VecDeque<CapturedFrame>>>,
     previous_frame: Arc<Mutex<Option<Vec<u8>>>>,
     last_capture: Arc<Mutex<Option<Instant>>>,
     running: Arc<AtomicBool>,
     config: Arc<Mutex<AutoCaptureConfig>>,
-    on_capture: Arc<Mutex<Option<Box<dyn Fn(CapturedFrame) + Send + 'static>>>>,
+    on_capture: Arc<Mutex<Option<OnCaptureCallback>>>,
 }
 
 impl AutoCaptureEngine {
     pub fn new(config: AutoCaptureConfig) -> Self {
         let cap = config.max_cache;
         Self {
-            captures: Arc::new(Mutex::new(Vec::with_capacity(cap))),
+            captures: Arc::new(Mutex::new(VecDeque::with_capacity(cap))),
             previous_frame: Arc::new(Mutex::new(None)),
             last_capture: Arc::new(Mutex::new(None)),
             running: Arc::new(AtomicBool::new(false)),
@@ -88,8 +93,14 @@ impl AutoCaptureEngine {
 
         std::thread::spawn(move || {
             while running.load(Ordering::SeqCst) {
+                // P1 (H-03): poison-tolerant locks. The old `.unwrap()`s meant
+                // one panicking holder silently killed this whole thread.
+                // Recovery takes the inner value (clearing poison) and carries on.
                 let (interval, mode, threshold, max_cache) = {
-                    let cfg = config.lock().unwrap();
+                    let cfg = config.lock().unwrap_or_else(|e| {
+                        log::warn!("auto-capture: config lock poisoned, recovering");
+                        e.into_inner()
+                    });
                     (
                         Duration::from_millis(cfg.interval_ms),
                         cfg.capture_mode.clone(),
@@ -99,7 +110,10 @@ impl AutoCaptureEngine {
                 };
 
                 {
-                    let last = last_time.lock().unwrap();
+                    let last = last_time.lock().unwrap_or_else(|e| {
+                        log::warn!("auto-capture: last_time lock poisoned, recovering");
+                        e.into_inner()
+                    });
                     if let Some(prev) = *last {
                         if prev.elapsed() < interval {
                             std::thread::sleep(Duration::from_millis(50));
@@ -122,7 +136,10 @@ impl AutoCaptureEngine {
                         .as_millis() as u64;
 
                     let diff = {
-                        let prev = prev_frame.lock().unwrap();
+                        let prev = prev_frame.lock().unwrap_or_else(|e| {
+                            log::warn!("auto-capture: prev_frame lock poisoned, recovering");
+                            e.into_inner()
+                        });
                         match prev.as_ref() {
                             Some(p) => compute_diff(p, &jpeg_bytes),
                             None => 1.0,
@@ -130,7 +147,10 @@ impl AutoCaptureEngine {
                     };
 
                     if diff > threshold {
-                        let mut caps = captures.lock().unwrap();
+                        let mut caps = captures.lock().unwrap_or_else(|e| {
+                            log::warn!("auto-capture: captures lock poisoned, recovering");
+                            e.into_inner()
+                        });
                         let frame = CapturedFrame {
                             data: jpeg_bytes.clone(),
                             timestamp: now,
@@ -138,13 +158,17 @@ impl AutoCaptureEngine {
                             width,
                             height,
                         };
-                        caps.push(frame.clone());
+                        caps.push_back(frame.clone());
                         while caps.len() > max_cache {
-                            caps.remove(0);
+                            caps.pop_front();
                         }
                         drop(caps);
-                        *prev_frame.lock().unwrap() = Some(jpeg_bytes);
-                        *last_time.lock().unwrap() = Some(Instant::now());
+                        if let Ok(mut prev) = prev_frame.lock() {
+                            *prev = Some(jpeg_bytes);
+                        }
+                        if let Ok(mut last) = last_time.lock() {
+                            *last = Some(Instant::now());
+                        }
 
                         if let Ok(cb_lock) = on_capture.lock() {
                             if let Some(cb) = cb_lock.as_ref() {
@@ -168,7 +192,7 @@ impl AutoCaptureEngine {
 
     pub fn get_latest(&self) -> Option<CapturedFrame> {
         let caps = self.captures.lock().ok()?;
-        caps.last().cloned()
+        caps.back().cloned()
     }
 
     pub fn get_latest_data_url(&self) -> Option<String> {
@@ -192,8 +216,7 @@ impl AutoCaptureEngine {
         match caps {
             Some(c) => {
                 let len = c.len();
-                let start = if len > n { len - n } else { 0 };
-                c[start..].to_vec()
+                c.iter().skip(len.saturating_sub(n)).cloned().collect()
             }
             None => Vec::new(),
         }
@@ -202,11 +225,12 @@ impl AutoCaptureEngine {
     pub fn set_config(&self, config: AutoCaptureConfig) {
         if let Ok(mut c) = self.config.lock() {
             if config.max_cache != c.max_cache {
-                let mut caps = self.captures.lock().unwrap();
-                while caps.len() > config.max_cache {
-                    caps.remove(0);
+                if let Ok(mut caps) = self.captures.lock() {
+                    while caps.len() > config.max_cache {
+                        caps.pop_front();
+                    }
+                    caps.shrink_to_fit();
                 }
-                caps.shrink_to_fit();
             }
             *c = config;
         }
@@ -217,7 +241,7 @@ impl AutoCaptureEngine {
     }
 
     pub fn get_config(&self) -> AutoCaptureConfig {
-        self.config.lock().unwrap().clone()
+        self.config.lock().map(|c| c.clone()).unwrap_or_default()
     }
 }
 
@@ -229,7 +253,9 @@ fn capture_primary_jpeg() -> Result<(Vec<u8>, u32, u32), String> {
         .or_else(|| monitors.first())
         .ok_or_else(|| "no monitors found".to_string())?;
     let width = monitor.width().map_err(|e| format!("monitor width: {e}"))?;
-    let height = monitor.height().map_err(|e| format!("monitor height: {e}"))?;
+    let height = monitor
+        .height()
+        .map_err(|e| format!("monitor height: {e}"))?;
     let img = monitor
         .capture_image()
         .map_err(|e| format!("monitor capture: {e}"))?;
@@ -246,7 +272,9 @@ fn capture_cursor_jpeg() -> Result<(Vec<u8>, u32, u32), String> {
             if w.is_focused().unwrap_or(false) {
                 if let Ok(monitor) = w.current_monitor() {
                     let width = monitor.width().map_err(|e| format!("monitor width: {e}"))?;
-                    let height = monitor.height().map_err(|e| format!("monitor height: {e}"))?;
+                    let height = monitor
+                        .height()
+                        .map_err(|e| format!("monitor height: {e}"))?;
                     let img = monitor
                         .capture_image()
                         .map_err(|e| format!("monitor capture: {e}"))?;
@@ -284,9 +312,13 @@ fn capture_focused_window_jpeg() -> Result<(Vec<u8>, u32, u32), String> {
 
 fn capture_all_jpeg() -> Result<(Vec<u8>, u32, u32), String> {
     let monitors = Monitor::all().map_err(|e| format!("enumerate monitors: {e}"))?;
-    let monitor = monitors.first().ok_or_else(|| "no monitors found".to_string())?;
+    let monitor = monitors
+        .first()
+        .ok_or_else(|| "no monitors found".to_string())?;
     let width = monitor.width().map_err(|e| format!("monitor width: {e}"))?;
-    let height = monitor.height().map_err(|e| format!("monitor height: {e}"))?;
+    let height = monitor
+        .height()
+        .map_err(|e| format!("monitor height: {e}"))?;
     let mut img = image::RgbaImage::new(width, height);
     use image::GenericImage;
     for m in &monitors {
@@ -329,11 +361,7 @@ fn compute_diff(prev: &[u8], curr: &[u8]) -> f64 {
         .pixels()
         .zip(curr_gray.pixels())
         .filter(|(a, b)| {
-            let diff = if a.0[0] > b.0[0] {
-                a.0[0] - b.0[0]
-            } else {
-                b.0[0] - a.0[0]
-            };
+            let diff = a.0[0].abs_diff(b.0[0]);
             diff > 10
         })
         .count() as f64;

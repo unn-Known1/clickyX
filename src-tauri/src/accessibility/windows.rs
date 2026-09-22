@@ -2,7 +2,7 @@
 // they form the complete UIAutomation/PowerShell API surface for future use.
 #![allow(dead_code)]
 
-use super::{AccessibilityElement, AccessibilityTree, AccessibilityApi};
+use super::{AccessibilityApi, AccessibilityElement, AccessibilityTree};
 use std::process::Command;
 
 pub struct WindowsAccessibility;
@@ -21,7 +21,11 @@ fn powershell(script: &str) -> Option<String> {
         .ok()?;
     if out.status.success() {
         let s = String::from_utf8_lossy(&out.stdout).trim().to_string();
-        if s.is_empty() { None } else { Some(s) }
+        if s.is_empty() {
+            None
+        } else {
+            Some(s)
+        }
     } else {
         None
     }
@@ -31,10 +35,10 @@ fn powershell(script: &str) -> Option<String> {
 /// Falls back to getting the foreground window via Get-Process.
 fn get_focused_window_title() -> Option<String> {
     // Try UIAutomation first
-    if let Some(title) = powershell(
-        "[System.Windows.Automation.AutomationElement]::FocusedElement.Current.Name",
-    ) {
-        if !title.is_empty() && title != "" {
+    if let Some(title) =
+        powershell("[System.Windows.Automation.AutomationElement]::FocusedElement.Current.Name")
+    {
+        if !title.is_empty() {
             return Some(title);
         }
     }
@@ -269,8 +273,13 @@ if ($el -ne $null) {{
         let pid = get_foreground_pid().unwrap_or(0);
         let proc = get_foreground_process_name().unwrap_or_default();
         let (wx, wy, ww, wh) = get_foreground_window_rect();
-        Ok(build_element(&title, &proc, pid, false))
-            .map(|mut e| { e.x = wx; e.y = wy; e.width = ww; e.height = wh; e })
+        Ok(build_element(&title, &proc, pid, false)).map(|mut e| {
+            e.x = wx;
+            e.y = wy;
+            e.width = ww;
+            e.height = wh;
+            e
+        })
     }
 
     fn get_focused_element(&self) -> Result<Option<AccessibilityElement>, String> {
@@ -316,7 +325,10 @@ if ($el -ne $null) {{
         })
     }
 
-    fn get_children(&self, element: &AccessibilityElement) -> Result<Vec<AccessibilityElement>, String> {
+    fn get_children(
+        &self,
+        element: &AccessibilityElement,
+    ) -> Result<Vec<AccessibilityElement>, String> {
         if !element.children.is_empty() {
             return Ok(element.children.clone());
         }
@@ -330,36 +342,40 @@ if ($el -ne $null) {{
         Ok(Vec::new())
     }
 
-    fn get_ancestors(&self, element: &AccessibilityElement) -> Result<Vec<AccessibilityElement>, String> {
-        Ok(vec![
-            AccessibilityElement {
-                role: "desktop".into(),
-                name: "Windows Desktop".into(),
-                x: 0,
-                y: 0,
-                width: 0,
-                height: 0,
-                enabled: true,
-                focused: false,
-                visible: true,
-                children: Vec::new(),
-                pid: element.pid,
-                description: None,
-                value: None,
-                help_text: None,
-            },
-        ])
+    fn get_ancestors(
+        &self,
+        element: &AccessibilityElement,
+    ) -> Result<Vec<AccessibilityElement>, String> {
+        Ok(vec![AccessibilityElement {
+            role: "desktop".into(),
+            name: "Windows Desktop".into(),
+            x: 0,
+            y: 0,
+            width: 0,
+            height: 0,
+            enabled: true,
+            focused: false,
+            visible: true,
+            children: Vec::new(),
+            pid: element.pid,
+            description: None,
+            value: None,
+            help_text: None,
+        }])
     }
 
-    fn get_all_elements_matching(&self, role: &str, name: &str) -> Result<Vec<AccessibilityElement>, String> {
+    fn get_all_elements_matching(
+        &self,
+        role: &str,
+        name: &str,
+    ) -> Result<Vec<AccessibilityElement>, String> {
         let windows = list_visible_windows();
         let matches: Vec<AccessibilityElement> = windows
             .into_iter()
             .map(|(title, proc, pid)| build_element(&title, &proc, pid, false))
             .filter(|elem| {
                 (role.is_empty() || elem.role.to_lowercase().contains(&role.to_lowercase()))
-                    && (name.is_empty()
-                        || elem.name.to_lowercase().contains(&name.to_lowercase()))
+                    && (name.is_empty() || elem.name.to_lowercase().contains(&name.to_lowercase()))
             })
             .collect();
         Ok(matches)
@@ -447,7 +463,10 @@ Start-Sleep -Milliseconds 30
                 Ok(())
             }
             _ => {
-                log::warn!("WindowsAccessibility::perform_action: unsupported action '{}'", action);
+                log::warn!(
+                    "WindowsAccessibility::perform_action: unsupported action '{}'",
+                    action
+                );
                 Ok(())
             }
         }

@@ -169,13 +169,28 @@ function ChatTab({ initialText }: { initialText?: string }) {
   } = useChat();
   const { images, addImageFromDataUrl, removeImage, clearImages, getImageDataUrls } = useVision();
   const {
-    conversations, activeId, activeConversation,
+    conversations, activeId, activeConversation, isLoaded,
     setActiveId, createConversation, deleteConversation, updateMessages,
   } = useConversations();
 
-  // Load AI config to derive default model
+  // P1 (H-2/CR-10): hydrate the chat body on cold start. useConversations
+  // auto-selects the newest conversation (so the header shows its title) but
+  // useChat starts empty — without this the title sits over an empty list.
+  // Only fills an EMPTY message list so in-flight typing is never clobbered.
+  const hydratedRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!isLoaded || messages.length > 0) return;
+    const convo = activeConversation;
+    if (convo && convo.messages.length > 0 && hydratedRef.current !== convo.id) {
+      hydratedRef.current = convo.id;
+      replaceMessages(convo.messages);
+    }
+  }, [isLoaded, messages.length, activeConversation, replaceMessages]);
+
+  // Load AI config to derive default model.
+  // Shares the ["ai_config"] cache entry with useAiConfig/ModelSelector (was ["ai-config"] — C3).
   const { data: aiConfig } = useQuery<AiConfig>({
-    queryKey: ["ai-config"],
+    queryKey: ["ai_config"],
     queryFn: () => commands.getAiConfig(),
     staleTime: 30_000,
   });
@@ -243,9 +258,8 @@ function ChatTab({ initialText }: { initialText?: string }) {
       e.preventDefault();
       if ((!input.trim() && images.length === 0) || streaming) return;
 
-      // Create a conversation if none active
-      let cid = activeId;
-      if (!cid) cid = createConversation();
+      // Create a conversation if none active (createConversation sets it active).
+      if (!activeId) createConversation();
 
       const text = input;
       setInput("");

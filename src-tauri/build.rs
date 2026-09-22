@@ -3,10 +3,10 @@ fn main() {
     {
         if let Ok(path) = std::env::var("PATH") {
             std::env::set_var("ORIGINAL_PATH", &path);
-            
+
             let wrapper_dir = std::env::temp_dir().join("clickyx_windres_wrapper");
             let _ = std::fs::create_dir_all(&wrapper_dir);
-            
+
             // Write the wrapper source code to OUT_DIR
             let wrapper_src = r#"
 use std::process::Command;
@@ -57,27 +57,27 @@ fn main() {
     std::process::exit(status.code().unwrap_or(1));
 }
 "#;
-                
-                let src_path = wrapper_dir.join("windres_wrapper.rs");
-                let _ = std::fs::write(&src_path, wrapper_src);
-                
-                // Compile the wrapper source code to executables in wrapper_dir
-                let compile_wrapper = |dest_name: &str| {
-                    let dest_path = wrapper_dir.join(dest_name);
-                    let _ = std::process::Command::new("rustc")
-                        .arg(&src_path)
-                        .arg("-o")
-                        .arg(&dest_path)
-                        .status();
-                };
-                
-                compile_wrapper("windres.exe");
-                compile_wrapper("x86_64-w64-mingw32-windres.exe");
-                compile_wrapper("i686-w64-mingw32-windres.exe");
-                
-                // Prepend wrapper_dir to PATH
-                let new_path = format!("{};{}", wrapper_dir.display(), path);
-                std::env::set_var("PATH", new_path);
+
+            let src_path = wrapper_dir.join("windres_wrapper.rs");
+            let _ = std::fs::write(&src_path, wrapper_src);
+
+            // Compile the wrapper source code to executables in wrapper_dir
+            let compile_wrapper = |dest_name: &str| {
+                let dest_path = wrapper_dir.join(dest_name);
+                let _ = std::process::Command::new("rustc")
+                    .arg(&src_path)
+                    .arg("-o")
+                    .arg(&dest_path)
+                    .status();
+            };
+
+            compile_wrapper("windres.exe");
+            compile_wrapper("x86_64-w64-mingw32-windres.exe");
+            compile_wrapper("i686-w64-mingw32-windres.exe");
+
+            // Prepend wrapper_dir to PATH
+            let new_path = format!("{};{}", wrapper_dir.display(), path);
+            std::env::set_var("PATH", new_path);
         }
     }
 

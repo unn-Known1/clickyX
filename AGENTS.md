@@ -114,7 +114,7 @@ npm run test:visual           # Playwright visual regression
 | `components/AgentsTab.tsx` | Agent CRUD, skill management, slug auto-derive, drag-drop, HUD pop-out |
 | `components/AgentHUD.tsx` | Floating HUD — transcript, diff, activity timeline |
 | `components/ConnectionsTab.tsx` | Google Workspace status (shows unavailable message, no gogcli), MCP CRUD, automations, app usage log |
-| `components/SettingsTab.tsx` | 8 sections with icon nav, group headers, scroll memory |
+| `components/SettingsTab.tsx` | 7 sections with icon nav, group headers, scroll memory |
 | `components/SettingsSections/AppearanceSettings.tsx` | Theme, accent variants, color picker |
 | `components/SettingsSections/OverlayPrefsSettings.tsx` | Cursor size, opacity |
 | `components/SettingsSections/CaptureSettings.tsx` | Auto-capture config |
@@ -129,7 +129,7 @@ npm run test:visual           # Playwright visual regression
 | `components/UpdateBanner.tsx` | Auto-updater notification |
 | `components/AboutDialog.tsx` | Version + links dialog |
 | `components/ModelSelector.tsx` | react-query model list; filters by configured providers; shows setup prompt when no API key |
-| `overlay/OverlayApp.tsx` | Glow, calibration, waveform (real amplitude), cursors, captions, dock, HIGHLIGHT/SHAPE, AlwaysListeningIndicator; pet sprite only shown when AI is active |
+| `overlay/OverlayApp.tsx` | Glow, calibration, waveform (real amplitude), cursors, captions, dock, HIGHLIGHT/SHAPE, AlwaysListeningIndicator; pet sprite shown while AI active or always-listening (deprecated — see REVIEW_REPORT P1) |
 | `overlay/overlay.css` | Overlay-specific styles |
 | `styles/theme.css` | All panel styles, semantic color tokens, 6 accent variants |
 
@@ -140,6 +140,13 @@ npm run test:visual           # Playwright visual regression
 | `src/context/AppContext.test.tsx` | Toast add/dismiss/error, navigation |
 | `src/hooks/useChat.test.ts` | Empty state, streaming, cancel, clear |
 | `src/hooks/useConversations.test.ts` | Create/delete/update/persist/rename |
+| `src/hooks/useAgents.test.ts` | Agent list, mutations, error paths |
+| `src/hooks/useConfig.test.ts` | Config load/update, error paths |
+| `src/hooks/useAiConfig.test.ts` | AI config load/update |
+| `src/hooks/useAudioConfig.test.ts` | Audio config load/update |
+| `src/hooks/useOverlay.test.ts` | Overlay commands + args |
+| `src/hooks/useScreenCapture.test.ts` | Capture commands, error paths |
+| `src/hooks/useVision.test.ts` | Data-URL parsing, ordering, remove |
 | `src/components/CommandPalette.test.tsx` | Search, keyboard nav, click, backdrop |
 | `src/utils/agentStatus.test.ts` | Status color/label, map completeness |
 | `src/test-setup.ts` | Global Tauri mocks + react-i18next mock |
@@ -152,12 +159,12 @@ npm run test:visual           # Playwright visual regression
 
 ## Build Status
 
-- `cargo check` — passes (with `#[allow(dead_code)]` for Flatpak compatibility)
-- `cargo test --all-features` — passes (50+ Rust tests)
+- `cargo check` — passes (run from `src-tauri/`)
+- `cargo test --all-features` — passes (139 Rust tests)
 - `npm run build` — passes (TypeScript + Vite)
 - `npm test` — 12 test files, 90 cases passing
-- CI: Check (ubuntu) + Build (ubuntu/windows/macos) — **PASSING**
-- Release: v0.2.0 tagged and published — artifacts available on GitHub Releases
+- CI: Check (ubuntu: build + unit + clippy `-D warnings` + `cargo fmt --check`) + Build (ubuntu/windows/macos) + E2E (ubuntu, Playwright) — **PASSING**
+- Release: v0.2.0 tagged; GitHub releases ship as **drafts** until manually published (the updater only sees published releases)
 - Flatpak: Build passing
 - macOS: `--bundles dmg,app` + `macOSPrivateApi: true` for overlay transparency
 
@@ -184,7 +191,10 @@ Dev:
 "@types/three": "^0.170",
 "@testing-library/user-event": "^14",
 "@playwright/test": "^1",
-"msw": "^2"
+"eslint": "^10",
+"typescript-eslint": "^8",
+"eslint-plugin-react-hooks": "^7",
+"globals": "^16"
 ```
 
 ---
@@ -204,5 +214,6 @@ git config user.email "ptelgm.yt@gmail.com"
 |------|--------|
 | macOS signing | Set `APPLE_SIGNING_IDENTITY`, `APPLE_CERTIFICATE`, `APPLE_CERTIFICATE_PASSWORD`, `APPLE_NOTARIZATION_USERNAME`, `APPLE_NOTARIZATION_PASSWORD` as GitHub secrets |
 | Windows signing | Set `WINDOWS_SIGNING_CERT` (base64 PFX) and `WINDOWS_SIGNING_PASSWORD` as GitHub secrets |
+| Update signing (P0-T3) | Generate once (`minisign -G -p update.pub -s update.key`); set `UPDATE_SIGNING_KEY_B64` (base64 of the secret key file) and `UPDATE_SIGNING_PUBKEY` (pubkey string). Without these, release artifacts ship unsigned and the in-app updater refuses them |
 | Audio assets | Add `.mp3` files to `public/sounds/` (see `public/sounds/README.md`) |
 | Onboarding video | Add `intro.mp4` to `public/onboarding/` (SVG fallback already rendered) |

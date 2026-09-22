@@ -36,7 +36,7 @@ jobs:
             src-tauri/target
             ~/.cargo/registry
             ~/.cargo/git
-          key: ubuntu-cargo-${{ hashFiles('src-tauri/Cargo.toml') }}
+          key: ubuntu-cargo-${{ hashFiles('src-tauri/Cargo.lock') }}
           restore-keys: |
             ubuntu-cargo-
 
@@ -59,14 +59,35 @@ jobs:
         run: npm run build
       - name: Run frontend tests
         run: npm test
+      - name: Lint frontend (ESLint)
+        run: npm run lint
+      - name: Audit npm dependencies
+        run: npm audit --audit-level=high
+      - name: Run Playwright E2E (app/chat/settings)
+        run: |
+          npx playwright install --with-deps chromium
+          npx playwright test e2e/app.spec.ts e2e/chat.spec.ts e2e/settings.spec.ts
+        env:
+          CI: true
+      # NOTE: e2e/visual.spec.ts runs manually only until pixel baselines are
+      # committed (see e2e/visual.spec.ts header + `npm run test:visual:update`).
       - name: Check Rust compilation
         working-directory: src-tauri
         run: cargo check
       - name: Run Rust tests
         working-directory: src-tauri
         run: cargo test --all-features
-      - name: Lint
-        run: cargo clippy -- -D warnings 2>&1 | head -100
+      - name: Audit Rust dependencies
+        working-directory: src-tauri
+        run: |
+          cargo install cargo-audit --locked || true
+          ~/.cargo/bin/cargo-audit --deny warnings || echo "::warning::cargo-audit found advisories (see log)"
+      - name: Lint (clippy, deny warnings)
+        working-directory: src-tauri
+        run: cargo clippy --all-features -- -D warnings
+      - name: Check formatting
+        working-directory: src-tauri
+        run: cargo fmt --check
 
   build:
     name: Build (${{ matrix.os }})
@@ -95,7 +116,7 @@ jobs:
             src-tauri/target
             ~/.cargo/registry
             ~/.cargo/git
-          key: ${{ matrix.os }}-cargo-${{ hashFiles('src-tauri/Cargo.toml') }}
+          key: ${{ matrix.os }}-cargo-${{ hashFiles('src-tauri/Cargo.lock') }}
           restore-keys: |
             ${{ matrix.os }}-cargo-
 
@@ -120,6 +141,10 @@ jobs:
 
       - name: Build frontend
         run: npm run build
+
+      - name: Run Rust tests (all platforms)
+        working-directory: src-tauri
+        run: cargo test --all-features
 
       - name: Verify Windows dependencies
         if: matrix.os == 'windows-latest'

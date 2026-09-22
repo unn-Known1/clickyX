@@ -7,6 +7,7 @@ test.describe("Settings tab", () => {
   });
 
   test("shows settings sections", async ({ page }) => {
-    await expect(page.locator(".settings-content, .settings-nav")).toBeVisible();
+    await expect(page.locator(".settings-nav")).toBeVisible();
+    await expect(page.locator(".settings-content-wrapper")).toBeVisible();
   });
 });

@@ -24,7 +24,9 @@ pub struct VoiceAgentHandoff {
 
 impl VoiceAgentHandoff {
     pub fn new() -> Self {
-        Self { triggers: Vec::new() }
+        Self {
+            triggers: Vec::new(),
+        }
     }
 
     pub fn update_triggers(&mut self, agent_triggers: &HashMap<String, Vec<String>>) {
@@ -54,7 +56,11 @@ impl VoiceAgentHandoff {
                     return Some(HandoffAction {
                         agent_slug: trigger.agent_slug.clone(),
                         agent_name: trigger.agent_name.clone(),
-                        query: if remainder.is_empty() { transcript.to_string() } else { remainder },
+                        query: if remainder.is_empty() {
+                            transcript.to_string()
+                        } else {
+                            remainder
+                        },
                         trigger_phrase: phrase.clone(),
                     });
                 }
@@ -80,7 +86,7 @@ impl Default for VoiceAgentHandoff {
 
 static AGENT_PATTERN: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(
-        r"(?i)(?:hey|ask|tell|wake up)\s+(\w[\w\s]{0,20}?)(?:[,.:]|\s+to|\s+about|\s+can you|\s*$)"
+        r"(?i)(?:hey|ask|tell|wake up)\s+(\w[\w\s]{0,20}?)(?:[,.:]|\s+to|\s+about|\s+can you|\s*$)",
     )
     .expect("invalid agent trigger regex")
 });
@@ -88,7 +94,10 @@ static AGENT_PATTERN: LazyLock<Regex> = LazyLock::new(|| {
 pub fn extract_agent_name(text: &str) -> Option<(String, String)> {
     if let Some(caps) = AGENT_PATTERN.captures(text) {
         let name = caps.get(1)?.as_str().trim().to_string();
-        let remainder = text.replacen(caps.get(0)?.as_str(), "", 1).trim().to_string();
+        let remainder = text
+            .replacen(caps.get(0)?.as_str(), "", 1)
+            .trim()
+            .to_string();
         Some((name, remainder))
     } else {
         None

@@ -21,7 +21,10 @@ impl ScreenManager {
     pub fn new() -> Self {
         let monitors = Self::detect_monitors();
         let primary_index = monitors.iter().position(|m| m.is_primary).unwrap_or(0);
-        Self { monitors, primary_index }
+        Self {
+            monitors,
+            primary_index,
+        }
     }
 
     pub fn refresh(&mut self) {
@@ -51,8 +54,10 @@ impl ScreenManager {
         if monitors.is_empty() {
             monitors.push(MonitorInfo {
                 name: "default".into(),
-                x: 0, y: 0,
-                width: 1920, height: 1080,
+                x: 0,
+                y: 0,
+                width: 1920,
+                height: 1080,
                 scale_factor: 1.0,
                 is_primary: true,
             });
@@ -73,14 +78,12 @@ impl ScreenManager {
     }
 
     pub fn find_by_point(&self, x: f64, y: f64) -> Option<&MonitorInfo> {
-        self.monitors
-            .iter()
-            .find(|m| {
-                x >= m.x as f64
-                    && x < (m.x + m.width as i32) as f64
-                    && y >= m.y as f64
-                    && y < (m.y + m.height as i32) as f64
-            })
+        self.monitors.iter().find(|m| {
+            x >= m.x as f64
+                && x < (m.x + m.width as i32) as f64
+                && y >= m.y as f64
+                && y < (m.y + m.height as i32) as f64
+        })
     }
 
     pub fn count(&self) -> usize {
@@ -132,7 +135,11 @@ impl CoordinateNormalizer {
 
     pub fn to_local(&self, virtual_x: f64, virtual_y: f64) -> Option<(f64, f64, &MonitorInfo)> {
         let monitor = self.screen_mgr.find_by_point(virtual_x, virtual_y)?;
-        Some((virtual_x - monitor.x as f64, virtual_y - monitor.y as f64, monitor))
+        Some((
+            virtual_x - monitor.x as f64,
+            virtual_y - monitor.y as f64,
+            monitor,
+        ))
     }
 
     pub fn clamp_to_bounds(&self, x: f64, y: f64, margin: f64) -> (f64, f64) {
@@ -147,7 +154,11 @@ impl CoordinateNormalizer {
         self.screen_mgr
             .find_by_point(x, y)
             .map(|m| {
-                let idx = self.screen_mgr.monitors().iter().position(|r| std::ptr::eq(r, m));
+                let idx = self
+                    .screen_mgr
+                    .monitors()
+                    .iter()
+                    .position(|r| std::ptr::eq(r, m));
                 format!("screen{}", idx.unwrap_or(0) + 1)
             })
             .unwrap_or_else(|| "screen1".into())
@@ -156,14 +167,54 @@ impl CoordinateNormalizer {
     pub fn get_screen_idx(&self, x: f64, y: f64) -> usize {
         self.screen_mgr
             .find_by_point(x, y)
-            .and_then(|m| self.screen_mgr.monitors().iter().position(|r| std::ptr::eq(r, m)))
+            .and_then(|m| {
+                self.screen_mgr
+                    .monitors()
+                    .iter()
+                    .position(|r| std::ptr::eq(r, m))
+            })
             .unwrap_or(0)
     }
 
-    pub fn normalize_coordinates(&self, virtual_x: f64, virtual_y: f64, target_screen_idx: usize) -> Option<(f64, f64)> {
+    pub fn normalize_coordinates(
+        &self,
+        virtual_x: f64,
+        virtual_y: f64,
+        target_screen_idx: usize,
+    ) -> Option<(f64, f64)> {
         let monitors = self.screen_mgr.monitors();
         let target = monitors.get(target_screen_idx)?;
         Some((virtual_x - target.x as f64, virtual_y - target.y as f64))
+    }
+
+    /// Primary monitor's HiDPI scale (1.0 when unknown). Extents (w/h) from AI
+    /// tags are screenshot pixels — divide by this to get display points.
+    pub fn primary_scale(&self) -> f64 {
+        let s = self.screen_mgr.primary().scale_factor;
+        if s > 0.0 {
+            s
+        } else {
+            1.0
+        }
+    }
+
+    /// Map an AI guidance point (screenshot pixels, top-left origin, as vision
+    /// models emit) to virtual display coordinates (P1/CR-4 live path).
+    ///
+    /// Applies the primary monitor's offset + HiDPI scale and the macOS Y-flip
+    /// via `screen::coordinate` — previously dead code, now the single path.
+    /// Assumption: vision screenshots cover the primary monitor (documented;
+    /// multi-monitor composites need per-monitor routing in P3).
+    pub fn ai_point_to_virtual(&self, x: f64, y: f64) -> (f64, f64) {
+        let m = self.screen_mgr.primary();
+        let geom = crate::screen::coordinate::ScreenGeom {
+            x: m.x as f64,
+            y: m.y as f64,
+            width: m.width as f64,
+            height: m.height as f64,
+            scale: m.scale_factor,
+        };
+        crate::screen::coordinate::screenshot_to_display_geom(x, y, geom)
     }
 }
 
@@ -179,15 +230,42 @@ mod tests {
 
     fn test_monitors() -> Vec<MonitorInfo> {
         vec![
-            MonitorInfo { name: "left".into(), x: -1920, y: 0, width: 1920, height: 1080, scale_factor: 1.0, is_primary: false },
-            MonitorInfo { name: "main".into(), x: 0, y: 0, width: 1920, height: 1080, scale_factor: 1.0, is_primary: true },
-            MonitorInfo { name: "right".into(), x: 1920, y: 0, width: 1920, height: 1080, scale_factor: 1.0, is_primary: false },
+            MonitorInfo {
+                name: "left".into(),
+                x: -1920,
+                y: 0,
+                width: 1920,
+                height: 1080,
+                scale_factor: 1.0,
+                is_primary: false,
+            },
+            MonitorInfo {
+                name: "main".into(),
+                x: 0,
+                y: 0,
+                width: 1920,
+                height: 1080,
+                scale_factor: 1.0,
+                is_primary: true,
+            },
+            MonitorInfo {
+                name: "right".into(),
+                x: 1920,
+                y: 0,
+                width: 1920,
+                height: 1080,
+                scale_factor: 1.0,
+                is_primary: false,
+            },
         ]
     }
 
     fn test_screen_mgr() -> ScreenManager {
         let monitors = test_monitors();
-        ScreenManager { monitors, primary_index: 1 }
+        ScreenManager {
+            monitors,
+            primary_index: 1,
+        }
     }
 
     #[test]
@@ -264,5 +342,40 @@ mod tests {
         assert_eq!(min_y, 0);
         assert_eq!(w, 5760);
         assert_eq!(h, 1080);
+    }
+
+    // P1 (CR-4): AI-point normalization is the live guidance path.
+    #[test]
+    fn test_ai_point_to_virtual_scale_one() {
+        let sm = test_screen_mgr();
+        let norm = CoordinateNormalizer::new(sm);
+        assert!((norm.primary_scale() - 1.0).abs() < 1e-9);
+        let (vx, vy) = norm.ai_point_to_virtual(100.0, 200.0);
+        assert!((vx - 100.0).abs() < 1e-9);
+        #[cfg(not(target_os = "macos"))]
+        assert!((vy - 200.0).abs() < 1e-9);
+        #[cfg(target_os = "macos")]
+        assert!((vy - 880.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn test_ai_point_to_virtual_hidpi_scale() {
+        let monitors = vec![MonitorInfo {
+            name: "main".into(),
+            x: 0,
+            y: 0,
+            width: 1920,
+            height: 1080,
+            scale_factor: 2.0,
+            is_primary: true,
+        }];
+        let norm = CoordinateNormalizer::new(ScreenManager {
+            monitors,
+            primary_index: 0,
+        });
+        assert!((norm.primary_scale() - 2.0).abs() < 1e-9);
+        // 200 physical px → 100 logical points on x.
+        let (vx, _) = norm.ai_point_to_virtual(200.0, 200.0);
+        assert!((vx - 100.0).abs() < 1e-9);
     }
 }

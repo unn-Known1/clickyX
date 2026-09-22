@@ -77,17 +77,14 @@ fn check_os_permission(perm: &Permission) -> PermissionStatus {
             }
         }
         Permission::Notifications => {
-            // Notifications: check TCC for kTCCServiceNotifications. Falls back to true
-            // if the DB is unreadable (e.g., sandbox restrictions).
-            let granted = check_tcc_permission("kTCCServiceUserNotification");
+            // P1 (H-13): there is no `kTCCServiceUserNotification` TCC service —
+            // notification authorization cannot be probed via TCC.db, and the
+            // old query always missed. Posting notifications has no security
+            // impact, so report granted with honest copy instead of a fake check.
             PermissionStatus {
                 permission: perm.name().into(),
-                granted,
-                description: if granted {
-                    "macOS: notifications permitted".into()
-                } else {
-                    "macOS: notifications not permitted — open System Settings > Notifications".into()
-                },
+                granted: true,
+                description: "macOS: notification status can't be probed — verify in System Settings > Notifications".into(),
             }
         }
         Permission::Camera => {
@@ -129,52 +126,44 @@ fn check_os_permission(perm: &Permission) -> PermissionStatus {
 }
 
 /// Read the TCC SQLite database via `sqlite3` shell command.
-/// Returns true if the calling bundle (or any app) has `auth_value=2` (granted)
-/// for the given service. We check both the user and system TCC databases.
-/// Falls back to true if the DB is unreadable or query fails (to avoid blocking features).
+/// Returns true only when OUR bundle (`com.clickyx.app`) has `auth_value=2`
+/// (allowed) for the given service. Checks both user and system TCC databases.
+///
+/// P1 (H-13) fixes vs the old version:
+/// - scoped to our client (the old query returned true when ANY app was
+///   allowed, e.g. Safari's microphone grant counted as ours);
+/// - dropped the `COUNT(*)` fallback (any row — including denials — granted);
+/// - fail-CLOSED on unreadable DB (the old comment claimed fallback-true while
+///   the code returned false; now comment and code agree: denied).
+/// Our own bundle ID. Must match `identifier` in tauri.conf.json.
+#[cfg(target_os = "macos")]
+const CLICKYX_BUNDLE_ID: &str = "com.clickyx.app";
+
 #[cfg(target_os = "macos")]
 fn check_tcc_permission(service: &str) -> bool {
     let home = std::env::var("HOME").unwrap_or_else(|_| "/root".into());
-    let user_db = format!(
-        "{}/Library/Application Support/com.apple.TCC/TCC.db",
-        home
-    );
+    let user_db = format!("{}/Library/Application Support/com.apple.TCC/TCC.db", home);
     let system_db = "/Library/Application Support/com.apple.TCC/TCC.db";
 
-    // Try multiple query patterns to handle schema changes across macOS versions:
-    // - macOS 10.14-13: `access` table with `auth_value` column
-    // - macOS 14+: may use different columns or table names
-    let queries = [
-        // Standard schema: auth_value=2 means allowed
-        format!(
-            "SELECT auth_value FROM access WHERE service='{}' AND auth_value=2 LIMIT 1;",
-            service
-        ),
-        // Alternative: check for any row with the service (some macOS 14+ schemas)
-        format!(
-            "SELECT COUNT(*) FROM access WHERE service='{}' LIMIT 1;",
-            service
-        ),
-    ];
+    // Strict schema: auth_value=2 means allowed. No COUNT(*) fallback.
+    let query = format!(
+        "SELECT auth_value FROM access WHERE service='{}' AND client='{}' AND auth_value=2 LIMIT 1;",
+        service, CLICKYX_BUNDLE_ID
+    );
 
     for db in [user_db.as_str(), system_db] {
-        for query in &queries {
-            let out = Command::new("sqlite3")
-                .args([db, query.as_str()])
-                .output();
-            if let Ok(o) = out {
-                let stdout = String::from_utf8_lossy(&o.stdout);
-                let trimmed = stdout.trim();
-                if trimmed == "2" || (trimmed == "1" && query.contains("COUNT(*)")) {
-                    return true;
-                }
+        let out = Command::new("sqlite3").args([db, query.as_str()]).output();
+        if let Ok(o) = out {
+            if o.status.success() && String::from_utf8_lossy(&o.stdout).trim() == "2" {
+                return true;
             }
         }
     }
 
     log::warn!(
-        "TCC permission check for '{}' failed — DB may be unreadable or schema changed. Assuming denied.",
-        service
+        "TCC permission check for '{}' found no grant for {} — treating as denied.",
+        service,
+        CLICKYX_BUNDLE_ID
     );
     false
 }
@@ -190,7 +179,9 @@ fn check_screen_recording() -> bool {
         .output();
     match out {
         Ok(o) if o.status.success() => {
-            let ok = std::fs::metadata(&tmp).map(|m| m.len() > 0).unwrap_or(false);
+            let ok = std::fs::metadata(&tmp)
+                .map(|m| m.len() > 0)
+                .unwrap_or(false);
             let _ = std::fs::remove_file(&tmp);
             ok
         }
@@ -200,9 +191,7 @@ fn check_screen_recording() -> bool {
 
 #[cfg(target_os = "macos")]
 fn macos_version() -> (u32, u32) {
-    let out = Command::new("sw_vers")
-        .arg("-productVersion")
-        .output();
+    let out = Command::new("sw_vers").arg("-productVersion").output();
     if let Ok(o) = out {
         let ver = String::from_utf8_lossy(&o.stdout).trim().to_string();
         let parts: Vec<&str> = ver.split('.').collect();
@@ -276,7 +265,8 @@ fn check_os_permission(perm: &Permission) -> PermissionStatus {
                 description: if granted {
                     "Windows: microphone access granted".into()
                 } else {
-                    "Windows: microphone access denied — check Settings > Privacy > Microphone".into()
+                    "Windows: microphone access denied — check Settings > Privacy > Microphone"
+                        .into()
                 },
             }
         }
@@ -297,7 +287,9 @@ fn check_os_permission(perm: &Permission) -> PermissionStatus {
             PermissionStatus {
                 permission: perm.name().into(),
                 granted: true,
-                description: "Windows: screen capture available via DXGI (no explicit permission gate)".into(),
+                description:
+                    "Windows: screen capture available via DXGI (no explicit permission gate)"
+                        .into(),
             }
         }
         Permission::Notifications => {
@@ -319,7 +311,8 @@ fn check_os_permission(perm: &Permission) -> PermissionStatus {
             PermissionStatus {
                 permission: perm.name().into(),
                 granted: true,
-                description: "Windows: UI Automation accessibility available (UIAccess manifest)".into(),
+                description: "Windows: UI Automation accessibility available (UIAccess manifest)"
+                    .into(),
             }
         }
     }
@@ -344,24 +337,27 @@ fn check_windows_capability(capability: &str) -> bool {
     let out = Command::new("powershell")
         .args(["-NoProfile", "-NonInteractive", "-Command", &combined_query])
         .output();
-        
+
     match out {
         Ok(o) => {
             let s = String::from_utf8_lossy(&o.stdout).trim().to_lowercase();
             let parts: Vec<&str> = s.split('|').collect();
             let global_val = parts.get(0).unwrap_or(&"allow").trim();
             let np_val = parts.get(1).unwrap_or(&"allow").trim();
-            
+
             // If the global is Deny, it's denied. If NonPackaged is explicitly Deny, it's denied.
             // Empty means the key doesn't exist (older Windows) so we default to allowed.
             let global_allow = global_val.is_empty() || global_val == "allow";
             let np_allow = np_val.is_empty() || np_val == "allow";
-            
+
             global_allow && np_allow
         }
         Err(_) => {
-            // If powershell fails completely, assume granted to not block features
-            true
+            // P1 (H-13): fail CLOSED. If PowerShell itself can't run, we know
+            // nothing about the registry — reporting "granted" was a lie that
+            // sent users into capture flows the OS would block.
+            log::warn!("Windows permission probe: powershell failed; treating as denied");
+            false
         }
     }
 }
@@ -452,7 +448,8 @@ fn check_os_permission(perm: &Permission) -> PermissionStatus {
         }
         Permission::Camera => {
             // Check if any /dev/video* device exists and is accessible.
-            let granted = (0..=9).any(|i| std::path::Path::new(&format!("/dev/video{}", i)).exists());
+            let granted =
+                (0..=9).any(|i| std::path::Path::new(&format!("/dev/video{}", i)).exists());
             PermissionStatus {
                 permission: perm.name().into(),
                 granted,
@@ -532,7 +529,10 @@ fn check_linux_pipewire() -> bool {
         }
     }
     // Also check xdg-desktop-portal via pgrep
-    if let Ok(out) = Command::new("pgrep").args(["-x", "xdg-desktop-portal"]).output() {
+    if let Ok(out) = Command::new("pgrep")
+        .args(["-x", "xdg-desktop-portal"])
+        .output()
+    {
         if out.status.success() {
             return true;
         }
@@ -569,10 +569,7 @@ fn check_linux_notifications() -> bool {
         return out.status.success();
     }
     // Fallback: systemd's busctl
-    if let Ok(out) = Command::new("busctl")
-        .args(["--user", "list"])
-        .output()
-    {
+    if let Ok(out) = Command::new("busctl").args(["--user", "list"]).output() {
         let stdout = String::from_utf8_lossy(&out.stdout).to_lowercase();
         return stdout.contains("notifications") || stdout.contains("notify");
     }
@@ -605,12 +602,19 @@ fn check_linux_atspi() -> bool {
 fn detect_desktop_environment() -> &'static str {
     let de = std::env::var("XDG_CURRENT_DESKTOP").unwrap_or_default();
     let de_lower = de.to_lowercase();
-    if de_lower.contains("kde") { "kde" }
-    else if de_lower.contains("gnome") || de_lower.contains("unity") { "gnome" }
-    else if de_lower.contains("xfce") { "xfce" }
-    else if de_lower.contains("cinnamon") { "cinnamon" }
-    else if de_lower.contains("mate") { "mate" }
-    else { "other" }
+    if de_lower.contains("kde") {
+        "kde"
+    } else if de_lower.contains("gnome") || de_lower.contains("unity") {
+        "gnome"
+    } else if de_lower.contains("xfce") {
+        "xfce"
+    } else if de_lower.contains("cinnamon") {
+        "cinnamon"
+    } else if de_lower.contains("mate") {
+        "mate"
+    } else {
+        "other"
+    }
 }
 
 #[cfg(target_os = "linux")]
@@ -618,23 +622,20 @@ fn request_os_permission(perm: &Permission) -> Result<bool, String> {
     log::info!("Requesting permission: {:?} (Linux)", perm);
     let de = detect_desktop_environment();
     match perm {
-        Permission::Microphone | Permission::Camera => {
-            match de {
-                "gnome" => {
-                    let _ = Command::new("gnome-control-center")
-                        .arg("privacy")
-                        .spawn();
-                }
-                "kde" => {
-                    let _ = Command::new("systemsettings")
-                        .arg("kcm_privacy")
-                        .spawn();
-                }
-                _ => {
-                    log::info!("No settings app known for DE '{}'; user must grant manually", de);
-                }
+        Permission::Microphone | Permission::Camera => match de {
+            "gnome" => {
+                let _ = Command::new("gnome-control-center").arg("privacy").spawn();
             }
-        }
+            "kde" => {
+                let _ = Command::new("systemsettings").arg("kcm_privacy").spawn();
+            }
+            _ => {
+                log::info!(
+                    "No settings app known for DE '{}'; user must grant manually",
+                    de
+                );
+            }
+        },
         Permission::ScreenRecording => {
             // Try to start PipeWire if not running via multiple methods
             if Command::new("systemctl").arg("--version").output().is_ok() {

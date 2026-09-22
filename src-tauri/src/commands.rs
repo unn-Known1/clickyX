@@ -2,6 +2,7 @@ use serde::{Deserialize, Serialize};
 use std::sync::Mutex;
 use tauri::{AppHandle, Emitter, Manager, State};
 
+use crate::accessibility::{AccessibilityElement, AccessibilityTree};
 use crate::agent::codex::CodexProcess;
 use crate::agent::session::{AgentSession, AgentStore, ChatMessage, SessionState};
 use crate::agent::skills::{self, Skill};
@@ -10,7 +11,6 @@ use crate::ai::catalog::ModelCatalog;
 use crate::ai::streaming::StreamEvent;
 use crate::audio::VoicePipeline;
 use crate::config::{self, AgentConfig, AppConfig};
-use crate::accessibility::{AccessibilityElement, AccessibilityTree};
 use crate::permissions::{self, Permission, PermissionStatus};
 use crate::screen::auto_capture::{AutoCaptureConfig, AutoCaptureEngine, CapturedFrame};
 use crate::screen::capture;
@@ -85,7 +85,9 @@ pub fn update_config(app: AppHandle, partial: serde_json::Value) -> Result<AppCo
         if let Some(theme) = obj.get("theme").and_then(|v| v.as_str()) {
             config.theme = theme.to_string();
         }
-        if let Some(onboarding_completed) = obj.get("onboarding_completed").and_then(|v| v.as_bool()) {
+        if let Some(onboarding_completed) =
+            obj.get("onboarding_completed").and_then(|v| v.as_bool())
+        {
             config.onboarding_completed = onboarding_completed;
         }
         if let Some(window) = obj.get("window") {
@@ -135,8 +137,29 @@ pub fn update_config(app: AppHandle, partial: serde_json::Value) -> Result<AppCo
             if bt.is_null() {
                 config.bridge_token = None;
             } else if let Some(s) = bt.as_str() {
-                config.bridge_token = if s.is_empty() { None } else { Some(s.to_string()) };
+                config.bridge_token = if s.is_empty() {
+                    None
+                } else {
+                    Some(s.to_string())
+                };
             }
+            // Same invariant as set_bridge_token: clearing while enabled rotates.
+            if !config.bridge_auth_disabled
+                && config
+                    .bridge_token
+                    .as_ref()
+                    .map(|t| t.is_empty())
+                    .unwrap_or(true)
+            {
+                config.bridge_token = Some(config::generate_secret_token());
+            }
+            // P0-T1: token changes apply to the running bridge immediately.
+            apply_bridge_auth_state(&app, &config);
+        }
+        // P0-T1: explicit auth opt-out flag (UI must warn when true).
+        if let Some(disabled) = obj.get("bridge_auth_disabled").and_then(|v| v.as_bool()) {
+            config.bridge_auth_disabled = disabled;
+            apply_bridge_auth_state(&app, &config);
         }
     }
     config::save_config(&app, &config)?;
@@ -186,9 +209,7 @@ pub fn get_panel_state(state: State<'_, Mutex<AppState>>) -> Result<PanelState, 
 }
 
 #[tauri::command]
-pub fn toggle_panel_pin(
-    state: State<'_, Mutex<AppState>>,
-) -> Result<PanelState, String> {
+pub fn toggle_panel_pin(state: State<'_, Mutex<AppState>>) -> Result<PanelState, String> {
     let mut state = state.lock().map_err(|e| format!("lock error: {e}"))?;
     state.panel_pinned = !state.panel_pinned;
     Ok(PanelState {
@@ -262,24 +283,24 @@ pub async fn send_chat_message(
         role: "user".into(),
         content: message,
     };
-    let model = model.unwrap_or_else(|| {
-        ai::get_default_model(&config.ai, &config.ai.default_provider)
-    });
-    let provider = ai::create_provider_for_model(&config.ai, &model)
-        .map_err(|e| format!("{e}"))?;
+    let model =
+        model.unwrap_or_else(|| ai::get_default_model(&config.ai, &config.ai.default_provider));
+    let provider = ai::create_provider_for_model(&config.ai, &model).map_err(|e| format!("{e}"))?;
     let response = provider
         .chat(&[msg], &model)
         .await
         .map_err(|e| format!("{e}"))?;
-        
+
     execute_guidance_tags(&app, &response);
     Ok(response)
 }
 
 fn execute_guidance_tags(app: &AppHandle, text: &str) {
     let tags = crate::ai::guidance::parse_guidance_tags(text);
-    if tags.is_empty() { return; }
-    
+    if tags.is_empty() {
+        return;
+    }
+
     let config = crate::config::load_config(app).unwrap_or_default();
     let backend = if config.computer_use.native_cua {
         crate::cua::CuaBackend::Native
@@ -287,24 +308,51 @@ fn execute_guidance_tags(app: &AppHandle, text: &str) {
         crate::cua::CuaBackend::Background
     };
     let mut sim = crate::cua::InputSimulator::new(backend);
-    
+
+    // P1 (CR-4): AI tags arrive in screenshot pixels — normalize to virtual
+    // display coords (offset + HiDPI scale + macOS Y-flip) before ANY click or
+    // overlay call. Previously tags executed raw (misaligned on macOS/HiDPI).
+    let normalizer = crate::overlay::screen_router::CoordinateNormalizer::default();
+    let scale = normalizer.primary_scale();
+    let pt = |x: f64, y: f64| normalizer.ai_point_to_virtual(x, y);
+    // Extents are screenshot pixels — convert to display points.
+    let ext = |v: f64| v / scale;
+
     for tag in tags {
         match tag {
             crate::ai::guidance::GuidanceTag::Point { x, y, label } => {
+                let (x, y) = pt(x, y);
                 let _ = sim.click(x, y);
                 let _ = crate::overlay::show_cursor(app, x, y, label);
             }
             crate::ai::guidance::GuidanceTag::Rect { x, y, w, h, label } => {
-                let _ = crate::overlay::show_rect(app, x, y, w, h, label);
+                let (x, y) = pt(x, y);
+                let _ = crate::overlay::show_rect(app, x, y, ext(w), ext(h), label);
             }
             crate::ai::guidance::GuidanceTag::Highlight { x, y, w, h, label } => {
-                let _ = crate::overlay::show_highlight(app, x, y, w, h, label);
+                let (x, y) = pt(x, y);
+                let _ = crate::overlay::show_highlight(app, x, y, ext(w), ext(h), label);
             }
-            crate::ai::guidance::GuidanceTag::Shape { shape_type, x1, y1, x2, y2, label } => {
+            crate::ai::guidance::GuidanceTag::Shape {
+                shape_type,
+                x1,
+                y1,
+                x2,
+                y2,
+                label,
+            } => {
+                let (x1, y1) = pt(x1, y1);
+                let (x2, y2) = pt(x2, y2);
                 let _ = crate::overlay::show_shape(app, &shape_type, x1, y1, x2, y2, label);
             }
             crate::ai::guidance::GuidanceTag::Scribble { points, label } => {
-                let p = points.into_iter().map(|(x, y)| [x, y]).collect();
+                let p = points
+                    .into_iter()
+                    .map(|(x, y)| {
+                        let (vx, vy) = pt(x, y);
+                        [vx, vy]
+                    })
+                    .collect();
                 let _ = crate::overlay::show_scribble(app, p, label);
             }
             _ => {}
@@ -324,16 +372,21 @@ pub async fn send_chat_message_stream(
         role: "user".into(),
         content: message,
     };
-    let model = model.unwrap_or_else(|| {
-        ai::get_default_model(&config.ai, &config.ai.default_provider)
-    });
+    let model =
+        model.unwrap_or_else(|| ai::get_default_model(&config.ai, &config.ai.default_provider));
 
     let app_clone = app.clone();
     tokio::spawn(async move {
         let provider = match ai::create_provider_for_model(&config.ai, &model) {
             Ok(p) => p,
             Err(e) => {
-                let _ = app_clone.emit("stream-event", StreamEvent::Error { message: e.to_string(), session_id: session_id.clone() });
+                let _ = app_clone.emit(
+                    "stream-event",
+                    StreamEvent::Error {
+                        message: e.to_string(),
+                        session_id: session_id.clone(),
+                    },
+                );
                 return;
             }
         };
@@ -341,7 +394,13 @@ pub async fn send_chat_message_stream(
         let mut receiver = match provider.chat_stream(&[msg], &model).await {
             Ok(r) => r,
             Err(e) => {
-                let _ = app_clone.emit("stream-event", StreamEvent::Error { message: e.to_string(), session_id: session_id.clone() });
+                let _ = app_clone.emit(
+                    "stream-event",
+                    StreamEvent::Error {
+                        message: e.to_string(),
+                        session_id: session_id.clone(),
+                    },
+                );
                 return;
             }
         };
@@ -349,7 +408,10 @@ pub async fn send_chat_message_stream(
         while let Some(mut event) = receiver.recv().await {
             match &mut event {
                 StreamEvent::TextDelta { session_id: s, .. } => *s = session_id.clone(),
-                StreamEvent::TextDone { text, session_id: s } => {
+                StreamEvent::TextDone {
+                    text,
+                    session_id: s,
+                } => {
                     *s = session_id.clone();
                     execute_guidance_tags(&app_clone, text);
                 }
@@ -367,12 +429,23 @@ pub async fn send_chat_message_stream(
 }
 
 #[tauri::command]
-pub async fn get_models(app: AppHandle, provider: Option<String>) -> Result<Vec<ai::catalog::ModelInfo>, String> {
+pub async fn get_models(
+    app: AppHandle,
+    provider: Option<String>,
+) -> Result<Vec<ai::catalog::ModelInfo>, String> {
     let mut catalog = ModelCatalog::new();
     let config = config::load_config(&app).unwrap_or_default();
     let ai_cfg = &config.ai;
-    if ai_cfg.openai_api_key.as_ref().map_or(false, |k| !k.is_empty()) {
-        let remote = ModelCatalog::fetch_openai_compatible(&ai_cfg.openai_base_url, ai_cfg.openai_api_key.as_deref().unwrap_or("")).await;
+    if ai_cfg
+        .openai_api_key
+        .as_ref()
+        .is_some_and(|k| !k.is_empty())
+    {
+        let remote = ModelCatalog::fetch_openai_compatible(
+            &ai_cfg.openai_base_url,
+            ai_cfg.openai_api_key.as_deref().unwrap_or(""),
+        )
+        .await;
         catalog.merge_remote(remote);
     }
     match provider {
@@ -398,6 +471,8 @@ pub fn update_ai_config(
 ) -> Result<ai::AiConfig, String> {
     let mut config = config::load_config(&app).unwrap_or_default();
     config.ai = ai::merge_ai_config(&config.ai, &partial);
+    // P0-T2/H-6: validate before persisting — this URL receives the API key.
+    validate_openai_base_url(&config.ai.openai_base_url)?;
     config::save_config(&app, &config)?;
     Ok(config.ai)
 }
@@ -414,9 +489,8 @@ pub async fn chat_with_vision(
         role: "user".into(),
         content: message,
     };
-    let model = model.unwrap_or_else(|| {
-        ai::get_default_model(&config.ai, &config.ai.default_provider)
-    });
+    let model =
+        model.unwrap_or_else(|| ai::get_default_model(&config.ai, &config.ai.default_provider));
 
     let image_inputs: Vec<ai::ImageInput> = images
         .iter()
@@ -442,13 +516,12 @@ pub async fn chat_with_vision(
         })
         .collect();
 
-    let provider = ai::create_provider_for_model(&config.ai, &model)
-        .map_err(|e| format!("{e}"))?;
+    let provider = ai::create_provider_for_model(&config.ai, &model).map_err(|e| format!("{e}"))?;
     let response = provider
         .chat_with_vision(&[msg], &model, &image_inputs)
         .await
         .map_err(|e| format!("{e}"))?;
-        
+
     execute_guidance_tags(&app, &response);
     Ok(response)
 }
@@ -498,9 +571,7 @@ pub fn start_auto_capture(
 }
 
 #[tauri::command]
-pub fn stop_auto_capture(
-    engine: State<'_, Mutex<AutoCaptureEngine>>,
-) -> Result<(), String> {
+pub fn stop_auto_capture(engine: State<'_, Mutex<AutoCaptureEngine>>) -> Result<(), String> {
     let engine = engine.lock().map_err(|e| format!("lock error: {e}"))?;
     engine.stop()
 }
@@ -536,21 +607,30 @@ pub fn get_latest_auto_capture(
 }
 
 #[tauri::command]
-pub fn clear_auto_capture_cache(
-    engine: State<'_, Mutex<AutoCaptureEngine>>,
-) -> Result<(), String> {
+pub fn clear_auto_capture_cache(engine: State<'_, Mutex<AutoCaptureEngine>>) -> Result<(), String> {
     let engine = engine.lock().map_err(|e| format!("lock error: {e}"))?;
     engine.clear_cache();
     Ok(())
 }
 
 #[tauri::command]
-pub fn overlay_show_cursor(app: AppHandle, x: f64, y: f64, label: Option<String>) -> Result<(), String> {
+pub fn overlay_show_cursor(
+    app: AppHandle,
+    x: f64,
+    y: f64,
+    label: Option<String>,
+) -> Result<(), String> {
     crate::overlay::show_cursor(&app, x, y, label)
 }
 
 #[tauri::command]
-pub fn overlay_show_cursor_on_screen(app: AppHandle, x: f64, y: f64, label: Option<String>, screen_idx: usize) -> Result<(), String> {
+pub fn overlay_show_cursor_on_screen(
+    app: AppHandle,
+    x: f64,
+    y: f64,
+    label: Option<String>,
+    screen_idx: usize,
+) -> Result<(), String> {
     crate::overlay::show_cursor_on_screen(&app, x, y, label, screen_idx)
 }
 
@@ -563,6 +643,8 @@ pub fn overlay_show_cursors(app: AppHandle, cursors: Vec<CursorCommand>) -> Resu
 }
 
 #[tauri::command]
+// P2 (clippy): Tauri command arity mirrors the overlay API; grouped in P3.
+#[allow(clippy::too_many_arguments)]
 pub fn overlay_show_animated_cursor(
     app: AppHandle,
     x: f64,
@@ -577,6 +659,8 @@ pub fn overlay_show_animated_cursor(
 }
 
 #[tauri::command]
+// P2 (clippy): Tauri command arity mirrors the overlay API; grouped in P3.
+#[allow(clippy::too_many_arguments)]
 pub fn overlay_show_animated_cursor_on_screen(
     app: AppHandle,
     x: f64,
@@ -588,7 +672,9 @@ pub fn overlay_show_animated_cursor_on_screen(
     accent: Option<String>,
     screen_idx: usize,
 ) -> Result<(), String> {
-    crate::overlay::show_animated_cursor_on_screen(&app, x, y, from_x, from_y, &animation, label, accent, screen_idx)
+    crate::overlay::show_animated_cursor_on_screen(
+        &app, x, y, from_x, from_y, &animation, label, accent, screen_idx,
+    )
 }
 
 #[tauri::command]
@@ -605,22 +691,46 @@ pub fn overlay_hide_agent_dock(app: AppHandle) -> Result<(), String> {
 }
 
 #[tauri::command]
-pub fn overlay_show_rect(app: AppHandle, x: f64, y: f64, w: f64, h: f64, label: Option<String>) -> Result<(), String> {
+pub fn overlay_show_rect(
+    app: AppHandle,
+    x: f64,
+    y: f64,
+    w: f64,
+    h: f64,
+    label: Option<String>,
+) -> Result<(), String> {
     crate::overlay::show_rect(&app, x, y, w, h, label)
 }
 
 #[tauri::command]
-pub fn overlay_show_rect_on_screen(app: AppHandle, x: f64, y: f64, w: f64, h: f64, label: Option<String>, screen_idx: usize) -> Result<(), String> {
+pub fn overlay_show_rect_on_screen(
+    app: AppHandle,
+    x: f64,
+    y: f64,
+    w: f64,
+    h: f64,
+    label: Option<String>,
+    screen_idx: usize,
+) -> Result<(), String> {
     crate::overlay::show_rect_on_screen(&app, x, y, w, h, label, screen_idx)
 }
 
 #[tauri::command]
-pub fn overlay_show_scribble(app: AppHandle, points: Vec<[f64; 2]>, label: Option<String>) -> Result<(), String> {
+pub fn overlay_show_scribble(
+    app: AppHandle,
+    points: Vec<[f64; 2]>,
+    label: Option<String>,
+) -> Result<(), String> {
     crate::overlay::show_scribble(&app, points, label)
 }
 
 #[tauri::command]
-pub fn overlay_show_scribble_on_screen(app: AppHandle, points: Vec<[f64; 2]>, label: Option<String>, screen_idx: usize) -> Result<(), String> {
+pub fn overlay_show_scribble_on_screen(
+    app: AppHandle,
+    points: Vec<[f64; 2]>,
+    label: Option<String>,
+    screen_idx: usize,
+) -> Result<(), String> {
     crate::overlay::show_scribble_on_screen(&app, points, label, screen_idx)
 }
 
@@ -630,7 +740,13 @@ pub fn overlay_show_caption(app: AppHandle, text: String, x: f64, y: f64) -> Res
 }
 
 #[tauri::command]
-pub fn overlay_show_caption_on_screen(app: AppHandle, text: String, x: f64, y: f64, screen_idx: usize) -> Result<(), String> {
+pub fn overlay_show_caption_on_screen(
+    app: AppHandle,
+    text: String,
+    x: f64,
+    y: f64,
+    screen_idx: usize,
+) -> Result<(), String> {
     crate::overlay::show_caption_on_screen(&app, &text, x, y, screen_idx)
 }
 
@@ -706,7 +822,10 @@ pub fn get_audio_status(
     let s = state.lock().map_err(|e| format!("lock error: {e}"))?;
     let pipe = pipeline.lock().map_err(|e| format!("lock error: {e}"))?;
     let is_running = pipe.is_always_on_running()
-        || matches!(pipe.get_state().ok(), Some(crate::audio::PipelineState::Listening));
+        || matches!(
+            pipe.get_state().ok(),
+            Some(crate::audio::PipelineState::Listening)
+        );
     Ok(AudioStatusResponse {
         listening: is_running,
         mode: s.app_mode.clone(),
@@ -721,9 +840,7 @@ pub struct TodayStatsResponse {
 }
 
 #[tauri::command]
-pub fn get_today_stats(
-    store: State<'_, Mutex<AgentStore>>,
-) -> Result<TodayStatsResponse, String> {
+pub fn get_today_stats(store: State<'_, Mutex<AgentStore>>) -> Result<TodayStatsResponse, String> {
     let store = store.lock().map_err(|e| format!("lock error: {e}"))?;
     // #16: only count sessions active today, not the entire history.
     let today = crate::automation::now_date_parts();
@@ -826,10 +943,18 @@ pub fn set_always_on_config(
 ) -> Result<(), String> {
     let pipe = pipeline.lock().map_err(|e| format!("lock error: {e}"))?;
     let mut cfg = pipe.get_always_on_config()?;
-    if let Some(t) = threshold { cfg.vad_threshold = t; }
-    if let Some(s) = silence_timeout_ms { cfg.silence_timeout_ms = s; }
-    if let Some(m) = min_speech_ms { cfg.min_speech_ms = m; }
-    if let Some(a) = auto_submit { cfg.auto_submit = a; }
+    if let Some(t) = threshold {
+        cfg.vad_threshold = t;
+    }
+    if let Some(s) = silence_timeout_ms {
+        cfg.silence_timeout_ms = s;
+    }
+    if let Some(m) = min_speech_ms {
+        cfg.min_speech_ms = m;
+    }
+    if let Some(a) = auto_submit {
+        cfg.auto_submit = a;
+    }
     pipe.set_always_on_config(cfg)
 }
 
@@ -852,9 +977,7 @@ pub fn set_agent_triggers(
 }
 
 #[tauri::command]
-pub fn get_agent_triggers(
-    state: State<'_, Mutex<AppState>>,
-) -> Result<Vec<String>, String> {
+pub fn get_agent_triggers(state: State<'_, Mutex<AppState>>) -> Result<Vec<String>, String> {
     let s = state.lock().map_err(|e| format!("lock error: {e}"))?;
     Ok(s.agent_triggers.clone())
 }
@@ -982,47 +1105,16 @@ pub fn start_wake_word_detection(
 }
 
 #[tauri::command]
-pub fn stop_wake_word_detection(
-    pipeline: State<'_, Mutex<VoicePipeline>>,
-) -> Result<bool, String> {
+pub fn stop_wake_word_detection(pipeline: State<'_, Mutex<VoicePipeline>>) -> Result<bool, String> {
     let pipe = pipeline.lock().map_err(|e| format!("lock error: {e}"))?;
     pipe.stop_wake_word()?;
     Ok(true)
 }
 
 #[tauri::command]
-pub fn check_wake_word_detected(
-    pipeline: State<'_, Mutex<VoicePipeline>>,
-) -> Result<bool, String> {
+pub fn check_wake_word_detected(pipeline: State<'_, Mutex<VoicePipeline>>) -> Result<bool, String> {
     let pipe = pipeline.lock().map_err(|e| format!("lock error: {e}"))?;
     Ok(pipe.consume_wake_word_detected())
-}
-
-// --- Google Workspace Commands ---
-
-#[tauri::command]
-pub fn check_google_workspace() -> Result<crate::agent::google::WorkspaceStatus, String> {
-    crate::agent::google::GoogleWorkspace::check_auth()
-}
-
-#[tauri::command]
-pub fn google_workspace_auth_start() -> Result<(), String> {
-    crate::agent::google::GoogleWorkspace::start_auth()
-}
-
-#[tauri::command]
-pub fn google_workspace_auth_revoke() -> Result<(), String> {
-    crate::agent::google::GoogleWorkspace::revoke_auth()
-}
-
-#[tauri::command]
-pub fn list_emails(count: Option<u32>) -> Result<Vec<crate::agent::google::Email>, String> {
-    crate::agent::google::GoogleWorkspace::list_emails(count.unwrap_or(10))
-}
-
-#[tauri::command]
-pub fn list_calendar_events(count: Option<u32>) -> Result<Vec<crate::agent::google::CalendarEvent>, String> {
-    crate::agent::google::GoogleWorkspace::list_calendar_events(count.unwrap_or(10))
 }
 
 // --- Automation Commands ---
@@ -1163,18 +1255,13 @@ pub fn deactivate_type_mode(
 }
 
 #[tauri::command]
-pub fn get_type_mode_state(
-    engine: State<'_, Mutex<TypeModeEngine>>,
-) -> Result<String, String> {
+pub fn get_type_mode_state(engine: State<'_, Mutex<TypeModeEngine>>) -> Result<String, String> {
     let eng = engine.lock().map_err(|e| format!("lock error: {e}"))?;
     Ok(format!("{:?}", eng.get_state()))
 }
 
 #[tauri::command]
-pub fn type_text(
-    text: String,
-    engine: State<'_, Mutex<TypeModeEngine>>,
-) -> Result<(), String> {
+pub fn type_text(text: String, engine: State<'_, Mutex<TypeModeEngine>>) -> Result<(), String> {
     let eng = engine.lock().map_err(|e| format!("lock error: {e}"))?;
     eng.type_text(&text)
 }
@@ -1215,7 +1302,9 @@ pub async fn generate_3d_model(
         .iter()
         .find(|k| k.provider.to_lowercase() == "tripo3d")
         .map(|k| k.key.clone())
-        .ok_or_else(|| "Tripo3D API key not configured. Add it in Settings > API Keys.".to_string())?;
+        .ok_or_else(|| {
+            "Tripo3D API key not configured. Add it in Settings > API Keys.".to_string()
+        })?;
     let style = style.unwrap_or_else(|| "realistic".into());
     // Use a stable task-id derived from the prompt so get_3d_model_task can
     // look up the current job. In a production app each poll would query the
@@ -1239,7 +1328,10 @@ pub async fn generate_3d_model(
     if let Some(parent) = task_path.parent() {
         let _ = std::fs::create_dir_all(parent);
     }
-    let _ = std::fs::write(&task_path, serde_json::to_string_pretty(&task_record).unwrap_or_default());
+    let _ = std::fs::write(
+        &task_path,
+        serde_json::to_string_pretty(&task_record).unwrap_or_default(),
+    );
 
     crate::gen3d::generate_3d(&prompt, &style, &api_key).await?;
 
@@ -1252,7 +1344,10 @@ pub async fn generate_3d_model(
         "model_url": task_path.to_string_lossy().to_string(),
         "created_at": crate::agent::session::now_utc().parse::<u64>().unwrap_or(0),
     });
-    let _ = std::fs::write(&task_path, serde_json::to_string_pretty(&updated).unwrap_or_default());
+    let _ = std::fs::write(
+        &task_path,
+        serde_json::to_string_pretty(&updated).unwrap_or_default(),
+    );
 
     Ok(updated)
 }
@@ -1275,8 +1370,8 @@ pub fn get_3d_model_task() -> Result<serde_json::Value, String> {
     }
     let content = std::fs::read_to_string(&task_path)
         .map_err(|e| format!("failed to read gen3d task: {e}"))?;
-    let task: serde_json::Value = serde_json::from_str(&content)
-        .map_err(|e| format!("failed to parse gen3d task: {e}"))?;
+    let task: serde_json::Value =
+        serde_json::from_str(&content).map_err(|e| format!("failed to parse gen3d task: {e}"))?;
     Ok(task)
 }
 
@@ -1309,9 +1404,9 @@ pub async fn check_for_updates(app: AppHandle) -> Result<UpdateInfo, String> {
 }
 
 #[tauri::command]
-pub async fn install_update(url: String) -> Result<(), String> {
-    let data = updater::download_update(&url).await?;
-    updater::install_update(&data)
+pub async fn install_update(url: String, signature: Option<String>) -> Result<(), String> {
+    // P0-T3: download → minisign-verify (fail-closed) → install.
+    updater::install_update_from_url(&url, signature.as_deref()).await
 }
 
 #[tauri::command]
@@ -1327,7 +1422,12 @@ pub fn get_logs(count: Option<u32>) -> Result<Vec<LogEntry>, String> {
     let mut files: Vec<_> = std::fs::read_dir(&log_dir)
         .map_err(|e| format!("failed to read log dir: {e}"))?
         .filter_map(|e| e.ok())
-        .filter(|e| e.path().extension().map(|ext| ext == "log").unwrap_or(false))
+        .filter(|e| {
+            e.path()
+                .extension()
+                .map(|ext| ext == "log")
+                .unwrap_or(false)
+        })
         .collect();
 
     files.sort_by_key(|e| e.path().metadata().and_then(|m| m.modified()).ok());
@@ -1388,11 +1488,14 @@ pub fn clear_logs() -> Result<(), String> {
     if !log_dir.exists() {
         return Ok(());
     }
-    for entry in std::fs::read_dir(&log_dir)
-        .map_err(|e| format!("failed to read log dir: {e}"))?
-    {
+    for entry in std::fs::read_dir(&log_dir).map_err(|e| format!("failed to read log dir: {e}"))? {
         let entry = entry.map_err(|e| format!("failed to read entry: {e}"))?;
-        if entry.path().extension().map(|ext| ext == "log").unwrap_or(false) {
+        if entry
+            .path()
+            .extension()
+            .map(|ext| ext == "log")
+            .unwrap_or(false)
+        {
             // #39: on Windows the logger holds an open handle, so remove may fail;
             // fall back to truncating so the viewer still clears.
             if let Err(_e) = std::fs::remove_file(entry.path()) {
@@ -1531,7 +1634,12 @@ pub fn record_automation_run(entry: AutomationRunEntry) {
 /// Mark a previously recorded automation run as completed or failed.
 /// Called from `spawn_agent_run` after the AI provider returns so the
 /// Connections "Run History" panel reflects the actual outcome.
-pub fn update_automation_run_status(run_id: &str, finished_at: String, status: &str, error: Option<String>) {
+pub fn update_automation_run_status(
+    run_id: &str,
+    finished_at: String,
+    status: &str,
+    error: Option<String>,
+) {
     let mut all: Vec<AutomationRunEntry> = {
         let path = automation_runs_path();
         if path.exists() {
@@ -1553,31 +1661,177 @@ pub fn update_automation_run_status(run_id: &str, finished_at: String, status: &
     }
 }
 
-// ── Bridge auth token (#45) ──────────────────────────────────────────────────
-// Lets the UI enable/disable the local HTTP bridge token (was never exposable).
+// ── Bridge auth token (#45, P0-T1) ──────────────────────────────────────────
+// Lets the UI rotate/enable/disable the local HTTP bridge token.
+// Changes apply to the running bridge immediately (hot-reload).
+
+/// Push the config's bridge-auth state into the shared hot-reload state.
+fn apply_bridge_auth_state(app: &AppHandle, config: &AppConfig) {
+    if let Some(shared) = app.try_state::<crate::bridge_auth::SharedAuthSettings>() {
+        shared.set_token(config.bridge_token.clone());
+        shared.set_disabled(config.bridge_auth_disabled);
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BridgeStatus {
+    pub token_set: bool,
+    pub auth_disabled: bool,
+    pub dangerous_always_gated: bool,
+}
+
+/// Read-only bridge auth status for the UI (never returns the token itself).
+#[tauri::command]
+pub fn get_bridge_status(app: AppHandle) -> Result<BridgeStatus, String> {
+    let config = config::load_config(&app)?;
+    Ok(BridgeStatus {
+        token_set: config
+            .bridge_token
+            .as_ref()
+            .map(|t| !t.is_empty())
+            .unwrap_or(false),
+        auth_disabled: config.bridge_auth_disabled,
+        dangerous_always_gated: true,
+    })
+}
 
 #[tauri::command]
 pub fn set_bridge_token(app: AppHandle, token: Option<String>) -> Result<(), String> {
     let mut config = config::load_config(&app)?;
-    config.bridge_token = token;
+    // An explicitly empty string clears the token; a missing token with auth
+    // enabled is regenerated on next load (auth stays on by default).
+    config.bridge_token = token.filter(|t| !t.is_empty());
+    // P0-T1 invariant: auth enabled requires a token NOW, not after restart.
+    // Clearing while enabled rotates instead of locking every endpoint out.
+    if !config.bridge_auth_disabled
+        && config
+            .bridge_token
+            .as_ref()
+            .map(|t| t.is_empty())
+            .unwrap_or(true)
+    {
+        config.bridge_token = Some(config::generate_secret_token());
+        log::info!("Bridge token cleared while auth enabled — rotated instead");
+    }
     config::save_config(&app, &config)?;
-    log::info!("Bridge token updated (takes effect on next app start)");
+    apply_bridge_auth_state(&app, &config);
+    log::info!("Bridge token updated (applied immediately, no restart needed)");
     Ok(())
 }
 
+/// Generate a fresh bridge token, persist it, apply it immediately, and
+/// return it ONCE so the UI can show/copy it. The token is never readable
+/// again via any command after this returns.
 #[tauri::command]
-pub fn export_config(app: AppHandle) -> Result<String, String> {
+pub fn rotate_bridge_token(app: AppHandle) -> Result<String, String> {
+    let mut config = config::load_config(&app)?;
+    let token = config::generate_secret_token();
+    config.bridge_token = Some(token.clone());
+    config.bridge_auth_disabled = false;
+    config::save_config(&app, &config)?;
+    apply_bridge_auth_state(&app, &config);
+    log::info!("Bridge token rotated (applied immediately)");
+    Ok(token)
+}
+
+/// Sentinel marking redacted secrets in an export. Importing a file that
+/// still contains it is refused so a redacted export can never wipe keys.
+pub const REDACTED_SENTINEL: &str = "__REDACTED__";
+
+fn redact_config_value(config: &AppConfig) -> serde_json::Value {
+    let mut v = serde_json::to_value(config).unwrap_or(serde_json::Value::Null);
+    if let Some(obj) = v.as_object_mut() {
+        // Top-level secrets.
+        if obj.contains_key("bridge_token") {
+            obj.insert(
+                "bridge_token".into(),
+                serde_json::Value::String(REDACTED_SENTINEL.into()),
+            );
+        }
+        // Legacy per-provider keys.
+        if let Some(keys) = obj.get_mut("api_keys").and_then(|k| k.as_array_mut()) {
+            for entry in keys.iter_mut() {
+                if let Some(e) = entry.as_object_mut() {
+                    e.insert(
+                        "key".into(),
+                        serde_json::Value::String(REDACTED_SENTINEL.into()),
+                    );
+                }
+            }
+        }
+        // AI provider keys + agent-store encryption key.
+        for section in ["ai", "agent"] {
+            if let Some(sec) = obj.get_mut(section).and_then(|s| s.as_object_mut()) {
+                // Explicit secret fields (kept in sync with AiConfig/AgentConfig).
+                for field in ["anthropic_api_key", "openai_api_key", "encryption_key"] {
+                    if sec.contains_key(field) {
+                        sec.insert(
+                            field.into(),
+                            serde_json::Value::String(REDACTED_SENTINEL.into()),
+                        );
+                    }
+                }
+            }
+        }
+        // MCP server env blocks frequently hold tokens — redact values, keep names.
+        if let Some(servers) = obj.get_mut("mcp_servers").and_then(|s| s.as_array_mut()) {
+            for server in servers.iter_mut() {
+                if let Some(env) = server.get_mut("env").and_then(|e| e.as_object_mut()) {
+                    for (_k, val) in env.iter_mut() {
+                        *val = serde_json::Value::String(REDACTED_SENTINEL.into());
+                    }
+                }
+            }
+        }
+    }
+    v
+}
+
+#[tauri::command]
+pub fn export_config(app: AppHandle, include_secrets: bool) -> Result<String, String> {
     let config = config::load_config(&app)?;
-    serde_json::to_string_pretty(&config)
-        .map_err(|e| format!("failed to serialize config: {e}"))
+    if include_secrets {
+        log::warn!("Config exported WITH secrets — the file contains API keys and tokens");
+        serde_json::to_string_pretty(&config)
+            .map_err(|e| format!("failed to serialize config: {e}"))
+    } else {
+        serde_json::to_string_pretty(&redact_config_value(&config))
+            .map_err(|e| format!("failed to serialize config: {e}"))
+    }
 }
 
 #[tauri::command]
 pub fn import_config(app: AppHandle, json: String) -> Result<AppConfig, String> {
-    let config: AppConfig = serde_json::from_str(&json)
-        .map_err(|e| format!("invalid config JSON: {e}"))?;
+    // P0-T2: refuse redacted exports — importing one would silently wipe every
+    // secret (keys, tokens, MCP env) with the __REDACTED__ sentinel.
+    if json.contains(REDACTED_SENTINEL) {
+        return Err(
+            "refusing to import a redacted export (secrets were stripped). \
+             Re-export with \"include secrets\" checked, or re-enter keys manually."
+                .into(),
+        );
+    }
+    let config: AppConfig =
+        serde_json::from_str(&json).map_err(|e| format!("invalid config JSON: {e}"))?;
+    // P0-T2/H-6: the OpenAI-compatible base URL receives the user's API key —
+    // only allow explicit http(s) hosts so a typo can't become key exfiltration.
+    validate_openai_base_url(&config.ai.openai_base_url)?;
     config::save_config(&app, &config)?;
+    apply_bridge_auth_state(&app, &config);
     Ok(config)
+}
+
+/// P0-T2/H-6 guard: `openai_base_url` gets `Authorization: Bearer <user key>`,
+/// so it must be an explicit http(s) URL — never empty, never another scheme.
+fn validate_openai_base_url(base_url: &str) -> Result<(), String> {
+    let lower = base_url.trim().to_ascii_lowercase();
+    if lower.starts_with("https://") || lower.starts_with("http://") {
+        Ok(())
+    } else {
+        Err(format!(
+            "refusing openai_base_url without explicit http(s) scheme: {base_url}"
+        ))
+    }
 }
 
 #[tauri::command]
@@ -1658,10 +1912,7 @@ pub fn get_voice_providers() -> Vec<serde_json::Value> {
 // --- Accent Color Commands ---
 
 #[tauri::command]
-pub fn set_accent_preset(
-    app: AppHandle,
-    color: String,
-) -> Result<String, String> {
+pub fn set_accent_preset(app: AppHandle, color: String) -> Result<String, String> {
     let mut config = config::load_config(&app)?;
     config.overlay.cursor_accent = color.clone();
     config::save_config(&app, &config)?;
@@ -1676,10 +1927,7 @@ pub fn get_accent_presets(app: AppHandle) -> Result<Vec<String>, String> {
 }
 
 #[tauri::command]
-pub fn push_accent_preset(
-    app: AppHandle,
-    color: String,
-) -> Result<Vec<String>, String> {
+pub fn push_accent_preset(app: AppHandle, color: String) -> Result<Vec<String>, String> {
     let mut config = config::load_config(&app)?;
     if !config.overlay.accent_presets.contains(&color) {
         config.overlay.accent_presets.push(color.clone());
@@ -1694,7 +1942,9 @@ pub type AgentState = AgentStore;
 pub type CodexState = Option<CodexProcess>;
 
 #[tauri::command]
-pub fn list_agents(state: tauri::State<'_, Mutex<AgentStore>>) -> Result<Vec<AgentSession>, String> {
+pub fn list_agents(
+    state: tauri::State<'_, Mutex<AgentStore>>,
+) -> Result<Vec<AgentSession>, String> {
     let store = state.lock().map_err(|e| format!("lock error: {e}"))?;
     Ok(store.list())
 }
@@ -1767,10 +2017,14 @@ pub fn spawn_agent_run(app: AppHandle, slug: String, prompt: String, run_id: Opt
                 }
             };
             if let Some(session) = guard.get(&slug_clone) {
-                let msgs: Vec<ai::ChatMessage> = session.transcript.iter().map(|m| ai::ChatMessage {
-                    role: m.role.clone(),
-                    content: m.content.clone(),
-                }).collect();
+                let msgs: Vec<ai::ChatMessage> = session
+                    .transcript
+                    .iter()
+                    .map(|m| ai::ChatMessage {
+                        role: m.role.clone(),
+                        content: m.content.clone(),
+                    })
+                    .collect();
                 drop(guard);
                 msgs
             } else {
@@ -1795,8 +2049,14 @@ pub fn spawn_agent_run(app: AppHandle, slug: String, prompt: String, run_id: Opt
                     if let Ok(mut store) = store_mutex.lock() {
                         if let Some(session) = store.get_mut(&slug_clone) {
                             // #12: never resurrect a stopped/archived agent.
-                            if matches!(session.state, SessionState::Paused | SessionState::Archived) {
-                                log::info!("Agent {} was stopped while running — discarding completion", slug_clone);
+                            if matches!(
+                                session.state,
+                                SessionState::Paused | SessionState::Archived
+                            ) {
+                                log::info!(
+                                    "Agent {} was stopped while running — discarding completion",
+                                    slug_clone
+                                );
                                 drop(store);
                                 return;
                             }
@@ -1815,7 +2075,12 @@ pub fn spawn_agent_run(app: AppHandle, slug: String, prompt: String, run_id: Opt
                 let _ = app_clone.emit("agent-state-changed", slug_clone);
                 // Update automation run history if this was triggered by one
                 if let Some(ref rid) = run_id {
-                    update_automation_run_status(rid, crate::agent::session::now_utc(), "success", None);
+                    update_automation_run_status(
+                        rid,
+                        crate::agent::session::now_utc(),
+                        "success",
+                        None,
+                    );
                 }
             }
             Err(e) => {
@@ -1823,8 +2088,14 @@ pub fn spawn_agent_run(app: AppHandle, slug: String, prompt: String, run_id: Opt
                 if let Some(store_mutex) = app_clone.try_state::<Mutex<AgentStore>>() {
                     if let Ok(mut store) = store_mutex.lock() {
                         if let Some(session) = store.get_mut(&slug_clone) {
-                            if matches!(session.state, SessionState::Paused | SessionState::Archived) {
-                                log::info!("Agent {} was stopped while running — discarding error", slug_clone);
+                            if matches!(
+                                session.state,
+                                SessionState::Paused | SessionState::Archived
+                            ) {
+                                log::info!(
+                                    "Agent {} was stopped while running — discarding error",
+                                    slug_clone
+                                );
                                 drop(store);
                                 return;
                             }
@@ -1839,7 +2110,12 @@ pub fn spawn_agent_run(app: AppHandle, slug: String, prompt: String, run_id: Opt
                 let _ = app_clone.emit("agent-state-changed", slug_clone);
                 // Update automation run history if this was triggered by one
                 if let Some(ref rid) = run_id {
-                    update_automation_run_status(rid, crate::agent::session::now_utc(), "error", Some(e.to_string()));
+                    update_automation_run_status(
+                        rid,
+                        crate::agent::session::now_utc(),
+                        "error",
+                        Some(e.to_string()),
+                    );
                 }
             }
         }
@@ -1873,11 +2149,9 @@ pub fn stop_agent(
     let session = store
         .get_mut(&slug)
         .ok_or_else(|| format!("agent '{slug}' not found"))?;
-    match &session.state {
-        SessionState::Running => {
-            session.state = SessionState::Paused;
-        }
-        _ => {} // already stopped, no-op
+    if matches!(&session.state, SessionState::Running) {
+        // already stopped otherwise — no-op
+        session.state = SessionState::Paused;
     }
     session.updated_at = crate::agent::session::now_utc();
     let config = config::load_config(&app).unwrap_or_default();
@@ -2001,9 +2275,7 @@ pub fn start_codex(
 }
 
 #[tauri::command]
-pub fn stop_codex(
-    codex_state: tauri::State<'_, Mutex<CodexState>>,
-) -> Result<(), String> {
+pub fn stop_codex(codex_state: tauri::State<'_, Mutex<CodexState>>) -> Result<(), String> {
     let mut state = codex_state.lock().map_err(|e| format!("lock error: {e}"))?;
     if let Some(process) = state.as_mut() {
         process.stop()?;
@@ -2013,9 +2285,7 @@ pub fn stop_codex(
 }
 
 #[tauri::command]
-pub fn get_codex_status(
-    codex_state: tauri::State<'_, Mutex<CodexState>>,
-) -> Result<bool, String> {
+pub fn get_codex_status(codex_state: tauri::State<'_, Mutex<CodexState>>) -> Result<bool, String> {
     let state = codex_state.lock().map_err(|e| format!("lock error: {e}"))?;
     Ok(state.is_some())
 }
@@ -2119,8 +2389,8 @@ pub fn perform_accessibility_action(
 
 #[tauri::command]
 pub fn open_agent_hud(app: AppHandle, slug: String) -> Result<(), String> {
-    use tauri::WebviewUrl;
     use tauri::webview::WebviewWindowBuilder;
+    use tauri::WebviewUrl;
 
     let label = format!("agent-hud-{}", slug.replace(['.', '/', ' '], "-"));
     let url = "agent-hud.html";
@@ -2184,7 +2454,11 @@ pub fn test_mcp_server(server_id: String, app: AppHandle) -> Result<bool, String
             } else {
                 let stderr = String::from_utf8_lossy(&out.stderr);
                 log::warn!("MCP server '{}' validation failed: {}", server.name, stderr);
-                Err(format!("Server exited with code {}: {}", out.status, stderr.trim()))
+                Err(format!(
+                    "Server exited with code {}: {}",
+                    out.status,
+                    stderr.trim()
+                ))
             }
         }
         Err(e) => Err(format!("Failed to spawn '{}': {}", server.command, e)),
@@ -2221,6 +2495,15 @@ pub fn overlay_show_shape(
 }
 
 // ── B-011: Agent file attachment ──────────────────────────────────────────────
+// P1 (H-27): bounded — max file count, files only (no dirs), per-file and
+// total content caps. The old code read any path the caller named.
+
+/// Maximum files attachable in one call.
+const ATTACH_MAX_FILES: usize = 20;
+/// Per-file content cap (chars, char-boundary safe).
+const ATTACH_MAX_CHARS_PER_FILE: usize = 10_000;
+/// Total content cap across one call (chars).
+const ATTACH_MAX_CHARS_TOTAL: usize = 100_000;
 
 #[tauri::command]
 pub fn agent_attach_files(
@@ -2228,47 +2511,68 @@ pub fn agent_attach_files(
     paths: Vec<String>,
     store: State<'_, Mutex<AgentStore>>,
 ) -> Result<(), String> {
+    if paths.len() > ATTACH_MAX_FILES {
+        return Err(format!(
+            "refusing to attach {} files (max {ATTACH_MAX_FILES})",
+            paths.len()
+        ));
+    }
     let mut store = store.lock().map_err(|e| format!("lock: {e}"))?;
     if let Some(session) = store.sessions.get_mut(&slug) {
+        let mut total_chars = 0usize;
         for path in &paths {
             let path_obj = std::path::Path::new(path);
-            if path_obj.exists() {
-                // Read file content and store as a message
-                match std::fs::read_to_string(path_obj) {
-                    Ok(content) => {
-                        // #6: never slice at a non-char-boundary (panics on CJK/emoji)
-                        let truncated = if content.len() > 10000 {
-                            let cut = content
-                                .char_indices()
-                                .nth(10000)
-                                .map(|(i, _)| i)
-                                .unwrap_or(content.len());
-                            format!("{}... [truncated]", &content[..cut])
-                        } else {
-                            content
-                        };
-                        session.transcript.push(ChatMessage {
-                            role: "system".to_string(),
-                            content: format!("[File: {}]\n{}", path, truncated),
-                        });
-                    }
-                    Err(_) => {
-                        // Binary file or unreadable — store path reference
-                        session.transcript.push(ChatMessage {
-                            role: "system".to_string(),
-                            content: format!("[File attached: {}]", path),
-                        });
-                    }
-                }
-            } else {
-                log::warn!("[agent-attach] File not found: {}", path);
+            if !path_obj.is_file() {
+                log::warn!("[agent-attach] Not a file, skipping: {}", path);
                 session.transcript.push(ChatMessage {
                     role: "system".to_string(),
-                    content: format!("[File not found: {}]", path),
+                    content: format!("[File skipped (not a file): {}]", path),
                 });
+                continue;
+            }
+            if total_chars >= ATTACH_MAX_CHARS_TOTAL {
+                log::warn!(
+                    "[agent-attach] Total content cap reached, skipping: {}",
+                    path
+                );
+                session.transcript.push(ChatMessage {
+                    role: "system".to_string(),
+                    content: format!("[File skipped (total cap reached): {}]", path),
+                });
+                continue;
+            }
+            match std::fs::read_to_string(path_obj) {
+                Ok(content) => {
+                    // #6: never slice at a non-char-boundary (panics on CJK/emoji).
+                    // Budget: per-file cap AND remaining total cap, whichever is smaller.
+                    let remaining = ATTACH_MAX_CHARS_TOTAL.saturating_sub(total_chars);
+                    let budget = remaining.min(ATTACH_MAX_CHARS_PER_FILE);
+                    let truncated: String = content.chars().take(budget).collect();
+                    total_chars += truncated.chars().count();
+                    let truncated = if truncated.chars().count() < content.chars().count() {
+                        format!("{}... [truncated]", truncated)
+                    } else {
+                        truncated
+                    };
+                    session.transcript.push(ChatMessage {
+                        role: "system".to_string(),
+                        content: format!("[File: {}]\n{}", path, truncated),
+                    });
+                }
+                Err(_) => {
+                    // Binary file or unreadable — store path reference
+                    session.transcript.push(ChatMessage {
+                        role: "system".to_string(),
+                        content: format!("[File attached: {}]", path),
+                    });
+                }
             }
         }
-        log::info!("[agent-attach] {} files attached to agent '{}'", paths.len(), slug);
+        log::info!(
+            "[agent-attach] {} files attached to agent '{}'",
+            paths.len(),
+            slug
+        );
     }
     Ok(())
 }

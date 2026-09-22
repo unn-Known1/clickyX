@@ -30,7 +30,9 @@ describe("useChat", () => {
     expect(result.current.error).toBe(null);
   });
 
-  it("sets streaming=true after sendMessageStream", async () => {
+  // P2: renamed — the old title claimed to assert `streaming` but only
+  // checked the user message. Streaming-flag coverage needs event injection.
+  it("appends the user message when sendMessageStream starts", async () => {
     (invoke as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
     const { result } = renderHook(() => useChat());
     await act(async () => {

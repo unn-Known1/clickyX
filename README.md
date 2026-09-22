@@ -46,7 +46,7 @@ Artifacts land in `src-tauri/target/release/bundle/`:
 | **Voice** | Push-to-talk (key-capture, 5 presets), always-on VAD with barge-in suppression, wake word "Hey Clicky", STT (Deepgram/Whisper/AssemblyAI), TTS (ElevenLabs/Cartesia/Edge/Deepgram Aura/OpenAI Realtime/**System TTS — offline, no key**), drag-to-rotate voice-discovery orbit picker |
 | **Screen** | All-monitor / cursor / focused-window capture via `xcap`, auto-capture with diff detection, coordinate normalization, multi-monitor per-screen overlay routing |
 | **Overlay** | Animated bezier-arc cursor, 5-ring active-control glow, calibration box, rectangles, scribbles, captions, streaming text bubble, real-amplitude waveform, agent dock, HIGHLIGHT/SHAPE annotation tags, display hotplug detection; pet sprite visible only during active AI operations |
-| **Agents** | Codex Node.js sidecar, session lifecycle, floating HUD window, 63 bundled skills, voice-agent handoff, file drag-drop onto cards |
+| **Agents** | Codex Node.js sidecar, session lifecycle, floating HUD window, 64 bundled skills, voice-agent handoff, file drag-drop onto cards |
 | **Computer Use** | `enigo`-based click/double-click/scroll/type/key on all platforms; background mode (no cursor warp); app-specific CUA context injection |
 | **Chat** | react-markdown + syntax highlighting, conversation sidebar, per-session stream scoping, draft persistence, stop/cancel, drag-drop images, model selector filtered to configured providers |
 | **Connections** | Google Workspace (status shown, OAuth2 setup required), MCP CRUD (real stdio JSON-RPC), automation cron/interval + run history, app usage log |
@@ -69,7 +69,7 @@ Artifacts land in `src-tauri/target/release/bundle/`:
 │  Rust Backend (src-tauri/src/)                        │
 │  audio/   VAD · STT · TTS · wake word · handoff        │
 │  ai/      Anthropic · OpenAI · guidance tag parser    │
-│  agent/   Codex · sessions · 63 skills · dock         │
+│  agent/   Codex · sessions · 64 skills · dock         │
 │  screen/  xcap · auto-capture · coordinates           │
 │  overlay/ cursors · glow · lifecycle · screen router  │
 │  cua.rs   enigo input (native + background mode)      │

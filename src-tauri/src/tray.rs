@@ -1,8 +1,7 @@
 use tauri::{
-    AppHandle, Runtime,
-    tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
     menu::{MenuBuilder, MenuItemBuilder},
-    Manager,
+    tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
+    AppHandle, Emitter, Manager, Runtime,
 };
 
 pub fn setup_tray<R: Runtime>(app: &AppHandle<R>) -> Result<(), Box<dyn std::error::Error>> {
@@ -19,7 +18,11 @@ pub fn setup_tray<R: Runtime>(app: &AppHandle<R>) -> Result<(), Box<dyn std::err
         .build()?;
 
     let tray = TrayIconBuilder::new()
-        .icon(app.default_window_icon().ok_or("no default window icon")?.clone())
+        .icon(
+            app.default_window_icon()
+                .ok_or("no default window icon")?
+                .clone(),
+        )
         .tooltip("ClickyX")
         .menu(&menu)
         .on_menu_event(move |app, event| match event.id.as_ref() {
@@ -35,7 +38,10 @@ pub fn setup_tray<R: Runtime>(app: &AppHandle<R>) -> Result<(), Box<dyn std::err
                 if let Some(window) = app.get_webview_window("main") {
                     let _ = window.show();
                     let _ = window.set_focus();
-                    let _ = window.eval("window.__setActiveTab && window.__setActiveTab('settings')");
+                    // P1 (H-4): navigate via a real event. The old
+                    // window.__setActiveTab eval called a function that was
+                    // never defined in the frontend (dead path).
+                    let _ = app.emit("open-settings", ());
                 }
             }
             "quit" => {

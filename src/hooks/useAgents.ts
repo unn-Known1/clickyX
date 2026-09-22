@@ -1,7 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useEffect } from "react";
-import { commands, listen } from "../bindings";
+import { commands } from "../bindings";
 import type { AgentInfo, SkillInfo } from "../bindings";
+import { useTauriEvent } from "./useTauriEvent";
 
 export type { AgentInfo, SkillInfo };
 
@@ -32,13 +32,11 @@ export function useAgents() {
   });
 
   // ── Tauri event listener: invalidate agents on state-changed events ─────────
-  useEffect(() => {
-    let unlisten: (() => void) | null = null;
-    listen("agent-state-changed", () => {
-      queryClient.invalidateQueries({ queryKey: AGENTS_KEY });
-    }).then((fn) => { unlisten = fn; });
-    return () => { if (unlisten) unlisten(); };
-  }, [queryClient]);
+  // P1 (H-4): shared useTauriEvent helper — no unmount race, no duplicate
+  // listener styles. (One subscription per hook mount remains; events fan out.)
+  useTauriEvent("agent-state-changed", () => {
+    queryClient.invalidateQueries({ queryKey: AGENTS_KEY });
+  });
 
   // ── Mutations ─────────────────────────────────────────────────────────────────
   const createMutation = useMutation<AgentInfo, Error, { name: string; slug: string; skills: string[] }>({

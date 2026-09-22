@@ -152,7 +152,11 @@ pub async fn generate_3d(prompt: &str, style: &str, api_key: &str) -> Result<Str
                 return Err("Tripo3D task failed".into());
             }
             _ => {
-                log::debug!("3D generation task {} status: {}", task_id, status.data.status);
+                log::debug!(
+                    "3D generation task {} status: {}",
+                    task_id,
+                    status.data.status
+                );
             }
         }
 
@@ -194,11 +198,15 @@ mod tests {
 
     #[test]
     fn test_task_status_success_with_output() {
-        let json = r#"{"data":{"status":"success","output":{"model":"https://example.com/model.glb"}}}"#;
+        let json =
+            r#"{"data":{"status":"success","output":{"model":"https://example.com/model.glb"}}}"#;
         let resp: TaskStatusResponse = serde_json::from_str(json).expect("deserialize failed");
         assert_eq!(resp.data.status, "success");
         assert!(resp.data.output.is_some());
-        assert_eq!(resp.data.output.unwrap().model, "https://example.com/model.glb");
+        assert_eq!(
+            resp.data.output.unwrap().model,
+            "https://example.com/model.glb"
+        );
     }
 
     #[test]
@@ -234,7 +242,10 @@ mod tests {
         let json = serde_json::to_string(&req).expect("serialize failed");
         // JSON should handle escaping properly
         let parsed: serde_json::Value = serde_json::from_str(&json).expect("re-parse failed");
-        assert_eq!(parsed["prompt"].as_str().unwrap(), r#"a "fancy" object with 'quotes'"#);
+        assert_eq!(
+            parsed["prompt"].as_str().unwrap(),
+            r#"a "fancy" object with 'quotes'"#
+        );
     }
 
     #[test]

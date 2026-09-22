@@ -16,7 +16,7 @@ pub struct ToolHint {
 }
 
 pub fn get_app_contexts() -> Vec<AppCuaContext> {
-    vec![
+    let mut contexts = vec![
         AppCuaContext {
             app_name: "VS Code".into(),
             app_patterns: vec![
@@ -27,7 +27,8 @@ pub fn get_app_contexts() -> Vec<AppCuaContext> {
             ],
             system_prompt_injection: "The user is working in VS Code. Use keyboard shortcuts like \
                 Ctrl+P for file search, Ctrl+Shift+P for command palette, F5 to run/debug, \
-                Ctrl+` to open terminal, Ctrl+B to toggle sidebar.".into(),
+                Ctrl+` to open terminal, Ctrl+B to toggle sidebar."
+                .into(),
             tool_descriptions: vec![
                 ToolHint {
                     name: "open_file".into(),
@@ -56,7 +57,8 @@ pub fn get_app_contexts() -> Vec<AppCuaContext> {
             app_patterns: vec!["figma".into(), "Figma".into()],
             system_prompt_injection: "The user is working in Figma. Use V for selector, F for \
                 frame tool, R for rectangle, T for text, Space+drag to pan, Ctrl+G to group, \
-                Ctrl+D to duplicate, Ctrl+Z to undo.".into(),
+                Ctrl+D to duplicate, Ctrl+Z to undo."
+                .into(),
             tool_descriptions: vec![
                 ToolHint {
                     name: "select".into(),
@@ -98,7 +100,8 @@ pub fn get_app_contexts() -> Vec<AppCuaContext> {
             ],
             system_prompt_injection: "The user is working in a terminal. Type commands directly, \
                 use Tab for autocomplete, Ctrl+C to cancel a running command, Ctrl+L to clear \
-                the screen, up/down arrows to navigate history.".into(),
+                the screen, up/down arrows to navigate history."
+                .into(),
             tool_descriptions: vec![
                 ToolHint {
                     name: "autocomplete".into(),
@@ -123,7 +126,8 @@ pub fn get_app_contexts() -> Vec<AppCuaContext> {
             system_prompt_injection: "The user is working in Blender 3D. Use G to grab/move, \
                 R to rotate, S to scale, X/Y/Z to constrain to an axis after G/R/S, Tab to \
                 toggle edit mode, Numpad 0 for camera view, Numpad 5 to toggle orthographic, \
-                A to select all, Alt+A to deselect all, Ctrl+Z to undo.".into(),
+                A to select all, Alt+A to deselect all, Ctrl+Z to undo."
+                .into(),
             tool_descriptions: vec![
                 ToolHint {
                     name: "grab".into(),
@@ -158,7 +162,8 @@ pub fn get_app_contexts() -> Vec<AppCuaContext> {
             ],
             system_prompt_injection: "The user is working in Chrome browser. Use Ctrl+L to focus \
                 the address bar, Ctrl+T for a new tab, Ctrl+W to close a tab, Ctrl+F to find on \
-                the page, F12 for DevTools, Ctrl+Shift+J for the JS console.".into(),
+                the page, F12 for DevTools, Ctrl+Shift+J for the JS console."
+                .into(),
             tool_descriptions: vec![
                 ToolHint {
                     name: "address_bar".into(),
@@ -182,7 +187,8 @@ pub fn get_app_contexts() -> Vec<AppCuaContext> {
             app_patterns: vec!["premiere".into(), "Adobe Premiere".into()],
             system_prompt_injection: "The user is working in Adobe Premiere Pro. Use Space to \
                 play/pause, J/K/L for rewind/pause/forward, I/O to set in/out points, \
-                Ctrl+K to add a cut, Ctrl+Z to undo.".into(),
+                Ctrl+K to add a cut, Ctrl+Z to undo."
+                .into(),
             tool_descriptions: vec![
                 ToolHint {
                     name: "play_pause".into(),
@@ -198,14 +204,11 @@ pub fn get_app_contexts() -> Vec<AppCuaContext> {
         },
         AppCuaContext {
             app_name: "Excel".into(),
-            app_patterns: vec![
-                "excel".into(),
-                "EXCEL.EXE".into(),
-                "Microsoft Excel".into(),
-            ],
+            app_patterns: vec!["excel".into(), "EXCEL.EXE".into(), "Microsoft Excel".into()],
             system_prompt_injection: "The user is working in Microsoft Excel. Use Ctrl+Enter to \
                 confirm a cell, Tab to move right, Shift+Tab to move left, Ctrl+Shift+End to \
-                select to the last used cell, F2 to edit a cell, Ctrl+Home to go to A1.".into(),
+                select to the last used cell, F2 to edit a cell, Ctrl+Home to go to A1."
+                .into(),
             tool_descriptions: vec![
                 ToolHint {
                     name: "edit_cell".into(),
@@ -222,9 +225,11 @@ pub fn get_app_contexts() -> Vec<AppCuaContext> {
         AppCuaContext {
             app_name: "Notion".into(),
             app_patterns: vec!["notion".into(), "Notion".into()],
-            system_prompt_injection: "The user is working in Notion. Use / to open the block menu, \
+            system_prompt_injection:
+                "The user is working in Notion. Use / to open the block menu, \
                 Ctrl+K for quick search, [ ] for checkboxes, ## for headings, Ctrl+B to bold, \
-                Ctrl+I for italic.".into(),
+                Ctrl+I for italic."
+                    .into(),
             tool_descriptions: vec![
                 ToolHint {
                     name: "block_menu".into(),
@@ -238,20 +243,33 @@ pub fn get_app_contexts() -> Vec<AppCuaContext> {
                 },
             ],
         },
-    ]
+    ];
+
+    // P1 (H-14): shortcut data is authored with Ctrl (Windows/Linux modifier).
+    // On macOS the equivalent modifier is Cmd — rewrite so injected AI
+    // guidance tells macOS users the correct keys.
+    if cfg!(target_os = "macos") {
+        for ctx in &mut contexts {
+            ctx.system_prompt_injection = ctx.system_prompt_injection.replace("Ctrl", "Cmd");
+            for tool in &mut ctx.tool_descriptions {
+                tool.description = tool.description.replace("Ctrl", "Cmd");
+                tool.shortcut = tool.shortcut.take().map(|s| s.replace("Ctrl", "Cmd"));
+            }
+        }
+    }
+
+    contexts
 }
 
 /// Find a CUA context whose `app_patterns` contains a case-insensitive substring match for `process_name`.
 /// Returns the first match from the static contexts list.
 pub fn find_context_for_process(process_name: &str) -> Option<AppCuaContext> {
     let lower = process_name.to_lowercase();
-    get_app_contexts()
-        .into_iter()
-        .find(|ctx| {
-            ctx.app_patterns
-                .iter()
-                .any(|pat| lower.contains(&pat.to_lowercase()))
-        })
+    get_app_contexts().into_iter().find(|ctx| {
+        ctx.app_patterns
+            .iter()
+            .any(|pat| lower.contains(&pat.to_lowercase()))
+    })
 }
 
 #[cfg(test)]
@@ -312,5 +330,29 @@ mod tests {
             .filter_map(|t| t.shortcut.as_deref())
             .collect();
         assert!(!shortcuts.is_empty(), "Figma context should have shortcuts");
+    }
+
+    // P1 (H-14): the injected modifier must match the platform.
+    #[test]
+    fn test_shortcut_modifier_matches_platform() {
+        let ctx = find_context_for_process("code").unwrap();
+        let shortcuts: Vec<&str> = ctx
+            .tool_descriptions
+            .iter()
+            .filter_map(|t| t.shortcut.as_deref())
+            .collect();
+        let text = format!("{} {}", ctx.system_prompt_injection, shortcuts.join(" "));
+        if cfg!(target_os = "macos") {
+            assert!(text.contains("Cmd"), "macOS guidance must use Cmd: {text}");
+            assert!(
+                !text.contains("Ctrl"),
+                "macOS guidance must not use Ctrl: {text}"
+            );
+        } else {
+            assert!(
+                text.contains("Ctrl"),
+                "non-mac guidance must use Ctrl: {text}"
+            );
+        }
     }
 }

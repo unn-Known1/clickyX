@@ -27,6 +27,9 @@ export function useChat() {
   const [error, setError] = useState<string | null>(null);
   const unlistenRef = useRef<UnlistenFn | null>(null);
   const cancelledRef = useRef(false);
+  // P1 (H-4): mount guard — a listener that resolves after unmount is torn
+  // down immediately instead of leaking (cleanup used to miss it).
+  const mountedRef = useRef(true);
   // F-029: stable session ID so multiple useChat instances don't cross-contaminate
   const sessionIdRef = useRef<string>(newSessionId());
   // Mirror of messages for imperative helpers (regenerateLast)
@@ -37,7 +40,9 @@ export function useChat() {
   }, [messages]);
 
   useEffect(() => {
+    mountedRef.current = true;
     return () => {
+      mountedRef.current = false;
       if (unlistenRef.current) unlistenRef.current();
     };
   }, []);
@@ -106,6 +111,12 @@ export function useChat() {
         });
 
         unlistenRef.current = unlisten;
+        if (!mountedRef.current) {
+          // Unmounted while subscribing — tear down, don't send.
+          unlisten();
+          unlistenRef.current = null;
+          return;
+        }
         await commands.sendChatMessageStream(content, model ?? null, sessionId);
       } catch (e) {
         if (!cancelledRef.current) {
@@ -176,9 +187,20 @@ export function useChat() {
         });
 
         unlistenRef.current = unlisten;
+        if (!mountedRef.current) {
+          unlisten();
+          unlistenRef.current = null;
+          return;
+        }
 
         // Vision streaming isn't supported on the backend; call chatWithVision directly
         const response = await commands.chatWithVision(content, imageDataUrls, model ?? null);
+        // P1 (M-4): a cancel/clear during the await must not resurrect a reply.
+        if (cancelledRef.current || !mountedRef.current) {
+          unlisten();
+          unlistenRef.current = null;
+          return;
+        }
         setMessages((prev) => [
           ...prev,
           { role: "assistant", content: response, timestamp: Date.now() },

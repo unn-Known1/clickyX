@@ -1,42 +1,39 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useCallback } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { commands } from "../../bindings";
-
-interface PermissionStatus {
-  permission: string;
-  granted: boolean;
-  description: string;
-}
+import type { PermissionStatus } from "../../bindings";
 
 const PERMISSION_LIST = ["microphone", "screen_recording", "notifications", "camera", "accessibility"];
 
 function PermissionsSettings() {
-  const [statuses, setStatuses] = useState<Record<string, PermissionStatus>>({});
+  const queryClient = useQueryClient();
   const [requesting, setRequesting] = useState<string | null>(null);
 
-  const checkAll = useCallback(async () => {
-    const results: Record<string, PermissionStatus> = {};
-    for (const perm of PERMISSION_LIST) {
-      try {
-        results[perm] = await commands.checkPermission(perm);
-      } catch (e) {
-        console.error(`Failed to check ${perm}:`, e);
+  // P1 (H-7): server data via react-query, not a sequential useEffect loop.
+  const { data: statuses = {} } = useQuery<Record<string, PermissionStatus>>({
+    queryKey: ["permissions"],
+    queryFn: async () => {
+      const results: Record<string, PermissionStatus> = {};
+      for (const perm of PERMISSION_LIST) {
+        try {
+          results[perm] = await commands.checkPermission(perm);
+        } catch (e) {
+          console.error(`Failed to check ${perm}:`, e);
+        }
       }
-    }
-    setStatuses(results);
-  }, []);
-
-  useEffect(() => {
-    checkAll();
-  }, [checkAll]);
+      return results;
+    },
+    staleTime: 30_000,
+  });
 
   const requestPerm = useCallback(async (permission: string) => {
     setRequesting(permission);
     try {
       const granted = await commands.requestPermission(permission);
-      setStatuses((prev) => ({
-        ...prev,
+      queryClient.setQueryData<Record<string, PermissionStatus>>(["permissions"], (prev) => ({
+        ...(prev ?? {}),
         [permission]: {
-          ...prev[permission],
+          ...(prev?.[permission] ?? { permission, description: "" }),
           granted,
           description: granted ? "Granted" : "Denied",
         },
@@ -46,7 +43,7 @@ function PermissionsSettings() {
     } finally {
       setRequesting(null);
     }
-  }, []);
+  }, [queryClient]);
 
   const labelMap: Record<string, string> = {
     microphone: "Microphone",

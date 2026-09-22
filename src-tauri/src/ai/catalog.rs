@@ -35,13 +35,23 @@ impl ModelCatalog {
                 id: "claude-sonnet-4-20250514".into(),
                 provider: "anthropic".into(),
                 name: "Claude Sonnet 4".into(),
-                capabilities: vec!["chat".into(), "vision".into(), "streaming".into(), "tools".into()],
+                capabilities: vec![
+                    "chat".into(),
+                    "vision".into(),
+                    "streaming".into(),
+                    "tools".into(),
+                ],
             },
             ModelInfo {
                 id: "claude-opus-4-20250514".into(),
                 provider: "anthropic".into(),
                 name: "Claude Opus 4".into(),
-                capabilities: vec!["chat".into(), "vision".into(), "streaming".into(), "tools".into()],
+                capabilities: vec![
+                    "chat".into(),
+                    "vision".into(),
+                    "streaming".into(),
+                    "tools".into(),
+                ],
             },
             ModelInfo {
                 id: "claude-haiku-3-20250313".into(),
@@ -53,7 +63,12 @@ impl ModelCatalog {
                 id: "gpt-4o".into(),
                 provider: "openai".into(),
                 name: "GPT-4o".into(),
-                capabilities: vec!["chat".into(), "vision".into(), "streaming".into(), "tools".into()],
+                capabilities: vec![
+                    "chat".into(),
+                    "vision".into(),
+                    "streaming".into(),
+                    "tools".into(),
+                ],
             },
             ModelInfo {
                 id: "gpt-4o-mini".into(),
@@ -95,7 +110,9 @@ impl ModelCatalog {
             .await;
 
         let list: RemoteModelList = match response {
-            Ok(r) if r.status().is_success() => r.json().await.unwrap_or(RemoteModelList { data: vec![] }),
+            Ok(r) if r.status().is_success() => {
+                r.json().await.unwrap_or(RemoteModelList { data: vec![] })
+            }
             _ => return vec![],
         };
 

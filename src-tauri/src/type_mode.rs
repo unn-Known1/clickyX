@@ -1,7 +1,7 @@
 use enigo::{Direction, Enigo, Key, Keyboard, Settings};
+use serde::{Deserialize, Serialize};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Mutex;
-use serde::{Deserialize, Serialize};
 
 use crate::config::TypeModeConfig;
 #[cfg(target_os = "windows")]
@@ -12,17 +12,12 @@ fn is_wayland() -> bool {
     crate::platform::display_server() == "wayland"
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Default, Serialize, Deserialize)]
 pub enum TypeModeState {
+    #[default]
     Idle,
     CtrlTapped,
     Active,
-}
-
-impl Default for TypeModeState {
-    fn default() -> Self {
-        Self::Idle
-    }
 }
 
 pub struct TypeModeEngine {
@@ -182,12 +177,15 @@ impl TypeModeEngine {
         ensure_com();
         #[cfg(target_os = "linux")]
         if is_wayland() {
-            return Err(format!(
+            return Err(
                 "key_press not supported on Wayland. Install wtype and use type_text instead."
-            ));
+                    .to_string(),
+            );
         }
         let mut enigo = Enigo::new(&Settings::default()).map_err(|e| format!("enigo: {e}"))?;
-        enigo.key(key, Direction::Click).map_err(|e| format!("key_press: {e}"))
+        enigo
+            .key(key, Direction::Click)
+            .map_err(|e| format!("key_press: {e}"))
     }
 
     fn reset_timeout_if_idle(&self) {

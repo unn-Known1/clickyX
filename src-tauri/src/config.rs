@@ -104,6 +104,10 @@ pub struct ApiKey {
     pub key: String,
 }
 
+fn default_true() -> bool {
+    true
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
 pub struct WindowPrefs {
@@ -253,6 +257,12 @@ pub struct AppConfig {
     pub computer_use: ComputerUseConfig,
     pub type_mode: TypeModeConfig,
     pub bridge_token: Option<String>,
+    /// Explicit opt-out of bridge token auth. `false` (default) = token required.
+    /// Set `true` only deliberately — the UI must show a warning when it is set.
+    pub bridge_auth_disabled: bool,
+    /// Phone the update server once per launch (version check only). P0-T3.
+    #[serde(default = "default_true")]
+    pub check_updates_on_startup: bool,
     pub onboarding_completed: bool,
 }
 
@@ -278,15 +288,15 @@ impl Default for AppConfig {
             computer_use: ComputerUseConfig::default(),
             type_mode: TypeModeConfig::default(),
             bridge_token: None,
+            bridge_auth_disabled: false,
+            check_updates_on_startup: true,
             onboarding_completed: false,
         }
     }
 }
 
 fn config_dir() -> PathBuf {
-    let base = dirs::config_dir().unwrap_or_else(|| {
-        std::path::PathBuf::from(".").join(".clickyx")
-    });
+    let base = dirs::config_dir().unwrap_or_else(|| std::path::PathBuf::from(".").join(".clickyx"));
     base.join("clickyx")
 }
 
@@ -299,26 +309,16 @@ pub fn load_config(_app: &AppHandle) -> Result<AppConfig, String> {
     if !path.exists() {
         log::info!("No config file found at {:?}, creating defaults", path);
         let mut config = AppConfig::default();
-        // Generate a stable encryption key on first run
-        {
-            use rand::RngCore;
-            let mut key = [0u8; 32];
-            rand::thread_rng().fill_bytes(&mut key);
-            config.agent.encryption_key = hex::encode(key);
-        }
+        // Generate stable secrets on first run (encryption key + bridge token).
+        ensure_auth_secrets(&mut config);
         save_config_inner(&config)?;
         return Ok(config);
     }
     let content = fs::read_to_string(&path).map_err(|e| format!("failed to read config: {e}"))?;
     match serde_json::from_str::<AppConfig>(&content) {
         Ok(mut config) => {
-            // Ensure encryption key is generated and persisted if missing
-            if config.agent.encryption_key.is_empty() {
-                use rand::RngCore;
-                let mut key = [0u8; 32];
-                rand::thread_rng().fill_bytes(&mut key);
-                config.agent.encryption_key = hex::encode(key);
-                log::info!("Generated new encryption key for agent store");
+            // Ensure auth secrets exist (covers legacy configs predating them).
+            if ensure_auth_secrets(&mut config) {
                 let _ = save_config_inner(&config);
             }
             log::info!("Config loaded successfully from {:?}", path);
@@ -326,31 +326,72 @@ pub fn load_config(_app: &AppHandle) -> Result<AppConfig, String> {
         }
         Err(e) => {
             log::warn!("Invalid config file at {:?}, using defaults: {e}", path);
-            let config = AppConfig::default();
-            // Generate and persist a stable encryption key
-            let mut config = config;
-            if config.agent.encryption_key.is_empty() {
-                use rand::RngCore;
-                let mut key = [0u8; 32];
-                rand::thread_rng().fill_bytes(&mut key);
-                config.agent.encryption_key = hex::encode(key);
-            }
+            let mut config = AppConfig::default();
+            // Generate and persist stable secrets.
+            ensure_auth_secrets(&mut config);
             let _ = save_config_inner(&config);
             Ok(config)
         }
     }
 }
 
+/// Generate a high-entropy hex secret (32 random bytes → 64 hex chars).
+pub fn generate_secret_token() -> String {
+    use rand::RngCore;
+    let mut bytes = [0u8; 32];
+    rand::thread_rng().fill_bytes(&mut bytes);
+    hex::encode(bytes)
+}
+
+/// Ensure auth-critical secrets exist: the agent-store encryption key always,
+/// and the bridge token unless bridge auth was explicitly disabled.
+///
+/// A missing bridge token means "never configured" (fresh install) or
+/// "legacy config from before tokens existed" — both get a generated token.
+/// `bridge_auth_disabled = true` is the only explicit opt-out and is respected.
+///
+/// Returns true when the config was mutated (caller should persist).
+fn ensure_auth_secrets(config: &mut AppConfig) -> bool {
+    let mut changed = false;
+    if config.agent.encryption_key.is_empty() {
+        config.agent.encryption_key = generate_secret_token();
+        log::info!("Generated new encryption key for agent store");
+        changed = true;
+    }
+    // P0-T1: bridge auth is ON by default.
+    let token_missing = config
+        .bridge_token
+        .as_ref()
+        .map(|t| t.is_empty())
+        .unwrap_or(true);
+    if !config.bridge_auth_disabled && token_missing {
+        config.bridge_token = Some(generate_secret_token());
+        log::info!(
+            "Generated bridge token (bridge auth is on by default; \
+             disable explicitly via bridge_auth_disabled)"
+        );
+        changed = true;
+    }
+    changed
+}
+
 fn save_config_inner(config: &AppConfig) -> Result<(), String> {
     let dir = config_dir();
     fs::create_dir_all(&dir).map_err(|e| format!("failed to create config dir: {e}"))?;
-    let content =
-        serde_json::to_string_pretty(config).map_err(|e| format!("failed to serialize config: {e}"))?;
+    let content = serde_json::to_string_pretty(config)
+        .map_err(|e| format!("failed to serialize config: {e}"))?;
     let path = config_path();
     let tmp_path = path.with_extension("json.tmp");
     // Write to temp file first, then atomically rename
     fs::write(&tmp_path, &content).map_err(|e| format!("failed to write temp config: {e}"))?;
-    fs::rename(&tmp_path, &path).map_err(|e| format!("failed to rename config: {e}"))
+    fs::rename(&tmp_path, &path).map_err(|e| format!("failed to rename config: {e}"))?;
+    // P0-T2: secrets live in this file — restrict to owner-only on unix.
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let _ = fs::set_permissions(&path, fs::Permissions::from_mode(0o600));
+    }
+    Ok(())
 }
 
 pub fn validate_hotkeys(hotkeys: &[HotkeyBinding]) -> Result<(), String> {
@@ -523,8 +564,16 @@ mod tests {
     #[test]
     fn test_validate_hotkeys_disabled_can_duplicate() {
         let hotkeys = vec![
-            HotkeyBinding { key: "Ctrl+A".into(), enabled: false, action: "action_a".into() },
-            HotkeyBinding { key: "Ctrl+A".into(), enabled: false, action: "action_b".into() },
+            HotkeyBinding {
+                key: "Ctrl+A".into(),
+                enabled: false,
+                action: "action_a".into(),
+            },
+            HotkeyBinding {
+                key: "Ctrl+A".into(),
+                enabled: false,
+                action: "action_b".into(),
+            },
         ];
         // Disabled bindings should not trigger duplicate check
         assert!(validate_hotkeys(&hotkeys).is_ok());
@@ -532,7 +581,10 @@ mod tests {
 
     #[test]
     fn test_api_key_serialization() {
-        let key = ApiKey { provider: "openai".into(), key: "sk-test-123".into() };
+        let key = ApiKey {
+            provider: "openai".into(),
+            key: "sk-test-123".into(),
+        };
         let json = serde_json::to_string(&key).expect("serialization failed");
         let parsed: ApiKey = serde_json::from_str(&json).expect("deserialization failed");
         assert_eq!(key.provider, parsed.provider);
@@ -583,5 +635,57 @@ mod tests {
         // The real load_config would return AppConfig::default() here
         let fallback = AppConfig::default();
         assert_eq!(fallback.theme, "system");
+    }
+
+    // ── P0-T1: bridge auth on by default ─────────────────────────────────────
+
+    #[test]
+    fn test_bridge_auth_defaults_secure() {
+        let cfg = AppConfig::default();
+        assert!(!cfg.bridge_auth_disabled);
+        assert!(cfg.check_updates_on_startup);
+    }
+
+    #[test]
+    fn test_ensure_auth_secrets_generates_token() {
+        let mut cfg = AppConfig::default();
+        assert!(cfg.bridge_token.is_none());
+        assert!(ensure_auth_secrets(&mut cfg));
+        let token = cfg.bridge_token.clone().expect("token generated");
+        assert_eq!(token.len(), 64); // 32 bytes hex
+        assert!(!cfg.agent.encryption_key.is_empty());
+        // Second call is a no-op (stable, no rotation on load).
+        assert!(!ensure_auth_secrets(&mut cfg));
+        assert_eq!(cfg.bridge_token.as_deref(), Some(token.as_str()));
+    }
+
+    #[test]
+    fn test_ensure_auth_secrets_respects_explicit_opt_out() {
+        let mut cfg = AppConfig {
+            bridge_auth_disabled: true,
+            ..AppConfig::default()
+        };
+        ensure_auth_secrets(&mut cfg);
+        assert!(cfg.bridge_token.is_none());
+        // Encryption key is still generated — only bridge auth is opted out.
+        assert!(!cfg.agent.encryption_key.is_empty());
+    }
+
+    #[test]
+    fn test_legacy_config_without_new_fields_parses_secure() {
+        // Legacy configs predate bridge_auth_disabled/check_updates_on_startup.
+        // Missing fields must deserialize to the SECURE defaults (false/true).
+        let json = r#"{"theme":"dark"}"#;
+        let cfg: AppConfig = serde_json::from_str(json).expect("parse");
+        assert!(!cfg.bridge_auth_disabled);
+        assert!(cfg.check_updates_on_startup);
+    }
+
+    #[test]
+    fn test_generate_secret_token_uniqueness() {
+        let a = generate_secret_token();
+        let b = generate_secret_token();
+        assert_eq!(a.len(), 64);
+        assert_ne!(a, b);
     }
 }

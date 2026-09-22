@@ -204,7 +204,10 @@ mod tests {
     #[test]
     fn test_scan_dir_skips_missing_dir() {
         let mut skills = vec![];
-        scan_dir(&PathBuf::from("/nonexistent/definitely/missing"), &mut skills);
+        scan_dir(
+            &PathBuf::from("/nonexistent/definitely/missing"),
+            &mut skills,
+        );
         assert!(skills.is_empty());
     }
 }

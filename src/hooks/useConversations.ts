@@ -14,6 +14,33 @@ function generateId(): string {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
+function isChatMessage(m: unknown): m is ChatMessage {
+  return typeof m === "object" && m !== null
+    && typeof (m as { role?: unknown }).role === "string"
+    && typeof (m as { content?: unknown }).content === "string";
+}
+
+/// Runtime shape guard for conversation history loaded from disk (H-10: a
+/// corrupt conversations.json must not crash the chat UI on find/map).
+function sanitizeConversations(loaded: unknown): Conversation[] {
+  if (!Array.isArray(loaded)) return [];
+  const out: Conversation[] = [];
+  for (const c of loaded) {
+    if (typeof c !== "object" || c === null) continue;
+    const o = c as Record<string, unknown>;
+    if (typeof o.id !== "string" || typeof o.title !== "string") continue;
+    const messages = Array.isArray(o.messages) ? o.messages.filter(isChatMessage) : [];
+    out.push({
+      id: o.id,
+      title: o.title,
+      createdAt: typeof o.createdAt === "number" ? o.createdAt : Date.now(),
+      updatedAt: typeof o.updatedAt === "number" ? o.updatedAt : Date.now(),
+      messages,
+    });
+  }
+  return out;
+}
+
 function deriveTitle(messages: ChatMessage[]): string {
   const first = messages.find(m => m.role === "user");
   if (!first) return "New conversation";
@@ -35,7 +62,7 @@ export function useConversations() {
 
   useEffect(() => {
     commands.loadConversations().then((loaded) => {
-      const convos = (loaded || []) as Conversation[];
+      const convos = sanitizeConversations(loaded);
       setConversations(convos);
       if (convos.length > 0) {
         setActiveId(convos[convos.length - 1].id);

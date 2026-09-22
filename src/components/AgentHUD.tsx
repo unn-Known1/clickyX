@@ -39,7 +39,7 @@ function Timeline({ items }: { items: TimelineItem[] }) {
 // ── Main HUD component ────────────────────────────────────────────────────────
 export default function AgentHUD() {
   // Read slug from global var set by Tauri initialization script
-  const slug = (window as any).__AGENT_SLUG || new URLSearchParams(window.location.search).get("agent") || "";
+  const slug = window.__AGENT_SLUG || new URLSearchParams(window.location.search).get("agent") || "";
   const [activeSection, setActiveSection] = useState<"transcript" | "diff" | "timeline">("transcript");
   const [minimized, setMinimized] = useState(false);
   const transcriptEndRef = useRef<HTMLDivElement>(null);

@@ -158,16 +158,26 @@ async fn speak_edge(text: &str, config: &TtsConfig) -> Result<Vec<u8>, String> {
     // Microsoft Edge TTS uses a public WebSocket endpoint (no API key required).
     // The edge-tts Python package is commonly used; here we call it as a subprocess.
     // Falls back to generating silence if edge-tts is unavailable.
+    // P0: platform temp dir, not hardcoded /tmp (wrong on Windows, symlink-risk on shared /tmp).
+    let wav_path = std::env::temp_dir().join("clickyx_edge_tts.wav");
+    let wav_str = wav_path.to_string_lossy().to_string();
     let output = std::process::Command::new("edge-tts")
-        .args(["--voice", &config.voice_id, "--text", text, "--write-media", "/tmp/clickyx_edge_tts.wav"])
+        .args([
+            "--voice",
+            &config.voice_id,
+            "--text",
+            text,
+            "--write-media",
+            &wav_str,
+        ])
         .output();
     match output {
-        Ok(out) if out.status.success() => {
-            match std::fs::read("/tmp/clickyx_edge_tts.wav") {
-                Ok(bytes) => Ok(bytes),
-                Err(e) => Err(format!("edge-tts produced output but could not read wav: {e}")),
-            }
-        }
+        Ok(out) if out.status.success() => match std::fs::read(&wav_path) {
+            Ok(bytes) => Ok(bytes),
+            Err(e) => Err(format!(
+                "edge-tts produced output but could not read wav: {e}"
+            )),
+        },
         _ => {
             log::warn!("edge-tts not available (pip install edge-tts); falling back to system TTS");
             // Fall through to system TTS path
@@ -227,12 +237,12 @@ async fn speak_system(text: &str) -> Result<Vec<u8>, String> {
     // The Tauri command path works correctly since audio plays locally.
     let text = text.to_string();
     tokio::task::spawn_blocking(move || {
-        let mut tts = tts::Tts::default()
-            .map_err(|e| format!("Failed to initialize System TTS: {e}"))?;
-        
+        let mut tts =
+            tts::Tts::default().map_err(|e| format!("Failed to initialize System TTS: {e}"))?;
+
         tts.speak(&text, true)
             .map_err(|e| format!("System TTS speech error: {e}"))?;
-            
+
         while tts.is_speaking().unwrap_or(false) {
             std::thread::sleep(std::time::Duration::from_millis(50));
         }

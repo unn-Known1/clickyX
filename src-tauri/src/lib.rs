@@ -1,22 +1,22 @@
 #![allow(dead_code)]
+mod accessibility;
 mod agent;
+mod ai;
 mod audio;
-mod config;
-mod tray;
+mod automation;
 mod bridge;
 mod bridge_auth;
-mod overlay;
 mod commands;
-mod ai;
-mod screen;
-mod automation;
-mod gen3d;
-mod updater;
-mod permissions;
+mod config;
 mod cua;
-mod accessibility;
-mod type_mode;
+mod gen3d;
+mod overlay;
+mod permissions;
 pub mod platform;
+mod screen;
+mod tray;
+mod type_mode;
+mod updater;
 
 use std::path::PathBuf;
 use std::sync::Mutex;
@@ -31,6 +31,40 @@ pub fn get_log_dir() -> Result<PathBuf, String> {
     let dir = base.join("clickyx").join("logs");
     std::fs::create_dir_all(&dir).map_err(|e| format!("failed to create log dir: {e}"))?;
     Ok(dir)
+}
+
+/// Validate an incoming deep-link URL (P1/H-26). Only `openclicky://<tab>`
+/// and `openclicky://<tab>/<section>` links for known tabs are accepted.
+/// Returns the validated `tab[/section]` path, or None to drop the link.
+fn validate_deep_link(url: &str) -> Option<String> {
+    let rest = url.strip_prefix("openclicky://")?;
+    // Reject anything that isn't a plain path (no query tricks, no traversal).
+    if rest.contains(['?', '#', '\\', '@']) || rest.contains("..") {
+        return None;
+    }
+    let mut parts = rest.split('/').filter(|p| !p.is_empty());
+    let tab = parts.next()?;
+    if !matches!(tab, "home" | "agents" | "connections" | "settings") {
+        return None;
+    }
+    let mut path = tab.to_string();
+    if let Some(section) = parts.next() {
+        // Section slugs are short alphanumerics (+/_/-); nothing else.
+        if section.len() > 64
+            || !section
+                .chars()
+                .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
+        {
+            return None;
+        }
+        path.push('/');
+        path.push_str(section);
+    }
+    // No deeper paths accepted.
+    if parts.next().is_some() {
+        return None;
+    }
+    Some(path)
 }
 
 fn init_logging() {
@@ -83,10 +117,7 @@ fn init_logging() {
 }
 
 pub(crate) fn register_hotkeys(app: &AppHandle) -> Result<(), String> {
-    if let Err(e) = app
-        .global_shortcut()
-        .unregister_all()
-    {
+    if let Err(e) = app.global_shortcut().unregister_all() {
         log::warn!("failed to unregister shortcuts: {e}");
     }
 
@@ -96,43 +127,41 @@ pub(crate) fn register_hotkeys(app: &AppHandle) -> Result<(), String> {
     let ptt_hotkey = hotkey_config.audio.ptt_hotkey.clone();
     if !ptt_hotkey.trim().is_empty() {
         let key = ptt_hotkey.trim().to_string();
-        if let Err(e) = app
-            .global_shortcut()
-            .on_shortcut(key.as_str(), move |handler_app, _shortcut, event| {
-                if event.state != ShortcutState::Pressed {
-                    return;
-                }
-                if let Some(pipeline) =
-                    handler_app.try_state::<Mutex<audio::VoicePipeline>>()
-                {
-                    if let Ok(pipe) = pipeline.lock() {
-                        let is_listening = matches!(
-                            pipe.get_state().ok(),
-                            Some(audio::PipelineState::Listening)
-                        );
-                        if is_listening {
-                            let _ = pipe.stop_ptt_and_transcribe();
-                            if let Some(state) =
-                                handler_app.try_state::<Mutex<commands::AppState>>()
-                            {
-                                if let Ok(mut s) = state.lock() {
-                                    s.app_mode = "idle".into();
-                                }
-                            }
-                        } else {
-                            if pipe.start_ptt().is_ok() {
+        if let Err(e) =
+            app.global_shortcut()
+                .on_shortcut(key.as_str(), move |handler_app, _shortcut, event| {
+                    if event.state != ShortcutState::Pressed {
+                        return;
+                    }
+                    if let Some(pipeline) = handler_app.try_state::<Mutex<audio::VoicePipeline>>() {
+                        if let Ok(pipe) = pipeline.lock() {
+                            let is_listening = matches!(
+                                pipe.get_state().ok(),
+                                Some(audio::PipelineState::Listening)
+                            );
+                            if is_listening {
+                                let _ = pipe.stop_ptt_and_transcribe();
                                 if let Some(state) =
                                     handler_app.try_state::<Mutex<commands::AppState>>()
                                 {
                                     if let Ok(mut s) = state.lock() {
-                                        s.app_mode = "listening".into();
+                                        s.app_mode = "idle".into();
+                                    }
+                                }
+                            } else {
+                                if pipe.start_ptt().is_ok() {
+                                    if let Some(state) =
+                                        handler_app.try_state::<Mutex<commands::AppState>>()
+                                    {
+                                        if let Ok(mut s) = state.lock() {
+                                            s.app_mode = "listening".into();
+                                        }
                                     }
                                 }
                             }
                         }
                     }
-                }
-            })
+                })
         {
             log::warn!("failed to register PTT hotkey {}: {e}", key);
         } else {
@@ -144,15 +173,20 @@ pub(crate) fn register_hotkeys(app: &AppHandle) -> Result<(), String> {
         if binding.enabled {
             let key = binding.key.clone();
             let action = binding.action.clone();
+            // P1 (H-19): "Option" is only a registrable modifier on macOS.
+            // The old code skipped Option-bindings on ALL platforms, so the
+            // default Ctrl+Option panel toggle never registered anywhere.
             if key
                 .split('+')
                 .any(|part| part.trim().eq_ignore_ascii_case("option"))
+                && !cfg!(target_os = "macos")
             {
                 log::warn!("skipping unsupported shortcut on this platform: {}", key);
                 continue;
             }
-            if let Err(e) = app.global_shortcut()
-                .on_shortcut(key.as_str(), move |handler_app, _shortcut, event| {
+            if let Err(e) = app.global_shortcut().on_shortcut(
+                key.as_str(),
+                move |handler_app, _shortcut, event| {
                     if event.state != ShortcutState::Pressed {
                         return;
                     }
@@ -192,15 +226,16 @@ pub(crate) fn register_hotkeys(app: &AppHandle) -> Result<(), String> {
                                         log::info!("Type mode activated via hotkey");
                                         let _ = handler_app.emit("type-mode-changed", "active");
                                     } else {
-                                        let _ = handler_app.emit("type-mode-changed", format!("{:?}", result));
+                                        let _ = handler_app
+                                            .emit("type-mode-changed", format!("{:?}", result));
                                     }
                                 }
                             }
                         }
                         _ => {}
                     }
-                })
-            {
+                },
+            ) {
                 log::warn!("failed to register shortcut {}: {e}", binding.key);
             }
         }
@@ -326,19 +361,31 @@ pub fn run() {
                                     triggered = eng.tick();
                                 }
                                 Err(e) => {
-                                    log::warn!("Automation tick: could not acquire lock (skipping): {e}");
+                                    log::warn!(
+                                        "Automation tick: could not acquire lock (skipping): {e}"
+                                    );
                                 }
                             }
                         }
                         for auto in triggered {
                             if let Some(slug) = &auto.agent_slug {
-                                let prompt = format!("[Automation Trigger: {}]\n{}", auto.name, auto.prompt);
-                                log::info!("Triggering agent: {} for automation: {}", slug, auto.name);
+                                let prompt =
+                                    format!("[Automation Trigger: {}]\n{}", auto.name, auto.prompt);
+                                log::info!(
+                                    "Triggering agent: {} for automation: {}",
+                                    slug,
+                                    auto.name
+                                );
                                 // #15: actually execute the agent (mark Running,
                                 // persist, emit, and spawn the provider call).
                                 let automation_id = auto.id.clone();
                                 let run_id = uuid::Uuid::new_v4().to_string();
-                                commands::spawn_agent_run(handle.clone(), slug.clone(), prompt.clone(), Some(run_id.clone()));
+                                commands::spawn_agent_run(
+                                    handle.clone(),
+                                    slug.clone(),
+                                    prompt.clone(),
+                                    Some(run_id.clone()),
+                                );
                                 // Record a run-history entry for the Connections UI.
                                 commands::record_automation_run(commands::AutomationRunEntry {
                                     id: run_id.clone(),
@@ -350,7 +397,10 @@ pub fn run() {
                                     error: None,
                                 });
                             } else {
-                                log::warn!("Automation {} has no agent_slug; nothing to run", auto.name);
+                                log::warn!(
+                                    "Automation {} has no agent_slug; nothing to run",
+                                    auto.name
+                                );
                             }
                         }
                     }
@@ -408,12 +458,18 @@ pub fn run() {
             }
             overlay::start_hotplug_poll(handle.clone(), "src/overlay/index.html");
 
-            // Start bridge server on separate thread
-            let bridge_token = config.bridge_token.clone();
-            bridge::start_bridge(handle.clone(), bridge_token);
+            // Start bridge server on separate thread (P0-T1: shared,
+            // hot-reloadable auth settings — token rotation applies immediately).
+            let bridge_auth = crate::bridge_auth::SharedAuthSettings::new(
+                config.bridge_token.clone(),
+                config.bridge_auth_disabled,
+            );
+            handle.manage(bridge_auth.clone());
+            bridge::start_bridge(handle.clone(), bridge_auth);
 
-            // Check for updates on startup (non-blocking)
-            {
+            // Check for updates on startup (non-blocking).
+            // P0-T3: version-check traffic only; user-opt-out via config.
+            if config.check_updates_on_startup {
                 let handle = app.handle().clone();
                 let version = config.version.clone();
                 tauri::async_runtime::spawn(async move {
@@ -427,25 +483,32 @@ pub fn run() {
                         Err(e) => log::warn!("Update check failed: {e}"),
                     }
                 });
+            } else {
+                log::info!("Startup update check disabled by config");
             }
 
-            // Register deep-link handler for openclicky:// URLs (B-016)
+            // Register deep-link handler for openclicky:// URLs (B-016, P1/H-26).
             // tauri-plugin-deep-link emits "deep-link://new-url" with a JSON array payload.
+            // Only openclicky://<tab>[/<section>] links are accepted; anything
+            // else is dropped. Full URLs are NOT logged (they may carry slugs).
             {
                 let deep_link_handle = app.handle().clone();
                 app.listen("deep-link://new-url", move |event| {
                     let payload = event.payload();
-                    log::info!("Deep link received: {}", payload);
-                    // Payload is a JSON array of URL strings: ["openclicky://..."]
-                    if let Ok(urls) = serde_json::from_str::<Vec<String>>(payload) {
-                        for url in urls {
-                            log::info!("Deep link URL: {}", url);
-                            let _ = deep_link_handle.emit("deep-link-opened", &url);
+                    let urls: Vec<String> = match serde_json::from_str(payload) {
+                        Ok(urls) => urls,
+                        Err(_) => vec![payload.trim_matches('"').to_string()],
+                    };
+                    for url in urls {
+                        match validate_deep_link(&url) {
+                            Some(path) => {
+                                log::info!("Deep link accepted: openclicky://{path}");
+                                let _ = deep_link_handle.emit("deep-link-opened", &url);
+                            }
+                            None => {
+                                log::warn!("Deep link rejected (not an openclicky:// app link)");
+                            }
                         }
-                    } else {
-                        // Fallback: emit raw payload
-                        let url = payload.trim_matches('"').to_string();
-                        let _ = deep_link_handle.emit("deep-link-opened", &url);
                     }
                 });
             }
@@ -502,11 +565,6 @@ pub fn run() {
             commands::start_wake_word_detection,
             commands::stop_wake_word_detection,
             commands::check_wake_word_detected,
-            commands::check_google_workspace,
-            commands::google_workspace_auth_start,
-            commands::google_workspace_auth_revoke,
-            commands::list_emails,
-            commands::list_calendar_events,
             commands::list_automations,
             commands::create_automation,
             commands::update_automation,
@@ -527,6 +585,8 @@ pub fn run() {
             commands::clear_app_usage_log,
             commands::get_automation_runs,
             commands::set_bridge_token,
+            commands::rotate_bridge_token,
+            commands::get_bridge_status,
             commands::export_config,
             commands::import_config,
             commands::reset_config,
@@ -615,8 +675,7 @@ mod tests {
         let rotated = dir.path().join("clickyx.old.log");
 
         // A file just under the threshold must NOT be rotated.
-        std::fs::write(&log_file, vec![b'a'; 5 * 1024 * 1024 - 1])
-            .expect("write log file");
+        std::fs::write(&log_file, vec![b'a'; 5 * 1024 * 1024 - 1]).expect("write log file");
         let meta = std::fs::metadata(&log_file).unwrap();
         assert!(meta.len() < 5 * 1024 * 1024);
         assert!(!rotated.exists()); // rotation should not have happened
@@ -642,5 +701,35 @@ mod tests {
         let dir = get_log_dir().expect("get_log_dir failed");
         assert!(dir.is_absolute());
         assert!(dir.to_string_lossy().contains("clickyx"));
+    }
+
+    // P1/H-26: deep-link allow-list.
+    #[test]
+    fn test_validate_deep_link_accepts_known_tabs() {
+        assert_eq!(validate_deep_link("openclicky://home"), Some("home".into()));
+        assert_eq!(
+            validate_deep_link("openclicky://agents"),
+            Some("agents".into())
+        );
+        assert_eq!(
+            validate_deep_link("openclicky://settings/voice"),
+            Some("settings/voice".into())
+        );
+        assert_eq!(
+            validate_deep_link("openclicky://connections"),
+            Some("connections".into())
+        );
+    }
+
+    #[test]
+    fn test_validate_deep_link_rejects_non_app_links() {
+        assert_eq!(validate_deep_link("https://evil.example/agents"), None);
+        assert_eq!(validate_deep_link("openclicky://exec"), None);
+        assert_eq!(validate_deep_link("openclicky://agents/x/y"), None);
+        assert_eq!(validate_deep_link("openclicky://settings/../agents"), None);
+        assert_eq!(validate_deep_link("openclicky://settings/voice?x=1"), None);
+        assert_eq!(validate_deep_link("openclicky://settings/vo ice"), None);
+        assert_eq!(validate_deep_link("openclicky://"), None);
+        assert_eq!(validate_deep_link(""), None);
     }
 }

@@ -146,7 +146,9 @@ The app creates a default config on first run; unrecognized keys are silently ig
 |-------|------|---------|-------------|
 | `version` | string | `"1.0"` | Config schema version. Do not edit manually. |
 | `theme` | string | `"system"` | UI theme. One of: `"system"`, `"light"`, `"dark"`. |
-| `bridge_token` | string \| null | `null` | Optional authentication token for the `localhost:32123` HTTP bridge. When set, all bridge requests must include the header `X-Bridge-Token: <token>`. Set to `null` to disable auth. |
+| `bridge_token` | string \| null | auto-generated | Authentication token for the `localhost:32123` HTTP bridge. **Generated automatically on first run — auth is on by default.** All bridge requests must include `Authorization: Bearer <token>`, `x-openclicky-token: <token>`, or `X-Bridge-Token: <token>`. Rotate from Settings → System → Local HTTP Bridge (applies immediately, no restart). |
+| `bridge_auth_disabled` | boolean | `false` | **Explicit opt-out.** When `true`, read-only endpoints are open to any local process (the UI warns). The dangerous tier (input, screenshots, AI spend, MCP/agent execution) stays token-gated regardless. |
+| `check_updates_on_startup` | boolean | `true` | When `true`, the app phones the update server once per launch (version check only, no identifiers). Set `false` to disable. |
 | `onboarding_completed` | boolean | `false` | Set to `true` after the onboarding wizard is completed. The wizard displays on launch when this is `false`. |
 | `automations_file` | string | `"automations.json"` | Filename (relative to config dir) where automations are stored. |
 

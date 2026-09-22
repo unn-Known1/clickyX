@@ -2,6 +2,36 @@
 
 All notable changes to ClickyX are documented here.
 
+## [Unreleased]
+
+### Security (P0 — trust surface rebuilt)
+- **Bridge auth on by default**: high-entropy token generated on first run (and migrated for legacy configs); explicit opt-out only via `bridge_auth_disabled` with UI warning
+- **Dangerous tier always gated**: `/click`, `/scroll`, `/screenshot`, `/v1/*`, `/mcp/call`, `/agent/*`, `/transcribe`, `/speak` require a token even when auth is disabled for read-only routes
+- **DNS-rebinding defense**: `Host` header allow-list (`127.0.0.1`/`localhost`); non-matching hosts get `403`
+- **Rate limiting**: 600 req / 60 s per IP (`429` on excess); bridge workers raised 1 → 2
+- **CORS/Auth order fixed**: preflight no longer 401s when a token is set; `GET /health` exempt from auth; `Authorization: Bearer`, `x-openclicky-token`, and `X-Bridge-Token` all accepted
+- **Token rotation applies immediately** (hot-reload shared state); new `get_bridge_status` / `rotate_bridge_token` commands + Settings UI
+- **Secrets**: `config.json` written owner-only (`0600` on unix); exports redact secrets by default (opt-in to include); redacted exports refused on import; raw API keys removed from react-query cache keys; unified `ai_config` query key
+- **`openai_base_url` validated** to explicit `http(s)` on save/import
+- **Updater**: semver-aware (downgrades never offered); single path (hosted → GitHub fallback with fixed asset-name matching); minisign signature verification, fail-closed — unsigned artifacts refused; dead delta path deleted; release workflow signs artifacts (`.sig`) and publishes (no longer draft)
+- **Permissions**: macOS TCC scoped to our bundle ID (dropped any-app/COUNT fallbacks), Windows probe fails closed, bogus notification TCC query replaced with honest copy
+
+### Fixed (P1 — core correctness)
+- **Coordinates**: `screen/coordinate.rs` wired into the module tree; guidance tags execute through Y-flip + HiDPI-scale + offset normalization (was raw)
+- **Wayland**: fixed malformed single-invocation `ydotool` click (split `mousemove` + `click`); shared helper with stderr diagnostics
+- **macOS**: AI app-context shortcuts use Cmd; `Ctrl+Option` hotkeys register on macOS (Option-skip scoped to other platforms)
+- **Chat**: cold-start hydration (active conversation body loads); vision cancel/mount guards; unmount-safe stream listener
+- **Settings**: single config-write path (was double); `CaptureSettings`/`VoiceDiscovery`/`PermissionsSettings` moved to react-query; dead Zustand agent state deleted (selectors adopted)
+- **UX**: visible hold-to-talk mic button in the status bar; tray Settings navigates via real event (was undefined `window.__` eval); `TodayStatsWidget` shows real backend stats; update banner driven by backend updater (was dead plugin call); camera onboarding step removed; Google Workspace stub removed (backend + UI)
+- **Robustness**: auto-capture locks poison-tolerant + `VecDeque` cache; MCP/Codex child-process I/O deadline-bounded (30 s / 60 s) with kill-on-timeout; `agent_attach_files` bounded (20 files, per-file + total caps, files only); `codex_path` must be a file; TOML-escape in generated config; deep-links scheme/host validated, payloads no longer logged raw
+
+### Engineering (P2 — truthful system)
+- **CI**: clippy gate fixed (`working-directory`, `-D warnings`, plus `cargo fmt --check`); Playwright E2E job (app/chat/settings); `cargo test` on all three OS legs; npm/cargo audit steps; Cargo cache keyed on `Cargo.lock`
+- **Tests**: bridge auth matrix (13 service tests + 6 unit), config auth tests, updater semver/verify/asset tests, deep-link tests, `useTauriEvent` tests (incl. unmount-race regression); e2e selectors fixed, vacuous assertions removed
+- **Lint**: ESLint 10 flat config (`npm run lint`) with react-hooks + no-raw-invoke rules; `no-explicit-any` as warn-ratchet
+- **Rust gates green**: `cargo clippy --all-features --tests -- -D warnings` clean (31 lints fixed, incl. a real `Path::join("/Applications")` bug that discarded the home dir); `cargo fmt --check` clean (whole tree normalized — was never fmt-clean); 4 documented `#[allow]`s for stable Tauri/overlay arities deferred to P3
+- **Docs**: SECURITY/BRIDGE_API/CONFIGURATION/AGENTS corrected to code (auth model, headers, CORS, updater, skills 64, 7 settings sections, 12 test files); `dependabot.yml` added; `.gitignore` covers test outputs; macOS signing fails hard; Windows `signtool` discovery
+
 ## [0.2.0] - 2026-07-31
 
 ### Fixed — Critical Stability & Security

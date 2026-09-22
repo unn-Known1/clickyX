@@ -2,7 +2,7 @@
 // they form the complete osascript-based API surface for future use.
 #![allow(dead_code)]
 
-use super::{AccessibilityElement, AccessibilityTree, AccessibilityApi};
+use super::{AccessibilityApi, AccessibilityElement, AccessibilityTree};
 use std::process::Command;
 use std::sync::OnceLock;
 
@@ -48,7 +48,11 @@ fn osascript(script: &str) -> Option<String> {
         .ok()?;
     if out.status.success() {
         let s = String::from_utf8_lossy(&out.stdout).trim().to_string();
-        if s.is_empty() { None } else { Some(s) }
+        if s.is_empty() {
+            None
+        } else {
+            Some(s)
+        }
     } else {
         let stderr = String::from_utf8_lossy(&out.stderr);
         log::warn!("osascript failed (exit {}): {}", out.status, stderr.trim());
@@ -80,20 +84,30 @@ fn frontmost_window_bounds() -> (i32, i32, u32, u32) {
     let script =
         "tell application \"System Events\" to tell (first application process whose frontmost is true) \
          to return position of front window";
-    let pos = osascript(script)
-        .unwrap_or_else(|| "0, 0".into());
+    let pos = osascript(script).unwrap_or_else(|| "0, 0".into());
 
     let script2 =
         "tell application \"System Events\" to tell (first application process whose frontmost is true) \
          to return size of front window";
-    let sz = osascript(script2)
-        .unwrap_or_else(|| "800, 600".into());
+    let sz = osascript(script2).unwrap_or_else(|| "800, 600".into());
 
     let mut coords = pos.split(',').chain(sz.split(','));
-    let x = coords.next().and_then(|s| s.trim().parse().ok()).unwrap_or(0);
-    let y = coords.next().and_then(|s| s.trim().parse().ok()).unwrap_or(0);
-    let w = coords.next().and_then(|s| s.trim().parse().ok()).unwrap_or(800u32);
-    let h = coords.next().and_then(|s| s.trim().parse().ok()).unwrap_or(600u32);
+    let x = coords
+        .next()
+        .and_then(|s| s.trim().parse().ok())
+        .unwrap_or(0);
+    let y = coords
+        .next()
+        .and_then(|s| s.trim().parse().ok())
+        .unwrap_or(0);
+    let w = coords
+        .next()
+        .and_then(|s| s.trim().parse().ok())
+        .unwrap_or(800u32);
+    let h = coords
+        .next()
+        .and_then(|s| s.trim().parse().ok())
+        .unwrap_or(600u32);
     (x, y, w, h)
 }
 
@@ -273,7 +287,10 @@ impl AccessibilityApi for MacAccessibility {
         })
     }
 
-    fn get_children(&self, element: &AccessibilityElement) -> Result<Vec<AccessibilityElement>, String> {
+    fn get_children(
+        &self,
+        element: &AccessibilityElement,
+    ) -> Result<Vec<AccessibilityElement>, String> {
         if !element.children.is_empty() {
             return Ok(element.children.clone());
         }
@@ -323,7 +340,10 @@ impl AccessibilityApi for MacAccessibility {
         Ok(Vec::new())
     }
 
-    fn get_ancestors(&self, element: &AccessibilityElement) -> Result<Vec<AccessibilityElement>, String> {
+    fn get_ancestors(
+        &self,
+        element: &AccessibilityElement,
+    ) -> Result<Vec<AccessibilityElement>, String> {
         let app_name = element
             .description
             .as_deref()
@@ -331,27 +351,29 @@ impl AccessibilityApi for MacAccessibility {
             .or(element.description.as_deref())
             .unwrap_or(&element.name);
 
-        Ok(vec![
-            AccessibilityElement {
-                role: "AXApplication".into(),
-                name: app_name.to_string(),
-                x: 0,
-                y: 0,
-                width: 0,
-                height: 0,
-                enabled: true,
-                focused: false,
-                visible: true,
-                children: Vec::new(),
-                pid: element.pid,
-                description: None,
-                value: None,
-                help_text: None,
-            },
-        ])
+        Ok(vec![AccessibilityElement {
+            role: "AXApplication".into(),
+            name: app_name.to_string(),
+            x: 0,
+            y: 0,
+            width: 0,
+            height: 0,
+            enabled: true,
+            focused: false,
+            visible: true,
+            children: Vec::new(),
+            pid: element.pid,
+            description: None,
+            value: None,
+            help_text: None,
+        }])
     }
 
-    fn get_all_elements_matching(&self, role: &str, name: &str) -> Result<Vec<AccessibilityElement>, String> {
+    fn get_all_elements_matching(
+        &self,
+        role: &str,
+        name: &str,
+    ) -> Result<Vec<AccessibilityElement>, String> {
         let apps = list_visible_apps();
         let focused_app = frontmost_app_name().unwrap_or_default();
         let elements: Vec<AccessibilityElement> = apps
@@ -359,8 +381,7 @@ impl AccessibilityApi for MacAccessibility {
             .map(|a| build_element_for_app(a, a == &focused_app))
             .filter(|elem| {
                 (role.is_empty() || elem.role.to_lowercase().contains(&role.to_lowercase()))
-                    && (name.is_empty()
-                        || elem.name.to_lowercase().contains(&name.to_lowercase()))
+                    && (name.is_empty() || elem.name.to_lowercase().contains(&name.to_lowercase()))
             })
             .collect();
         Ok(elements)
@@ -424,7 +445,10 @@ impl AccessibilityApi for MacAccessibility {
                 Ok(())
             }
             _ => {
-                log::warn!("MacAccessibility::perform_action: unsupported action '{}'", action);
+                log::warn!(
+                    "MacAccessibility::perform_action: unsupported action '{}'",
+                    action
+                );
                 Ok(())
             }
         }

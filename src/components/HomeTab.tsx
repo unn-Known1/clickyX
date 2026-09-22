@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import ChatTab from "./ChatTab";
 import { Icon } from "./Icon";
@@ -6,7 +6,7 @@ import type { IconName } from "./Icon";
 import { useAgents } from "../hooks/useAgents";
 import { agentStatusColor, agentStatusLabel } from "../utils/agentStatus";
 import { useAppContext } from "../context/AppContext";
-import { listen } from "../bindings";
+import { useTauriEvent } from "../hooks/useTauriEvent";
 
 function timeGreeting(): string {
   const h = new Date().getHours();
@@ -112,13 +112,10 @@ function HomeTab() {
 
   // F-003: invalidate today-stats cache when any agent completes/errors so the
   // home card reflects real-time results without waiting for the 30s poll.
-  useEffect(() => {
-    let unlisten: (() => void) | null = null;
-    listen("agent-state-changed", () => {
-      void queryClient.invalidateQueries({ queryKey: ["today-stats"] });
-    }).then((fn) => { unlisten = fn; });
-    return () => { if (unlisten) unlisten(); };
-  }, [queryClient]);
+  // P1 (H-4): shared listener helper — no unmount race.
+  useTauriEvent("agent-state-changed", () => {
+    void queryClient.invalidateQueries({ queryKey: ["today-stats"] });
+  });
 
   // F-026: Dynamic suggestions from recent prompts
   const { data: suggestions = DEFAULT_SUGGESTIONS } = useQuery({

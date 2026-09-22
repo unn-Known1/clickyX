@@ -337,23 +337,28 @@ fn edge_voices() -> Vec<VoiceInfo> {
 }
 
 fn system_voices() -> Vec<VoiceInfo> {
-    vec![
-        VoiceInfo {
-            id: "system_default".into(),
-            provider: "system".into(),
-            name: "System Voice".into(),
-            description: "Built-in operating system voice".into(),
-            accent_color: "#66bb6a".into(),
-            gender: "neutral".into(),
-            style: "default".into(),
-            language: "en-US".into(),
-            tier: "free".into(),
-        }
-    ]
+    vec![VoiceInfo {
+        id: "system_default".into(),
+        provider: "system".into(),
+        name: "System Voice".into(),
+        description: "Built-in operating system voice".into(),
+        accent_color: "#66bb6a".into(),
+        gender: "neutral".into(),
+        style: "default".into(),
+        language: "en-US".into(),
+        tier: "free".into(),
+    }]
 }
 
 pub fn get_voice_by_id(voice_id: &str) -> Option<VoiceInfo> {
-    for provider in &["elevenlabs", "cartesia", "aura", "openai_realtime", "edge", "system"] {
+    for provider in &[
+        "elevenlabs",
+        "cartesia",
+        "aura",
+        "openai_realtime",
+        "edge",
+        "system",
+    ] {
         for voice in get_voices_for_provider(provider) {
             if voice.id == voice_id {
                 return Some(voice);
@@ -395,7 +400,14 @@ mod tests {
 
     #[test]
     fn test_voice_info_has_accent_color() {
-        for provider in &["elevenlabs", "cartesia", "aura", "openai_realtime", "edge", "system"] {
+        for provider in &[
+            "elevenlabs",
+            "cartesia",
+            "aura",
+            "openai_realtime",
+            "edge",
+            "system",
+        ] {
             for v in get_voices_for_provider(provider) {
                 assert!(v.accent_color.starts_with("#"));
             }

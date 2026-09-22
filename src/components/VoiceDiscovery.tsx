@@ -1,24 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { commands } from "../bindings";
-
-interface VoiceInfo {
-  id: string;
-  provider: string;
-  name: string;
-  description: string;
-  accent_color: string;
-  gender: string;
-  style: string;
-  language: string;
-  tier: string;
-}
-
-interface VoiceProvider {
-  id: string;
-  name: string;
-  tier: string;
-  requires_key: boolean;
-}
+import type { VoiceInfo, VoiceProvider } from "../bindings";
 
 interface AudioConfig {
   tts_provider: string;
@@ -87,13 +70,25 @@ function VoiceOrbitNode({
 }
 
 export default function VoiceDiscovery({ audioConfig, onSelected }: VoiceDiscoveryProps) {
-  const [providers, setProviders] = useState<VoiceProvider[]>([]);
-  const [voices, setVoices] = useState<VoiceInfo[]>([]);
   const [selectedProvider, setSelectedProvider] = useState<string>(audioConfig.tts_provider);
   const [hovered, setHovered] = useState<VoiceInfo | null>(null);
   const [selected, setSelected] = useState<string>(audioConfig.selected_voice_id);
   const [dragging, setDragging] = useState(false);
   const [orbitRotation, setOrbitRotation] = useState(0);
+
+  // P1 (H-7): server data via react-query (shared cache entries), not raw
+  // useState+useEffect fetches. Voices are keyed per provider.
+  const { data: providers = [] } = useQuery<VoiceProvider[]>({
+    queryKey: ["voice-providers"],
+    queryFn: () => commands.getVoiceProviders(),
+    staleTime: 300_000,
+  });
+  const { data: voices = [] } = useQuery<VoiceInfo[]>({
+    queryKey: ["voices", selectedProvider],
+    queryFn: () => commands.getVoices(selectedProvider),
+    staleTime: 300_000,
+    enabled: !!selectedProvider,
+  });
 
   // Use refs so drag callbacks always see the latest values without re-creating
   const voicesRef = useRef<VoiceInfo[]>([]);
@@ -106,23 +101,12 @@ export default function VoiceDiscovery({ audioConfig, onSelected }: VoiceDiscove
   useEffect(() => { orbitRotRef.current = orbitRotation; }, [orbitRotation]);
   useEffect(() => { selectedRef.current = selected; }, [selected]);
 
+  // Default to the first provider when the configured one is unknown.
   useEffect(() => {
-    commands.getVoiceProviders()
-      .then((p) => {
-        setProviders(p);
-        if (p.length > 0 && !p.some((x) => x.id === selectedProvider)) {
-          setSelectedProvider(p[0].id);
-        }
-      })
-      .catch((e) => console.error("Failed to load providers:", e));
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
-  useEffect(() => {
-    if (!selectedProvider) return;
-    commands.getVoices(selectedProvider)
-      .then(setVoices)
-      .catch((e) => console.error("Failed to load voices:", e));
-  }, [selectedProvider]);
+    if (providers.length > 0 && !providers.some((x) => x.id === selectedProvider)) {
+      setSelectedProvider(providers[0].id);
+    }
+  }, [providers, selectedProvider]);
 
   const onSelect = useCallback(async (v: VoiceInfo) => {
     setSelected(v.id);

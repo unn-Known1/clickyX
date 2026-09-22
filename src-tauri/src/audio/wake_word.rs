@@ -36,8 +36,7 @@ impl WakeWordDetector {
             return false;
         }
 
-        let energy: f32 =
-            audio_chunk.iter().map(|s| s * s).sum::<f32>() / audio_chunk.len() as f32;
+        let energy: f32 = audio_chunk.iter().map(|s| s * s).sum::<f32>() / audio_chunk.len() as f32;
         let threshold = 0.01 + (self.config.sensitivity * 0.19);
         let detected = energy > threshold;
 

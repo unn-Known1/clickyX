@@ -100,7 +100,10 @@ impl AiProvider for AnthropicProvider {
             .map_err(|e| AiError::Decode(e.to_string()))?;
 
         if !status.is_success() {
-            return Err(AiError::Api(format!("Anthropic API error ({}): {}", status, text)));
+            return Err(AiError::Api(format!(
+                "Anthropic API error ({}): {}",
+                status, text
+            )));
         }
 
         let json: serde_json::Value =
@@ -173,7 +176,10 @@ impl AiProvider for AnthropicProvider {
             .map_err(|e| AiError::Decode(e.to_string()))?;
 
         if !status.is_success() {
-            return Err(AiError::Api(format!("Anthropic API error ({}): {}", status, text)));
+            return Err(AiError::Api(format!(
+                "Anthropic API error ({}): {}",
+                status, text
+            )));
         }
 
         let json: serde_json::Value =
@@ -222,12 +228,12 @@ impl AnthropicProvider {
 
         let status = response.status();
         if !status.is_success() {
-            let text = response
-                .text()
-                .await
-                .unwrap_or_default();
+            let text = response.text().await.unwrap_or_default();
             let _ = sender
-                .send(StreamEvent::Error { message: format!("API error ({}): {}", status, text), session_id: None })
+                .send(StreamEvent::Error {
+                    message: format!("API error ({}): {}", status, text),
+                    session_id: None,
+                })
                 .await;
             return Ok(());
         }
@@ -242,7 +248,12 @@ impl AnthropicProvider {
             let chunk = match chunk {
                 Ok(c) => c,
                 Err(e) => {
-                    let _ = sender.send(StreamEvent::Error { message: e.to_string(), session_id: None }).await;
+                    let _ = sender
+                        .send(StreamEvent::Error {
+                            message: e.to_string(),
+                            session_id: None,
+                        })
+                        .await;
                     return Ok(());
                 }
             };
@@ -260,14 +271,16 @@ impl AnthropicProvider {
                     current_event.clear();
                 } else if let Some(data) = line.strip_prefix("data: ") {
                     if let Ok(json) = serde_json::from_str::<serde_json::Value>(data) {
-                        if json.get("type").and_then(|t| t.as_str()) == Some("content_block_delta") {
-                            if let Some(text) = json
-                                .pointer("/delta/text")
-                                .and_then(|t| t.as_str())
+                        if json.get("type").and_then(|t| t.as_str()) == Some("content_block_delta")
+                        {
+                            if let Some(text) = json.pointer("/delta/text").and_then(|t| t.as_str())
                             {
                                 full_text.push_str(text);
                                 let _ = sender
-                                    .send(StreamEvent::TextDelta { text: text.to_string(), session_id: None })
+                                    .send(StreamEvent::TextDelta {
+                                        text: text.to_string(),
+                                        session_id: None,
+                                    })
                                     .await;
                             }
                         }
@@ -287,7 +300,10 @@ impl AnthropicProvider {
                         if let Some(text) = json.pointer("/delta/text").and_then(|t| t.as_str()) {
                             full_text.push_str(text);
                             let _ = sender
-                                .send(StreamEvent::TextDelta { text: text.to_string(), session_id: None })
+                                .send(StreamEvent::TextDelta {
+                                    text: text.to_string(),
+                                    session_id: None,
+                                })
                                 .await;
                         }
                     }
@@ -295,7 +311,12 @@ impl AnthropicProvider {
             }
         }
 
-        let _ = sender.send(StreamEvent::TextDone { text: full_text, session_id: None }).await;
+        let _ = sender
+            .send(StreamEvent::TextDone {
+                text: full_text,
+                session_id: None,
+            })
+            .await;
         let _ = sender.send(StreamEvent::Done { session_id: None }).await;
 
         Ok(())

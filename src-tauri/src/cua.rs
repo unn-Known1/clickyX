@@ -1,6 +1,4 @@
-use enigo::{
-    Coordinate, Direction, Enigo, Key, Keyboard, Mouse, Settings,
-};
+use enigo::{Coordinate, Direction, Enigo, Key, Keyboard, Mouse, Settings};
 use serde::{Deserialize, Serialize};
 
 #[cfg(target_os = "linux")]
@@ -18,10 +16,8 @@ pub fn ensure_com() {
         fn CoInitializeEx(pvReserved: *const std::ffi::c_void, dwCoInit: u32) -> i32;
     }
     const COINIT_MULTITHREADED: u32 = 0x0;
-    COM_INIT.call_once(|| {
-        unsafe {
-            CoInitializeEx(std::ptr::null(), COINIT_MULTITHREADED);
-        }
+    COM_INIT.call_once(|| unsafe {
+        CoInitializeEx(std::ptr::null(), COINIT_MULTITHREADED);
     });
 }
 
@@ -153,28 +149,28 @@ impl InputSimulator {
     }
 
     fn click_via_ydotool(&self, x: f64, y: f64) -> ClickResult {
-        let cx = x as i64;
-        let cy = y as i64;
-        match std::process::Command::new("ydotool")
-            .args(["mousemove", "--", &cx.to_string(), &cy.to_string(), "click", "0xC0"])
-            .output()
-        {
-            Ok(out) if out.status.success() => ClickResult {
-                x, y, success: true, backend: "ydotool".into(),
-            },
-            Ok(out) => ClickResult {
-                x, y, success: false,
-                backend: format!("ydotool_exit_{}", out.status),
+        match ydotool_click(x, y) {
+            Ok(()) => ClickResult {
+                x,
+                y,
+                success: true,
+                backend: "ydotool".into(),
             },
             Err(e) => ClickResult {
-                x, y, success: false,
-                backend: format!("ydotool_error_{}", e),
+                x,
+                y,
+                success: false,
+                backend: format!("ydotool_error_{e}"),
             },
         }
     }
 
     fn click_background(&mut self, x: f64, y: f64) -> ClickResult {
-        log::info!("Background click at ({}, {}) — attempting platform-specific no-cursor-warp", x, y);
+        log::info!(
+            "Background click at ({}, {}) — attempting platform-specific no-cursor-warp",
+            x,
+            y
+        );
 
         // Try platform-specific background click first; fall back to enigo if it fails.
         match self.click_background_platform(x, y) {
@@ -187,7 +183,10 @@ impl InputSimulator {
                 };
             }
             Err(e) => {
-                log::warn!("Platform background click failed ({}), falling back to enigo", e);
+                log::warn!(
+                    "Platform background click failed ({}), falling back to enigo",
+                    e
+                );
             }
         }
 
@@ -266,10 +265,7 @@ public class Input {{
             if output.status.success() {
                 return Ok(());
             }
-            return Err(format!(
-                "powershell exited with {}",
-                output.status
-            ));
+            return Err(format!("powershell exited with {}", output.status));
         }
 
         #[cfg(target_os = "macos")]
@@ -285,7 +281,10 @@ public class Input {{
             match probe {
                 Ok(p) if !p.status.success() => {
                     let stderr = String::from_utf8_lossy(&p.stderr);
-                    log::warn!("Accessibility permission not granted for osascript: {}", stderr.trim());
+                    log::warn!(
+                        "Accessibility permission not granted for osascript: {}",
+                        stderr.trim()
+                    );
                     return Err("osascript click failed: Accessibility permission not granted. Enable in System Settings > Privacy & Security > Accessibility.".into());
                 }
                 Err(e) => {
@@ -315,13 +314,7 @@ public class Input {{
         #[cfg(target_os = "linux")]
         {
             if display_server() == "wayland" {
-                let cx = x as i64;
-                let cy = y as i64;
-                return std::process::Command::new("ydotool")
-                    .args(["mousemove", "--", &cx.to_string(), &cy.to_string(), "click", "0xC0"])
-                    .output()
-                    .map(|_| ())
-                    .map_err(|e| format!("ydotool click failed: {e}"));
+                return ydotool_click(x, y).map_err(|e| format!("ydotool click failed: {e}"));
             }
 
             // Linux: use xdotool to click the window at the given screen coords
@@ -330,10 +323,7 @@ public class Input {{
             let cy = y as i64;
             // 1. Find the window ID at the given point.
             let search_output = std::process::Command::new("xdotool")
-                .args([
-                    "search",
-                    "--onlyvisible",
-                ])
+                .args(["search", "--onlyvisible"])
                 .output()
                 .map_err(|e| format!("xdotool search failed: {e}"))?;
             let win_ids: Vec<&str> = std::str::from_utf8(&search_output.stdout)
@@ -355,10 +345,18 @@ public class Input {{
                     let s = String::from_utf8_lossy(&go.stdout);
                     let (mut wx, mut wy, mut ww, mut wh) = (0i64, 0i64, 0i64, 0i64);
                     for line in s.lines() {
-                        if let Some(v) = line.strip_prefix("X=") { wx = v.trim().parse().unwrap_or(0); }
-                        if let Some(v) = line.strip_prefix("Y=") { wy = v.trim().parse().unwrap_or(0); }
-                        if let Some(v) = line.strip_prefix("WIDTH=") { ww = v.trim().parse().unwrap_or(0); }
-                        if let Some(v) = line.strip_prefix("HEIGHT=") { wh = v.trim().parse().unwrap_or(0); }
+                        if let Some(v) = line.strip_prefix("X=") {
+                            wx = v.trim().parse().unwrap_or(0);
+                        }
+                        if let Some(v) = line.strip_prefix("Y=") {
+                            wy = v.trim().parse().unwrap_or(0);
+                        }
+                        if let Some(v) = line.strip_prefix("WIDTH=") {
+                            ww = v.trim().parse().unwrap_or(0);
+                        }
+                        if let Some(v) = line.strip_prefix("HEIGHT=") {
+                            wh = v.trim().parse().unwrap_or(0);
+                        }
                     }
                     if cx >= wx && cx < wx + ww && cy >= wy && cy < wy + wh {
                         target_win = Some(win_id.to_string());
@@ -382,13 +380,7 @@ public class Input {{
 
             // Click at window-relative coordinates
             let output = std::process::Command::new("xdotool")
-                .args([
-                    "click",
-                    "--window",
-                    &win_arg,
-                    "--clearmodifiers",
-                    "1",
-                ])
+                .args(["click", "--window", &win_arg, "--clearmodifiers", "1"])
                 .output()
                 .map_err(|e| format!("xdotool click failed: {e}"))?;
 
@@ -428,47 +420,52 @@ public class Input {{
     pub fn key_press(&mut self, key: Key) -> Result<(), String> {
         #[cfg(target_os = "linux")]
         if display_server() == "wayland" {
-            return Err(format!(
+            return Err(
                 "key_press via enigo not supported on Wayland. Install ydotool and use type_text instead."
-            ));
+                    .to_string(),
+            );
         }
         let mut enigo = Enigo::new(&Settings::default()).map_err(|e| format!("enigo: {e}"))?;
-        enigo.key(key, Direction::Click).map_err(|e| format!("key_press: {e}"))
+        enigo
+            .key(key, Direction::Click)
+            .map_err(|e| format!("key_press: {e}"))
     }
 
     pub fn move_cursor(&mut self, x: f64, y: f64) -> Result<(), String> {
         #[cfg(target_os = "linux")]
         if display_server() == "wayland" {
-            return Err(format!(
-                "move_cursor via enigo not supported on Wayland. Install ydotool."
-            ));
+            return Err(
+                "move_cursor via enigo not supported on Wayland. Install ydotool.".to_string(),
+            );
         }
         let mut enigo = Enigo::new(&Settings::default()).map_err(|e| format!("enigo: {e}"))?;
-        enigo.move_mouse(x as i32, y as i32, Coordinate::Abs)
+        enigo
+            .move_mouse(x as i32, y as i32, Coordinate::Abs)
             .map_err(|e| format!("move_cursor: {e}"))
     }
 
     pub fn scroll(&mut self, x: f64, y: f64, delta_x: f64, delta_y: f64) -> Result<(), String> {
         #[cfg(target_os = "linux")]
         if display_server() == "wayland" {
-            return Err(format!(
-                "scroll via enigo not supported on Wayland. Install ydotool."
-            ));
+            return Err("scroll via enigo not supported on Wayland. Install ydotool.".to_string());
         }
         let mut enigo = Enigo::new(&Settings::default()).map_err(|e| format!("enigo: {e}"))?;
-        enigo.move_mouse(x as i32, y as i32, Coordinate::Abs)
+        enigo
+            .move_mouse(x as i32, y as i32, Coordinate::Abs)
             .map_err(|e| format!("scroll move: {e}"))?;
         std::thread::sleep(std::time::Duration::from_millis(30));
         if delta_y.abs() > 0.1 {
             let steps = ((delta_y.abs() / 120.0).max(1.0) as i32)
                 .saturating_mul(if delta_y > 0.0 { 1 } else { -1 });
-            enigo.scroll(steps, enigo::Axis::Vertical)
+            enigo
+                .scroll(steps, enigo::Axis::Vertical)
                 .map_err(|e| format!("scroll vertical: {e}"))?;
         }
         if delta_x.abs() > 0.1 {
             let steps = ((delta_x.abs() / 120.0).max(1.0) as i32)
                 .saturating_mul(if delta_x > 0.0 { 1 } else { -1 });
-            enigo.scroll(steps, enigo::Axis::Horizontal)
+            enigo
+                .scroll(steps, enigo::Axis::Horizontal)
                 .map_err(|e| format!("scroll horizontal: {e}"))?;
         }
         log::info!("Scroll at ({}, {}) delta=({}, {})", x, y, delta_x, delta_y);
@@ -485,6 +482,38 @@ fn wtype_text(text: &str) -> Result<(), String> {
         .output()
         .map(|_| ())
         .map_err(|e| format!("wtype failed: {e}"))
+}
+
+/// Wayland click via ydotool (P1/CR-5 fix).
+///
+/// ydotool has SEPARATE `mousemove` and `click` subcommands — the old code
+/// mashed both into one invocation (`mousemove -- X Y click 0xC0`), which
+/// ydotool's flag parser rejects, so Wayland clicks never landed.
+/// Two invocations: move, then left-click (0xC0).
+#[cfg(target_os = "linux")]
+fn ydotool_click(x: f64, y: f64) -> Result<(), String> {
+    let cx = (x as i64).to_string();
+    let cy = (y as i64).to_string();
+    let run = |args: &[&str]| -> Result<(), String> {
+        let out = std::process::Command::new("ydotool")
+            .args(args)
+            .output()
+            .map_err(|e| format!("ydotool spawn failed (is ydotoold running?): {e}"))?;
+        if out.status.success() {
+            Ok(())
+        } else {
+            Err(format!(
+                "ydotool {} exited with {}: {}",
+                args.join(" "),
+                out.status,
+                String::from_utf8_lossy(&out.stderr).trim()
+            ))
+        }
+    };
+    run(&["mousemove", "--", &cx, &cy])?;
+    run(&["click", "0xC0"])?;
+    log::info!("Wayland click at ({cx}, {cy}) via ydotool");
+    Ok(())
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -546,7 +575,12 @@ mod tests {
 
     #[test]
     fn test_click_result_structure() {
-        let r = ClickResult { x: 10.0, y: 20.0, success: true, backend: "test".into() };
+        let r = ClickResult {
+            x: 10.0,
+            y: 20.0,
+            success: true,
+            backend: "test".into(),
+        };
         assert_eq!(r.x, 10.0);
         assert_eq!(r.y, 20.0);
         assert!(r.success);
@@ -556,7 +590,7 @@ mod tests {
     fn test_input_simulator_default() {
         let sim = InputSimulator::default();
         assert_eq!(sim.min_interval_ms, 100);
-        assert!(sim.last_click_ms > 0 || sim.last_click_ms == 0);
+        assert_eq!(sim.last_click_ms, 0);
     }
 
     #[test]

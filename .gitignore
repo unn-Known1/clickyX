@@ -23,5 +23,10 @@ target/
 # Tauri
 Thumbs.db
 *.tmp
+# Playwright / test outputs (P2)
+playwright-report/
+test-results/
+coverage/
+*.tsbuildinfo
 # Universal
 .vscode/

@@ -61,21 +61,21 @@ test.describe("Visual regression", () => {
 
   test("command palette matches snapshot", async ({ page }) => {
     await page.keyboard.press("Control+k");
-    await page.waitForSelector(".command-palette", { timeout: 3_000 });
-    await expect(page.locator(".command-palette")).toHaveScreenshot("command-palette.png", {
+    await page.waitForSelector(".palette-box", { timeout: 3_000 });
+    await expect(page.locator(".palette-box")).toHaveScreenshot("command-palette.png", {
       maxDiffPixelRatio: THRESHOLD,
       animations: "disabled",
     });
   });
 
   test("status bar matches snapshot", async ({ page }) => {
-    const statusBar = page.locator(".status-bar, [class*='status-bar']").first();
-    if (await statusBar.isVisible()) {
-      await expect(statusBar).toHaveScreenshot("status-bar.png", {
-        maxDiffPixelRatio: THRESHOLD,
-        animations: "disabled",
-      });
-    }
+    // The status bar is always rendered — assert, don't vacuous-pass.
+    const statusBar = page.locator(".status-bar");
+    await expect(statusBar).toBeVisible();
+    await expect(statusBar).toHaveScreenshot("status-bar.png", {
+      maxDiffPixelRatio: THRESHOLD,
+      animations: "disabled",
+    });
   });
 
   test("tab bar matches snapshot", async ({ page }) => {

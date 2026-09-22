@@ -1,19 +1,6 @@
 import { useState, useCallback } from "react";
-import { invoke } from "../../bindings";
-
-interface OverlayPrefs {
-  cursor_accent: string;
-  cursor_size: number;
-  show_cursor: boolean;
-  tutor_mode: boolean;
-  agent_dock_position: string;
-  accent_presets: string[];
-}
-
-interface AppConfig {
-  theme: string;
-  overlay: OverlayPrefs;
-}
+import { commands } from "../../bindings";
+import type { AppConfig } from "../../bindings";
 
 const THEME_VARIANTS = [
   { value: "", label: "Default" },
@@ -27,6 +14,8 @@ const THEME_VARIANTS = [
 
 interface Props {
   config: AppConfig;
+  // Cache sync ONLY — the caller never re-invokes. Each handler below
+  // performs exactly one backend write (P1/H-3 single-write path).
   onConfigUpdate: (updated: AppConfig) => void;
 }
 
@@ -36,7 +25,7 @@ export function AppearanceSettings({ config, onConfigUpdate }: Props) {
 
   const updateTheme = useCallback(async (theme: string) => {
     try {
-      const updated = await invoke<AppConfig>("update_config", { partial: { theme } });
+      const updated = await commands.updateConfig({ theme });
       onConfigUpdate(updated);
       // Apply base theme only when no color variant is active
       if (!themeVariant) {
@@ -52,7 +41,9 @@ export function AppearanceSettings({ config, onConfigUpdate }: Props) {
 
   const setAccent = useCallback(async (color: string) => {
     try {
-      await invoke<string>("set_accent_preset", { color });
+      // set_accent_preset persists server-side and emits accent-changed —
+      // sync the cache locally, do NOT call update_config again (P1/H-3).
+      await commands.setAccentPreset(color);
       onConfigUpdate({ ...config, overlay: { ...config.overlay, cursor_accent: color } });
     } catch (e) {
       console.error("Failed to set accent:", e);

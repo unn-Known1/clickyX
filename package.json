@@ -10,6 +10,7 @@
     "tauri": "tauri",
     "test": "vitest run",
     "test:watch": "vitest",
+    "lint": "eslint .",
     "test:e2e": "playwright test",
     "test:visual": "playwright test e2e/visual.spec.ts",
     "test:visual:update": "playwright test e2e/visual.spec.ts --update-snapshots"
@@ -35,6 +36,7 @@
     "zustand": "^5"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "@playwright/test": "^1",
     "@tauri-apps/cli": "^2",
     "@testing-library/jest-dom": "^6",
@@ -44,9 +46,12 @@
     "@types/react-dom": "^19",
     "@types/three": "^0.170",
     "@vitejs/plugin-react": "^4",
+    "eslint": "^10.11.0",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "globals": "^17.12.0",
     "jsdom": "^27",
-    "msw": "^2",
     "typescript": "^5",
+    "typescript-eslint": "^8.70.1",
     "vite": "^6",
     "vitest": "^4"
   },

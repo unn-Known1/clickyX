@@ -1,8 +1,11 @@
 import { useState, useEffect, useCallback } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { commands } from "../../bindings";
+import type { BridgeStatus } from "../../bindings";
 import { useAppContext } from "../../context/AppContext";
-import { useTranslation } from "react-i18next";
-import { SUPPORTED_LOCALES } from "../../i18n/index";
+// NOTE (P0-T2/CR-7): the language switcher is hidden until UI strings are
+// actually wired to i18n (U6). Shipping a picker that changes nothing is
+// worse than shipping English-only.
 
 interface LogEntry {
   timestamp: string;
@@ -17,12 +20,54 @@ interface Props {
 
 function SystemSettings({ onOpenAbout }: Props) {
   const { showToast } = useAppContext();
-  const { i18n } = useTranslation();
+  const queryClient = useQueryClient();
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [loading, setLoading] = useState(false);
   const [appVersion, setAppVersion] = useState("");
   const [logFilter, setLogFilter] = useState<string>("all");
   const [logSearch, setLogSearch] = useState("");
+  const [includeSecrets, setIncludeSecrets] = useState(false);
+  const [rotatedToken, setRotatedToken] = useState<string | null>(null);
+
+  // P0-T1: bridge auth status — read-only flags, the token itself is never exposed.
+  const { data: bridgeStatus } = useQuery<BridgeStatus>({
+    queryKey: ["bridge_status"],
+    queryFn: () => commands.getBridgeStatus(),
+    staleTime: 10_000,
+  });
+
+  const refreshBridgeStatus = useCallback(() => {
+    queryClient.invalidateQueries({ queryKey: ["bridge_status"] });
+  }, [queryClient]);
+
+  const rotateToken = useCallback(async () => {
+    if (!confirm("Generate a new bridge token? The old token stops working immediately.")) return;
+    try {
+      // Returned ONCE — the backend never reveals it again. Copy it now.
+      const token = await commands.rotateBridgeToken();
+      setRotatedToken(token);
+      refreshBridgeStatus();
+      showToast("Bridge token rotated — copy it now", "success");
+    } catch (e) {
+      console.error("Failed to rotate bridge token:", e);
+      showToast("Token rotation failed", "error");
+    }
+  }, [showToast, refreshBridgeStatus]);
+
+  const toggleBridgeAuth = useCallback(async () => {
+    const disabling = !bridgeStatus?.auth_disabled;
+    if (disabling && !confirm(
+      "Disable bridge authentication for read-only endpoints? Any local process will be able to read screenshots-state, models and overlay endpoints. Computer-use, AI spend and process-spawn endpoints STAY token-gated."
+    )) return;
+    try {
+      await commands.updateConfig({ bridge_auth_disabled: disabling });
+      refreshBridgeStatus();
+      showToast(disabling ? "Bridge auth disabled (dangerous tier still gated)" : "Bridge auth enabled", disabling ? "error" : "success");
+    } catch (e) {
+      console.error("Failed to toggle bridge auth:", e);
+      showToast("Failed to update bridge auth", "error");
+    }
+  }, [bridgeStatus, showToast, refreshBridgeStatus]);
 
   useEffect(() => {
     commands.getAppVersion().then(setAppVersion).catch(console.error);
@@ -58,20 +103,21 @@ function SystemSettings({ onOpenAbout }: Props) {
 
   const exportConfig = useCallback(async () => {
     try {
-      const json = await commands.exportConfig();
+      // P0-T2: exports are redacted by default; secrets only with explicit opt-in.
+      const json = await commands.exportConfig(includeSecrets);
       const blob = new Blob([json], { type: "application/json" });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `clickyx-config-${new Date().toISOString().split("T")[0]}.json`;
+      a.download = `clickyx-config-${new Date().toISOString().split("T")[0]}${includeSecrets ? "-WITH-SECRETS" : ""}.json`;
       a.click();
       URL.revokeObjectURL(url);
-      showToast("Config exported", "success");
+      showToast(includeSecrets ? "Config exported WITH secrets — store it safely" : "Config exported (secrets redacted)", includeSecrets ? "error" : "success");
     } catch (e) {
       console.error("Failed to export config:", e);
       showToast("Export failed", "error");
     }
-  }, [showToast]);
+  }, [showToast, includeSecrets]);
 
   const importConfig = useCallback(async () => {
     const input = document.createElement("input");
@@ -119,22 +165,40 @@ function SystemSettings({ onOpenAbout }: Props) {
       </div>
 
       <div className="setting-row">
-        <label>Language</label>
-        <div className="lang-selector-row">
-          {SUPPORTED_LOCALES.map(({ code, label }) => (
-            <button
-              key={code}
-              className={`hotkey-preset-chip ${i18n.language === code ? "active" : ""}`}
-              onClick={() => i18n.changeLanguage(code)}
-              title={label}
-            >
-              {label}
+        <label>Local HTTP Bridge <span className="setting-value">127.0.0.1:32123</span></label>
+        <div className="bridge-status-block">
+          <span className="setting-value">
+            Auth: {bridgeStatus ? (bridgeStatus.auth_disabled ? "DISABLED (read-only open)" : bridgeStatus.token_set ? "on (token set)" : "on (no token yet)") : "loading…"}
+          </span>
+          <div className="system-actions">
+            <button className="settings-save-btn" onClick={rotateToken}>Rotate token</button>
+            <button className="settings-save-btn danger" onClick={toggleBridgeAuth}>
+              {bridgeStatus?.auth_disabled ? "Enable auth" : "Disable auth"}
             </button>
-          ))}
+          </div>
+          {bridgeStatus?.auth_disabled && (
+            <p className="settings-hint danger-text">
+              Warning: read-only bridge endpoints are open to any local process.
+              Click, screenshots, AI spend and MCP execution stay token-gated.
+            </p>
+          )}
+          {rotatedToken && (
+            <p className="settings-hint">
+              New token (shown once — copy now): <code className="setting-value">{rotatedToken}</code>
+              <button className="settings-save-btn" onClick={() => { navigator.clipboard.writeText(rotatedToken).then(() => showToast("Token copied", "success")).catch(() => {}); }}>Copy</button>
+            </p>
+          )}
+          <p className="settings-hint">
+            Clients authenticate with <code>Authorization: Bearer &lt;token&gt;</code>, <code>x-openclicky-token</code> or <code>X-Bridge-Token</code>.
+          </p>
         </div>
       </div>
 
       <div className="system-actions">
+        <label className="setting-checkbox">
+          <input type="checkbox" checked={includeSecrets} onChange={(e) => setIncludeSecrets(e.target.checked)} />
+          Include secrets in export
+        </label>
         <button className="settings-save-btn" onClick={exportConfig}>Export Config</button>
         <button className="settings-save-btn" onClick={importConfig}>Import Config</button>
         <button className="settings-save-btn danger" onClick={resetConfig}>Reset to Defaults</button>

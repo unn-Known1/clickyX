@@ -41,12 +41,29 @@ When reporting, please include:
 ClickyX is a **local-first** desktop app. The following principles apply:
 
 - **No telemetry**: ClickyX does not phone home. There is no PostHog, Sentry, Supabase, or analytics SDK embedded.
-- **Local API only**: The HTTP bridge listens on `127.0.0.1:32123` only. It is not exposed to the network.
-- **Token-authenticated bridge**: All bridge endpoints require a token via `x-openclicky-token` header or `Bearer` token. Constant-time comparison is used.
-- **CORS restricted**: The bridge CORS allow-list is opt-in via configuration; defaults deny cross-origin.
-- **User-controlled API keys**: All AI provider keys (Anthropic, OpenAI, etc.) are entered by the user, stored locally, and never transmitted anywhere except the provider's own API endpoint.
+  Launch-time **update checks** do contact the update server (`releases.clickyx.app`, falling back to the
+  `api.github.com` latest-release endpoint) once per start. This is version-check traffic only — no identifiers,
+  no usage data — and can be disabled with `check_updates_on_startup: false` in `config.json`.
+- **Local API only**: The HTTP bridge binds `127.0.0.1:32123` only **and** rejects any `Host` header outside
+  `{127.0.0.1, localhost}` (DNS-rebinding defense). It is not exposed to the network.
+- **Token-authenticated bridge**: A high-entropy token is generated on first run and auth is **on by default**.
+  `GET /health` is the only unauthenticated endpoint. The dangerous tier (mouse/scroll input, screenshots,
+  AI-key proxies, MCP execution, agent runs, STT/TTS) **always** requires a token — even when auth is
+  explicitly disabled for read-only routes via `bridge_auth_disabled: true` (the Settings UI warns when set).
+  Accepted headers: `Authorization: Bearer <t>`, `x-openclicky-token: <t>`, `X-Bridge-Token: <t>`.
+  Comparison is constant-time; per-IP rate limiting (600 req / 60 s) is enforced.
+- **CORS restricted**: hardcoded allow-list of the local dev origins (`http://localhost:1420`,
+  `http://127.0.0.1:1420`); preflight is answered before auth so token clients work from browsers.
+- **User-controlled API keys**: All AI provider keys are entered by the user and stored locally in
+  `config.json` (owner-only `0600` permissions on unix). They are never transmitted anywhere except the
+  provider's own API endpoint — or a user-configured `openai_base_url`, which must use an explicit
+  `http(s)` scheme and is validated on save. Config exports **redact secrets by default** (explicit
+  opt-in required to include them); redacted exports are refused on import so keys can't be wiped silently.
 - **CUA / input simulation**: Click execution via `enigo` is rate-limited and bounds-checked; it can be disabled in settings.
-- **Auto-updater**: Custom platform-aware updater (`updater.rs`) checks the official `unn-Known1/clickyX` GitHub releases; it verifies the release exists and is signed (where platform permits).
+- **Auto-updater**: Custom platform-aware updater (`updater.rs`). Version comparison is semver-aware
+  (downgrades are never offered). Artifacts are installed only after minisign signature verification
+  against the embedded release key — **unsigned artifacts are refused, no exceptions**. Update metadata is
+  fetched from the official update server with fallback to `unn-Known1/clickyX` GitHub releases.
 
 ## Out of Scope
 

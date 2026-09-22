@@ -42,12 +42,11 @@ dependencies = [
 
 [[package]]
 name = "actix-http"
-version = "3.12.1"
+version = "3.13.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "93acb4a42f64936f9b8cae4a433b237599dd6eb6ed06124eb67132ef8cc90662"
+checksum = "3c4f07a021937af76abef4c458a0d6b25f63f82eec5394354deeb7de0551f523"
 dependencies = [
  "actix-codec",
- "actix-rt",
  "actix-service",
  "actix-utils",
  "base64 0.22.1",
@@ -58,7 +57,7 @@ dependencies = [
  "derive_more",
  "encoding_rs",
  "flate2",
- "foldhash 0.1.5",
+ "foldhash 0.2.0",
  "futures-core",
  "h2 0.3.27",
  "http 0.2.12",
@@ -894,6 +893,7 @@ name = "clickyx"
 version = "0.2.0"
 dependencies = [
  "actix-cors",
+ "actix-http",
  "actix-rt",
  "actix-web",
  "aes-gcm",
@@ -909,9 +909,11 @@ dependencies = [
  "hound",
  "image 0.25.10",
  "log",
+ "minisign-verify",
  "rand 0.8.6",
  "regex",
  "reqwest 0.12.28",
+ "semver",
  "serde",
  "serde_json",
  "specta",
@@ -3161,6 +3163,12 @@ name = "minimal-lexical"
 version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "68354c5c6bd36d73ff3feceb05efa59b6acb7626617f4962be322a825e61f79a"
+
+[[package]]
+name = "minisign-verify"
+version = "0.2.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "22f9645cb765ea72b8111f36c522475d2daa0d22c957a9826437e97534bc4e9e"
 
 [[package]]
 name = "miniz_oxide"

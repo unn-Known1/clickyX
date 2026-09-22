@@ -76,7 +76,26 @@ export function invoke<T>(cmd: string, args?: any): Promise<T> {
         },
         type_mode: { enabled: true, double_tap_timeout_ms: 400, indicator_color: "#4fc3f7" },
         bridge_token: null,
+        bridge_auth_disabled: false,
       } as any);
+    }
+    if (cmd === "get_bridge_status") {
+      return Promise.resolve({
+        token_set: false,
+        auth_disabled: false,
+        dangerous_always_gated: true,
+      }) as any;
+    }
+    if (cmd === "check_for_updates") {
+      return Promise.resolve({
+        available: false,
+        version: null,
+        release_notes: null,
+        download_url: null,
+        signature: null,
+        delta_available: null,
+        delta_url: null,
+      }) as any;
     }
     if (cmd === "get_audio_config") {
       return Promise.resolve({
@@ -215,7 +234,7 @@ export function listen<T>(event: string, handler: (e: Event<T>) => void): Promis
 export function getCurrentWindow(): ReturnType<typeof tauriGetCurrentWindow> {
   if (!isTauri) {
     return {
-      onFocusChanged: (_handler: any) => Promise.resolve(() => {}),
+      onFocusChanged: () => Promise.resolve(() => {}),
       minimize: () => Promise.resolve(),
       close: () => Promise.resolve(),
     } as any;
@@ -245,6 +264,25 @@ export interface AppConfig {
     cua_backend: string;
     native_cua: boolean;
   };
+  bridge_token: string | null;
+  bridge_auth_disabled: boolean;
+  check_updates_on_startup: boolean;
+}
+
+export interface BridgeStatus {
+  token_set: boolean;
+  auth_disabled: boolean;
+  dangerous_always_gated: boolean;
+}
+
+export interface UpdateInfo {
+  available: boolean;
+  version: string | null;
+  release_notes: string | null;
+  download_url: string | null;
+  signature: string | null;
+  delta_available: boolean | null;
+  delta_url: string | null;
 }
 
 export interface AiConfig {
@@ -379,14 +417,6 @@ export interface PermissionStatus {
   description: string;
 }
 
-// ── Workspace ─────────────────────────────────────────────────────────────────
-export interface WorkspaceStatus {
-  available: boolean;
-  authenticated: boolean;
-  email?: string;
-  scopes?: string[];
-}
-
 // ── Log ───────────────────────────────────────────────────────────────────────
 export interface LogEntry {
   timestamp: string;
@@ -412,9 +442,14 @@ export const commands = {
   // Config
   getConfig: () => invoke<AppConfig>("get_config"),
   updateConfig: (partial: Partial<AppConfig>) => invoke<AppConfig>("update_config", { partial }),
-  exportConfig: () => invoke<string>("export_config"),
-  importConfig: (json: string) => invoke<void>("import_config", { json }),
+  exportConfig: (includeSecrets: boolean) => invoke<string>("export_config", { include_secrets: includeSecrets }),
+  importConfig: (json: string) => invoke<unknown>("import_config", { json }),
   resetConfig: () => invoke<void>("reset_config"),
+
+  // Local HTTP bridge auth (P0-T1)
+  getBridgeStatus: () => invoke<BridgeStatus>("get_bridge_status"),
+  setBridgeToken: (token: string | null) => invoke<void>("set_bridge_token", { token }),
+  rotateBridgeToken: () => invoke<string>("rotate_bridge_token"),
 
   // AI
   getAiConfig: () => invoke<AiConfig>("get_ai_config"),
@@ -426,6 +461,9 @@ export const commands = {
   updateAudioConfig: (partial: Partial<AudioConfig>) => invoke<AudioConfig>("update_audio_config", { partial }),
   getAudioStatus: () => invoke<AudioStatus>("get_audio_status"),
   getAudioLevel: () => invoke<AudioLevelResponse>("get_audio_level"),
+  // P1 (H-4): hold-to-talk — the visible mic affordance (was hotkey-only).
+  startRecording: () => invoke<void>("start_recording"),
+  stopRecording: () => invoke<string>("stop_recording"),
 
   // Agents
   listAgents: () => invoke<AgentInfo[]>("list_agents"),
@@ -485,14 +523,15 @@ export const commands = {
 
   // System
   getAppVersion: () => invoke<string>("get_app_version"),
+  // Custom backend updater (P0-T3). NOTE: the Tauri plugin-updater is disabled
+  // in tauri.conf.json — do NOT use `check()` from @tauri-apps/plugin-updater.
+  checkForUpdates: () => invoke<UpdateInfo>("check_for_updates"),
+  installUpdate: (url: string, signature?: string | null) => invoke<void>("install_update", { url, signature }),
   getLogs: (count: number) => invoke<LogEntry[]>("get_logs", { count }),
   clearLogs: () => invoke<void>("clear_logs"),
   getAppUsageLog: () => invoke<any[]>("get_app_usage_log"),
   clearAppUsageLog: () => invoke<void>("clear_app_usage_log"),
   getAutomationRuns: (automationId: string) => invoke<any[]>("get_automation_runs", { automationId }),
-  checkGoogleWorkspace: () => invoke<WorkspaceStatus>("check_google_workspace"),
-  googleWorkspaceAuthStart: () => invoke<void>("google_workspace_auth_start"),
-  googleWorkspaceAuthRevoke: () => invoke<void>("google_workspace_auth_revoke"),
 
   // Overlay
   overlayShowCursor: (x: number, y: number, label?: string) => invoke<void>("overlay_show_cursor", { x, y, label }),

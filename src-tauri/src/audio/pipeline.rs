@@ -41,19 +41,14 @@ pub fn block_on_bg<F: std::future::Future>(fut: F) -> F::Output {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Default, Serialize, Deserialize)]
 pub enum PipelineState {
+    #[default]
     Idle,
     Listening,
     WakeWordListening,
     Processing,
     Speaking,
-}
-
-impl Default for PipelineState {
-    fn default() -> Self {
-        Self::Idle
-    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -205,9 +200,8 @@ impl VoicePipeline {
 
         let sample_rate = self.sample_rate;
         self.emit_event("processing-start", serde_json::json!({}));
-        let result = block_on_bg(async {
-            stt::transcribe(&audio_data, &stt_cfg, sample_rate).await
-        });
+        let result =
+            block_on_bg(async { stt::transcribe(&audio_data, &stt_cfg, sample_rate).await });
         self.emit_event("processing-end", serde_json::json!({}));
 
         match &result {
@@ -244,7 +238,9 @@ impl VoicePipeline {
         // Ensure ducking is always deactivated, even on panic.
         // Restore the pre-speaking state instead of unconditionally resetting to
         // Idle, so TTS during always-on listening never breaks the VAD loop.
-        struct DuckingGuard<'a> { pipeline: &'a VoicePipeline }
+        struct DuckingGuard<'a> {
+            pipeline: &'a VoicePipeline,
+        }
         impl<'a> Drop for DuckingGuard<'a> {
             fn drop(&mut self) {
                 self.pipeline.set_ducking(false);
@@ -302,7 +298,10 @@ impl VoicePipeline {
     /// When `duck` is true, the VAD loop will actively suppress audio input.
     pub fn set_ducking(&self, duck: bool) {
         self.audio_ducking_active.store(duck, Ordering::SeqCst);
-        log::debug!("Audio ducking: {}", if duck { "active" } else { "inactive" });
+        log::debug!(
+            "Audio ducking: {}",
+            if duck { "active" } else { "inactive" }
+        );
         if let Some(handle_arc) = &self.app_handle {
             if let Ok(handle) = handle_arc.lock() {
                 use tauri::Emitter;
@@ -346,10 +345,7 @@ impl VoicePipeline {
             .lock()
             .map_err(|e| format!("State lock error: {e}"))?;
         if *state != PipelineState::Idle {
-            return Err(format!(
-                "Pipeline is {:?}, cannot start wake word",
-                state
-            ));
+            return Err(format!("Pipeline is {:?}, cannot start wake word", state));
         }
 
         self.capture.start_recording()?;
@@ -372,17 +368,11 @@ impl VoicePipeline {
             .lock()
             .map_err(|e| format!("State lock error: {e}"))?;
         if *state != PipelineState::WakeWordListening {
-            return Err(format!(
-                "Pipeline is {:?}, not wake word listening",
-                state
-            ));
+            return Err(format!("Pipeline is {:?}, not wake word listening", state));
         }
 
         let data = self.capture.stop_recording()?;
-        log::info!(
-            "Wake word mode stopped, {} samples discarded",
-            data.len()
-        );
+        log::info!("Wake word mode stopped, {} samples discarded", data.len());
 
         let mut detector = self
             .wake_word_detector
@@ -455,7 +445,10 @@ impl VoicePipeline {
         self.capture.start_recording()?;
         *state = PipelineState::WakeWordListening;
         self.always_on_running.store(true, Ordering::SeqCst);
-        self.emit_event("always-on-state-changed", serde_json::json!({ "active": true }));
+        self.emit_event(
+            "always-on-state-changed",
+            serde_json::json!({ "active": true }),
+        );
         log::info!("Voice pipeline: always-on listening started");
         Ok(())
     }
@@ -479,8 +472,14 @@ impl VoicePipeline {
                 Vec::new()
             }
         };
-        self.emit_event("always-on-state-changed", serde_json::json!({ "active": false }));
-        log::info!("Voice pipeline: always-on stopped, {} samples discarded", audio_data.len());
+        self.emit_event(
+            "always-on-state-changed",
+            serde_json::json!({ "active": false }),
+        );
+        log::info!(
+            "Voice pipeline: always-on stopped, {} samples discarded",
+            audio_data.len()
+        );
         Ok(())
     }
 
@@ -572,8 +571,7 @@ impl VoicePipeline {
                     let peak = samples.iter().fold(0.0f32, |m, s| m.max(s.abs()));
                     let buckets = 20usize.min(samples.len());
                     let mut bars = Vec::with_capacity(buckets);
-                    if buckets > 0 {
-                        let chunk = samples.len() / buckets;
+                    if let Some(chunk) = samples.len().checked_div(buckets.max(1)) {
                         for b in 0..buckets {
                             let start = b * chunk;
                             let end = if b == buckets - 1 { samples.len() } else { start + chunk };
@@ -626,7 +624,9 @@ impl VoicePipeline {
                                         let rt = runtime.clone();
 
                                         emit("processing-start", serde_json::json!({}));
-                                        let _ = rt.spawn(async move {
+                                        // P2 (clippy): named binding — `let _ =` on a
+                                        // future is now `let_underscore_future`.
+                                        let _transcribe_handle = rt.spawn(async move {
                                             let result = stt::transcribe(&buffer_clone, &stt_cfg_clone, sample_rate).await;
                                             // #9: hide the processing indicator when done.
                                             if let Some(handle_arc) = &app_handle_clone {
@@ -755,7 +755,11 @@ impl VoicePipeline {
         Ok(())
     }
 
-    pub fn update_config(&self, config: &crate::config::AudioConfig, api_keys: &[crate::config::ApiKey]) -> Result<(), String> {
+    pub fn update_config(
+        &self,
+        config: &crate::config::AudioConfig,
+        api_keys: &[crate::config::ApiKey],
+    ) -> Result<(), String> {
         let mut stt_cfg = self
             .stt_config
             .lock()
@@ -896,7 +900,11 @@ mod tests {
 
     #[test]
     fn test_audio_level_clone() {
-        let a = AudioLevel { rms: 0.5, peak: 0.8, clipping: false };
+        let a = AudioLevel {
+            rms: 0.5,
+            peak: 0.8,
+            clipping: false,
+        };
         let b = a.clone();
         assert_eq!(a.rms, b.rms);
     }

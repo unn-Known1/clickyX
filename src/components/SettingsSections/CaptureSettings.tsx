@@ -1,73 +1,56 @@
-import { useState, useEffect, useCallback } from "react";
-import { commands, listen } from "../../bindings";
-
-interface AutoCaptureConfig {
-  enabled: boolean;
-  interval_ms: number;
-  capture_mode: string;
-  diff_threshold: number;
-  max_cache: number;
-  auto_attach: boolean;
-}
-
-interface AutoCaptureStatus {
-  running: boolean;
-  last_capture: { timestamp: number; region: string; width: number; height: number; size: number } | null;
-  config: AutoCaptureConfig;
-}
+import { useState, useCallback } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { commands } from "../../bindings";
+import type { AutoCaptureStatus } from "../../bindings";
+import { useTauriEvent } from "../../hooks/useTauriEvent";
 
 export function CaptureSettings() {
-  const [acStatus, setAcStatus] = useState<AutoCaptureStatus | null>(null);
+  const queryClient = useQueryClient();
   const [acError, setAcError] = useState<string | null>(null);
 
-  useEffect(() => {
-    let cancelled = false;
+  // P1 (H-7): consume the SHARED ["auto-capture-status"] cache entry (same as
+  // StatusBar) instead of an independent fetch + 5s setInterval + own listener.
+  // Freshness comes from StatusBar's polling and the event below — zero extra IPC.
+  const { data: acStatus } = useQuery<AutoCaptureStatus>({
+    queryKey: ["auto-capture-status"],
+    queryFn: () => commands.getAutoCaptureStatus(),
+    staleTime: 4000,
+  });
 
-    commands.getAutoCaptureStatus()
-      .then((status) => { if (!cancelled) setAcStatus(status); })
-      .catch((e) => { if (!cancelled) setAcError(String(e)); });
+  useTauriEvent<AutoCaptureStatus>("auto-capture-status", (e) => {
+    queryClient.setQueryData(["auto-capture-status"], e.payload);
+  });
 
-    let unlisten: (() => void) | null = null;
-    listen<AutoCaptureStatus>("auto-capture-status", (e) => {
-      if (!cancelled) setAcStatus(e.payload);
-    }).then((fn) => { unlisten = fn; });
-
-    const id = setInterval(() => {
-      commands.getAutoCaptureStatus()
-        .then((status) => { if (!cancelled) setAcStatus(status); })
-        .catch(() => {});
-    }, 5000);
-
-    return () => {
-      cancelled = true;
-      if (unlisten) unlisten();
-      clearInterval(id);
-    };
-  }, []);
+  const refresh = useCallback(() => {
+    queryClient.invalidateQueries({ queryKey: ["auto-capture-status"] });
+  }, [queryClient]);
 
   const startAutoCapture = useCallback(async (mode?: string, intervalMs?: number) => {
     try {
       await commands.startAutoCapture(mode, intervalMs);
+      refresh();
     } catch (e) {
       setAcError(String(e));
     }
-  }, []);
+  }, [refresh]);
 
   const stopAutoCapture = useCallback(async () => {
     try {
       await commands.stopAutoCapture();
+      refresh();
     } catch (e) {
       setAcError(String(e));
     }
-  }, []);
+  }, [refresh]);
 
   const clearAutoCapture = useCallback(async () => {
     try {
       await commands.clearAutoCaptureCache();
+      refresh();
     } catch (e) {
       setAcError(String(e));
     }
-  }, []);
+  }, [refresh]);
 
   return (
     <section className="settings-section elevated-card">

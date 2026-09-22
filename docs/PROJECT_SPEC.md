@@ -1,6 +1,7 @@
 # ClickyX — Project Specification
 
-> **Last updated:** 2026-06-06
+> **Last updated:** 2026-09-22
+> **Review status:** full P0/P1/P2 review + implementation in `docs/REVIEW_REPORT.md` (strategic decision: keep the core, excise the bloat, rebuild UI + trust surface).
 > **Repo:** `github.com/unn-Known1/clickyX`
 > **Stack:** Tauri v2 (Rust) + React 19 + TypeScript + Vite + Zustand + react-query
 
@@ -157,11 +158,11 @@ Per-screen transparent `WebviewWindow` (always-on-top, click-through), `macOSPri
 - File drag-drop onto agent cards → `agent_attach_files` Tauri command
 - Agent slug auto-derived from name (kebab-case); `promptInput` persisted in `sessionStorage`
 
-**Skills catalog: 63/63 implemented**
+**Skills catalog: 64/64 implemented** (reconciled 2026-09-22: added `email-assistant`, `web-scraper`; removed phantom `screen-point`/`screen-caption`/`screenshot` entries that have no skill directory — that functionality lives under `screen-control/`)
 
 | Category | Skills |
 |----------|--------|
-| Screen & Control | screen-point, screen-caption, screenshot, screen-control |
+| Screen & Control | screen-control |
 | Google Workspace | gmail, google-calendar, google-drive, google-docs, google-sheets, google-slides |
 | Development | github-issues, github-pr, vercel-deploy, docker-manager, npm-helper, repo-operator, code-review, codex |
 | Productivity | notion, obsidian, linear, airtable, calendar-assistant, todo-manager |
@@ -169,8 +170,8 @@ Per-screen transparent `WebviewWindow` (always-on-top, click-through), `macOSPri
 | Creative | image-generator, audio-transcriber, video-summarizer |
 | System | system-monitor, file-finder, clipboard-manager, network-checker, process-manager, cron-helper, env-manager, git-helper, shell-executor, file-organizer |
 | AI / Agent meta | skill-creator, skill-installer, prompt-optimizer, context-summarizer, agent-builder |
-| Data / Analytics | csv-analyzer, json-formatter, sql-runner, data-visualizer, api-tester |
-| Writing / Content | blog-writer, email-drafter, document-formatter, grammar-checker, citation-finder, summarizer, translator, research-report, meeting-notes |
+| Data / Analytics | csv-analyzer, json-formatter, sql-runner, data-visualizer, api-tester, web-scraper |
+| Writing / Content | blog-writer, email-assistant, email-drafter, document-formatter, grammar-checker, citation-finder, summarizer, translator, research-report, meeting-notes |
 | Security | password-generator, secret-scanner, dependency-auditor |
 | Learning | flashcard-maker, quiz-generator, concept-explainer |
 | Web | web-scraper |
@@ -375,7 +376,7 @@ cargo test --all-features    # Rust unit tests
 | Sparkle 2 auto-update | Custom `updater.rs` |
 | Supabase / PostHog / Sentry | **Omitted** — local-first, zero telemetry |
 | Codex (Node.js sidecar) | Codex (same — already cross-platform) |
-| 28+ bundled skills | 63 bundled skills (full catalog) |
+| 28+ bundled skills | 64 bundled skills (full catalog) |
 
 ---
 

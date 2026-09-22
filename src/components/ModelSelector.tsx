@@ -11,24 +11,28 @@ interface ModelSelectorProps {
 function ModelSelector({ selectedModel, onModelChange }: ModelSelectorProps) {
   const { setActiveTab } = useAppContext();
 
-  // Load current AI config to know which providers have keys configured
-  // NOTE: keep key in sync with ChatTab's ["ai-config"] so both share one cache entry
+  // Load current AI config to know which providers have keys configured.
+  // P0-T2/M-7: raw API keys must NEVER land in react-query cache keys —
+  // use presence booleans (+ non-secret base URL) instead.
+  // NOTE: key unified with useAiConfig's ["ai_config"] (was ["ai-config"] — C3).
   const { data: aiConfig } = useQuery<AiConfig>({
-    queryKey: ["ai-config"],
+    queryKey: ["ai_config"],
     queryFn: () => commands.getAiConfig(),
     staleTime: 30_000,
   });
 
+  const hasAnthropicKey = !!aiConfig?.anthropic_api_key;
+  const hasOpenaiKey = !!aiConfig?.openai_api_key;
+  const baseUrl = aiConfig?.openai_base_url ?? "";
+
   // Load model catalog from backend
   const { data: allModels = [], isLoading, isError } = useQuery<ModelInfo[]>({
-    queryKey: ["models", aiConfig?.anthropic_api_key, aiConfig?.openai_api_key, aiConfig?.openai_base_url],
+    queryKey: ["models", hasAnthropicKey, hasOpenaiKey, baseUrl],
     queryFn: () => commands.getModels(),
     staleTime: 60_000,
     enabled: !!aiConfig,
   });
 
-  const hasAnthropicKey = !!aiConfig?.anthropic_api_key;
-  const hasOpenaiKey = !!aiConfig?.openai_api_key;
   const hasAnyProvider = hasAnthropicKey || hasOpenaiKey;
 
   // Filter models to only show those for which we have credentials

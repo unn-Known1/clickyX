@@ -47,7 +47,11 @@ impl AnnotationManager {
     /// emit lifecycle events).
     pub fn add_cursor(&mut self, id: String, data: super::CursorData) -> Vec<String> {
         let completed = self.force_complete_kind(&AnnotationKind::Cursor);
-        let timeout = if data.duration_ms > 0 { data.duration_ms } else { self.timeouts.cursor_ms };
+        let timeout = if data.duration_ms > 0 {
+            data.duration_ms
+        } else {
+            self.timeouts.cursor_ms
+        };
         let ann = Annotation::new(id.clone(), AnnotationKind::Cursor, timeout, data);
         self.cursors.insert(id.clone(), ann);
         self.kind_order.push(id);
@@ -56,7 +60,12 @@ impl AnnotationManager {
 
     pub fn add_rect(&mut self, id: String, data: super::RectPayload) -> Vec<String> {
         let completed = self.force_complete_kind(&AnnotationKind::Rect);
-        let ann = Annotation::new(id.clone(), AnnotationKind::Rect, self.timeouts.rect_ms, data);
+        let ann = Annotation::new(
+            id.clone(),
+            AnnotationKind::Rect,
+            self.timeouts.rect_ms,
+            data,
+        );
         self.rectangles.insert(id.clone(), ann);
         self.kind_order.push(id);
         completed
@@ -64,7 +73,12 @@ impl AnnotationManager {
 
     pub fn add_scribble(&mut self, id: String, data: super::ScribblePayload) -> Vec<String> {
         let completed = self.force_complete_kind(&AnnotationKind::Scribble);
-        let ann = Annotation::new(id.clone(), AnnotationKind::Scribble, self.timeouts.scribble_ms, data);
+        let ann = Annotation::new(
+            id.clone(),
+            AnnotationKind::Scribble,
+            self.timeouts.scribble_ms,
+            data,
+        );
         self.scribbles.insert(id.clone(), ann);
         self.kind_order.push(id);
         completed
@@ -72,7 +86,12 @@ impl AnnotationManager {
 
     pub fn add_caption(&mut self, id: String, data: super::CaptionPayload) -> Vec<String> {
         let completed = self.force_complete_kind(&AnnotationKind::Caption);
-        let ann = Annotation::new(id.clone(), AnnotationKind::Caption, self.timeouts.caption_ms, data);
+        let ann = Annotation::new(
+            id.clone(),
+            AnnotationKind::Caption,
+            self.timeouts.caption_ms,
+            data,
+        );
         self.captions.insert(id.clone(), ann);
         self.kind_order.push(id);
         completed
@@ -134,10 +153,10 @@ impl AnnotationManager {
         let now = now_ms();
         let mut expired = Vec::new();
         for id in &self.kind_order {
-            let is_expired = self.cursors.get(id).map_or(false, |a| a.is_expired(now))
-                || self.rectangles.get(id).map_or(false, |a| a.is_expired(now))
-                || self.scribbles.get(id).map_or(false, |a| a.is_expired(now))
-                || self.captions.get(id).map_or(false, |a| a.is_expired(now));
+            let is_expired = self.cursors.get(id).is_some_and(|a| a.is_expired(now))
+                || self.rectangles.get(id).is_some_and(|a| a.is_expired(now))
+                || self.scribbles.get(id).is_some_and(|a| a.is_expired(now))
+                || self.captions.get(id).is_some_and(|a| a.is_expired(now));
             if is_expired {
                 expired.push(id.clone());
             }
@@ -192,7 +211,7 @@ pub fn format_lifecycle_event(action: &str, id: &str, state: &AnnotationState) -
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::overlay::{CursorData, RectPayload, ScribblePayload, CaptionPayload};
+    use crate::overlay::{CaptionPayload, CursorData, RectPayload, ScribblePayload};
 
     #[test]
     fn test_manager_new_is_empty() {
@@ -204,7 +223,13 @@ mod tests {
     #[test]
     fn test_add_and_complete_cursor() {
         let mut mgr = AnnotationManager::new();
-        let data = CursorData { x: 100.0, y: 200.0, label: None, accent: None, duration_ms: 5000 };
+        let data = CursorData {
+            x: 100.0,
+            y: 200.0,
+            label: None,
+            accent: None,
+            duration_ms: 5000,
+        };
         mgr.add_cursor("c1".into(), data);
         assert!(mgr.has_active());
         mgr.complete("c1");
@@ -214,7 +239,13 @@ mod tests {
     #[test]
     fn test_add_and_miss() {
         let mut mgr = AnnotationManager::new();
-        let data = CursorData { x: 10.0, y: 20.0, label: None, accent: None, duration_ms: 5000 };
+        let data = CursorData {
+            x: 10.0,
+            y: 20.0,
+            label: None,
+            accent: None,
+            duration_ms: 5000,
+        };
         mgr.add_cursor("c2".into(), data);
         mgr.miss("c2");
     }
@@ -224,12 +255,24 @@ mod tests {
         let mut mgr = AnnotationManager::new();
         // duration_ms: 0 falls back to the default cursor timeout, so a
         // freshly-added cursor must not be reported as expired.
-        let data = CursorData { x: 0.0, y: 0.0, label: None, accent: None, duration_ms: 0 };
+        let data = CursorData {
+            x: 0.0,
+            y: 0.0,
+            label: None,
+            accent: None,
+            duration_ms: 0,
+        };
         mgr.add_cursor("c3".into(), data);
         assert!(mgr.get_expired().is_empty());
 
         // A short positive duration does expire once the timeout elapses.
-        let short = CursorData { x: 1.0, y: 1.0, label: None, accent: None, duration_ms: 1 };
+        let short = CursorData {
+            x: 1.0,
+            y: 1.0,
+            label: None,
+            accent: None,
+            duration_ms: 1,
+        };
         mgr.add_cursor("c4".into(), short);
         std::thread::sleep(std::time::Duration::from_millis(20));
         let expired = mgr.get_expired();
@@ -240,8 +283,22 @@ mod tests {
     #[test]
     fn test_clear_all() {
         let mut mgr = AnnotationManager::new();
-        let cd = CursorData { x: 1.0, y: 2.0, label: None, accent: None, duration_ms: 5000 };
-        let rd = RectPayload { id: "r".into(), x: 0.0, y: 0.0, w: 10.0, h: 10.0, state: AnnotationState::Armed, label: None };
+        let cd = CursorData {
+            x: 1.0,
+            y: 2.0,
+            label: None,
+            accent: None,
+            duration_ms: 5000,
+        };
+        let rd = RectPayload {
+            id: "r".into(),
+            x: 0.0,
+            y: 0.0,
+            w: 10.0,
+            h: 10.0,
+            state: AnnotationState::Armed,
+            label: None,
+        };
         mgr.add_cursor("c".into(), cd);
         mgr.add_rect("r".into(), rd);
         assert!(mgr.has_active());
@@ -252,10 +309,33 @@ mod tests {
     #[test]
     fn test_add_all_kinds() {
         let mut mgr = AnnotationManager::new();
-        let cd = CursorData { x: 0.0, y: 0.0, label: None, accent: None, duration_ms: 5000 };
-        let rd = RectPayload { id: "r".into(), x: 0.0, y: 0.0, w: 10.0, h: 10.0, state: AnnotationState::Armed, label: None };
-        let sd = ScribblePayload { points: vec![[0.0, 0.0]], state: AnnotationState::Armed, label: None };
-        let capd = CaptionPayload { text: "hi".into(), x: 0.0, y: 0.0, state: AnnotationState::Armed };
+        let cd = CursorData {
+            x: 0.0,
+            y: 0.0,
+            label: None,
+            accent: None,
+            duration_ms: 5000,
+        };
+        let rd = RectPayload {
+            id: "r".into(),
+            x: 0.0,
+            y: 0.0,
+            w: 10.0,
+            h: 10.0,
+            state: AnnotationState::Armed,
+            label: None,
+        };
+        let sd = ScribblePayload {
+            points: vec![[0.0, 0.0]],
+            state: AnnotationState::Armed,
+            label: None,
+        };
+        let capd = CaptionPayload {
+            text: "hi".into(),
+            x: 0.0,
+            y: 0.0,
+            state: AnnotationState::Armed,
+        };
         mgr.add_cursor("c".into(), cd);
         mgr.add_rect("r".into(), rd);
         mgr.add_scribble("s".into(), sd);
@@ -266,11 +346,31 @@ mod tests {
     #[test]
     fn test_force_complete_kind() {
         let mut mgr = AnnotationManager::new();
-        let cd1 = CursorData { x: 0.0, y: 0.0, label: None, accent: None, duration_ms: 5000 };
-        let cd2 = CursorData { x: 1.0, y: 1.0, label: None, accent: None, duration_ms: 5000 };
+        let cd1 = CursorData {
+            x: 0.0,
+            y: 0.0,
+            label: None,
+            accent: None,
+            duration_ms: 5000,
+        };
+        let cd2 = CursorData {
+            x: 1.0,
+            y: 1.0,
+            label: None,
+            accent: None,
+            duration_ms: 5000,
+        };
         mgr.add_cursor("c1".into(), cd1);
         mgr.add_cursor("c2".into(), cd2);
-        let rd = RectPayload { id: "r".into(), x: 0.0, y: 0.0, w: 10.0, h: 10.0, state: AnnotationState::Armed, label: None };
+        let rd = RectPayload {
+            id: "r".into(),
+            x: 0.0,
+            y: 0.0,
+            w: 10.0,
+            h: 10.0,
+            state: AnnotationState::Armed,
+            label: None,
+        };
         mgr.add_rect("r".into(), rd);
         assert!(mgr.has_active());
     }

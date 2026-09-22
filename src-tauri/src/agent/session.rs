@@ -103,7 +103,8 @@ impl AgentStore {
         }
         let data = std::fs::read(path).map_err(|e| format!("Failed to read agents file: {e}"))?;
         let decrypted = decrypt_data(&data, encryption_key)?;
-        let store: Self = serde_json::from_str(&decrypted).map_err(|e| format!("Deserialization error: {e}"))?;
+        let store: Self =
+            serde_json::from_str(&decrypted).map_err(|e| format!("Deserialization error: {e}"))?;
         Ok(store)
     }
 
@@ -116,8 +117,10 @@ impl AgentStore {
             std::fs::create_dir_all(parent).unwrap_or_default();
         }
         // Write to temp file first, then atomically rename
-        std::fs::write(&tmp_path, &encrypted).map_err(|e| format!("Failed to write temp agents file: {e}"))?;
-        std::fs::rename(&tmp_path, &path).map_err(|e| format!("Failed to rename agents file: {e}"))?;
+        std::fs::write(&tmp_path, &encrypted)
+            .map_err(|e| format!("Failed to write temp agents file: {e}"))?;
+        std::fs::rename(&tmp_path, &path)
+            .map_err(|e| format!("Failed to rename agents file: {e}"))?;
         Ok(())
     }
 
@@ -148,9 +151,7 @@ pub fn parse_ts_secs(ts: &str) -> u64 {
 }
 
 fn agents_file_path() -> std::path::PathBuf {
-    let base = dirs::config_dir().unwrap_or_else(|| {
-        std::path::PathBuf::from(".").join(".clickyx")
-    });
+    let base = dirs::config_dir().unwrap_or_else(|| std::path::PathBuf::from(".").join(".clickyx"));
     base.join("clickyx").join("agents.enc")
 }
 
@@ -161,23 +162,33 @@ use aes_gcm::{
 
 pub fn encrypt_data(data: &str, key_hex: &str) -> Result<Vec<u8>, String> {
     let key_bytes = hex::decode(key_hex).map_err(|e| format!("Invalid hex key: {e}"))?;
-    if key_bytes.len() != 32 { return Err("Key must be 32 bytes".into()); }
+    if key_bytes.len() != 32 {
+        return Err("Key must be 32 bytes".into());
+    }
     let key = Key::<Aes256Gcm>::from_slice(&key_bytes);
     let cipher = Aes256Gcm::new(key);
     let nonce = Aes256Gcm::generate_nonce(&mut OsRng);
-    let ciphertext = cipher.encrypt(&nonce, data.as_bytes()).map_err(|e| format!("Encryption error: {:?}", e))?;
+    let ciphertext = cipher
+        .encrypt(&nonce, data.as_bytes())
+        .map_err(|e| format!("Encryption error: {:?}", e))?;
     let mut result = nonce.to_vec();
     result.extend_from_slice(&ciphertext);
     Ok(result)
 }
 
 pub fn decrypt_data(data: &[u8], key_hex: &str) -> Result<String, String> {
-    if data.len() < 12 { return Err("Data too short".into()); }
+    if data.len() < 12 {
+        return Err("Data too short".into());
+    }
     let key_bytes = hex::decode(key_hex).map_err(|e| format!("Invalid hex key: {e}"))?;
-    if key_bytes.len() != 32 { return Err("Key must be 32 bytes".into()); }
+    if key_bytes.len() != 32 {
+        return Err("Key must be 32 bytes".into());
+    }
     let key = Key::<Aes256Gcm>::from_slice(&key_bytes);
     let cipher = Aes256Gcm::new(key);
     let nonce = Nonce::from_slice(&data[..12]);
-    let plaintext = cipher.decrypt(nonce, &data[12..]).map_err(|e| format!("Decryption error: {:?}", e))?;
+    let plaintext = cipher
+        .decrypt(nonce, &data[12..])
+        .map_err(|e| format!("Decryption error: {:?}", e))?;
     String::from_utf8(plaintext).map_err(|e| format!("Invalid UTF-8: {e}"))
 }

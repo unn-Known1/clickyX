@@ -41,7 +41,7 @@ jobs:
             src-tauri/target
             ~/.cargo/registry
             ~/.cargo/git
-          key: ${{ matrix.os }}-cargo-${{ hashFiles('src-tauri/Cargo.toml') }}
+          key: ${{ matrix.os }}-cargo-${{ hashFiles('src-tauri/Cargo.lock') }}
 
       - name: Install sccache (Rust compile cache)
         uses: mozilla-actions/sccache-action@v0.0.9
@@ -66,6 +66,10 @@ jobs:
         run: npm run build
 
       - name: Build Tauri app
+        env:
+          # P0-T3: bakes the trusted minisign release pubkey into the updater.
+          # Empty in forks/PRs → the updater fail-closed refuses installs (documented).
+          CLICKYX_UPDATE_PUBKEY: ${{ secrets.UPDATE_SIGNING_PUBKEY }}
         run: npm run tauri build ${{ startsWith(matrix.os, 'macos') && '-- --bundles dmg,app' || '' }}
 
       - name: Create macOS zip (fallback)
@@ -85,8 +89,12 @@ jobs:
           $certBytes = [Convert]::FromBase64String($env:SIGNING_CERT)
           $certPath = "$env:TEMP\signing.pfx"
           [IO.File]::WriteAllBytes($certPath, $certBytes)
+          # P2: signtool is not on PATH by default — discover it from the SDK.
+          $signtool = (Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin" -Recurse -Filter signtool.exe -ErrorAction SilentlyContinue | Select-Object -First 1).FullName
+          if (-not $signtool) { $signtool = (Get-Command signtool -ErrorAction SilentlyContinue).Source }
+          if (-not $signtool) { throw "signtool not found — cannot sign" }
           Get-ChildItem -Path "src-tauri/target/release/bundle" -Recurse -Include "*.msi","*.exe" | ForEach-Object {
-            & signtool sign /f $certPath /p $env:SIGNING_PASSWORD /tr http://timestamp.digicert.com /td sha256 /fd sha256 $_.FullName
+            & $signtool sign /f $certPath /p $env:SIGNING_PASSWORD /tr http://timestamp.digicert.com /td sha256 /fd sha256 $_.FullName
           }
           Remove-Item $certPath -Force
 
@@ -160,13 +168,39 @@ jobs:
             echo "- $basename" >> release-notes.md
           done
 
+      - name: Sign update artifacts (minisign)
+        # P0-T3: every installable artifact gets a `<file>.sig` companion.
+        # The in-app updater verifies it against CLICKYX_UPDATE_PUBKEY and
+        # REFUSES unsigned artifacts. Requires repo secrets:
+        #   UPDATE_SIGNING_KEY_B64 = base64(minisign secret key file)
+        #   UPDATE_SIGNING_PUBKEY  = minisign public key (also baked into builds)
+        # Generate once: minisign -G -p update.pub -s update.key
+        env:
+          UPDATE_SIGNING_KEY_B64: ${{ secrets.UPDATE_SIGNING_KEY_B64 }}
+        run: |
+          if [ -z "$UPDATE_SIGNING_KEY_B64" ]; then
+            echo "::warning::UPDATE_SIGNING_KEY_B64 not set — artifacts will ship WITHOUT .sig; the in-app updater will refuse them (fail-closed, by design)"
+            exit 0
+          fi
+          (sudo apt-get install -y minisign 2>/dev/null || cargo install minisign --locked) 2>&1 | tail -1
+          echo "$UPDATE_SIGNING_KEY_B64" | base64 -d > /tmp/update.key
+          chmod 600 /tmp/update.key
+          find artifacts -type f \( -name "*.msi" -o -name "*.exe" -o -name "*.dmg" -o -name "*.AppImage" -o -name "*.deb" -o -name "*.rpm" \) | while read f; do
+            minisign -S -m "$f" -s /tmp/update.key -x "$f.sig"
+            echo "signed: $f.sig"
+          done
+          rm -f /tmp/update.key
+
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_name }}
           name: ClickyX ${{ github.ref_name }}
           body_path: release-notes.md
-          draft: true
+          # P0-T3: releases publish immediately — drafts are invisible to the
+          # updater and to users (the old `draft: true` is why "v0.2.0
+          # published" was false).
+          draft: false
           prerelease: ${{ steps.check.outputs.prerelease }}
           files: |
             artifacts/**/*.msi
@@ -176,3 +210,4 @@ jobs:
             artifacts/**/*.AppImage
             artifacts/**/*.deb
             artifacts/**/*.rpm
+            artifacts/**/*.sig

@@ -65,7 +65,8 @@ impl CaptureThreadHandle {
         self.cmd_tx
             .send(CaptureCommand::StartRecording { response: tx })
             .map_err(|_| "Capture thread disconnected".to_string())?;
-        rx.recv().map_err(|_| "Capture thread response error".to_string())?
+        rx.recv()
+            .map_err(|_| "Capture thread response error".to_string())?
     }
 
     pub fn stop_recording(&self) -> Result<Vec<f32>, String> {
@@ -73,7 +74,8 @@ impl CaptureThreadHandle {
         self.cmd_tx
             .send(CaptureCommand::StopRecording { response: tx })
             .map_err(|_| "Capture thread disconnected".to_string())?;
-        rx.recv().map_err(|_| "Capture thread response error".to_string())?
+        rx.recv()
+            .map_err(|_| "Capture thread response error".to_string())?
     }
 
     pub fn is_recording(&self) -> bool {

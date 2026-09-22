@@ -3,19 +3,29 @@ use std::sync::LazyLock;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 
-static RE_POINT: LazyLock<Option<Regex>> = LazyLock::new(|| Regex::new(r"\[POINT:(\d+(?:\.\d+)?),(\d+(?:\.\d+)?)(?::(.+?))?\]").ok());
-static RE_RECT: LazyLock<Option<Regex>> = LazyLock::new(|| Regex::new(r"\[RECT:(\d+(?:\.\d+)?),(\d+(?:\.\d+)?),(\d+(?:\.\d+)?),(\d+(?:\.\d+)?)(?::(.+?))?\]").ok());
-static RE_SCRIBBLE: LazyLock<Option<Regex>> = LazyLock::new(|| Regex::new(r"\[SCRIBBLE:((?:\d+(?:\.\d+)?,\d+(?:\.\d+)?;?)+)(?::(.+?))?\]").ok());
+static RE_POINT: LazyLock<Option<Regex>> =
+    LazyLock::new(|| Regex::new(r"\[POINT:(\d+(?:\.\d+)?),(\d+(?:\.\d+)?)(?::(.+?))?\]").ok());
+static RE_RECT: LazyLock<Option<Regex>> = LazyLock::new(|| {
+    Regex::new(
+        r"\[RECT:(\d+(?:\.\d+)?),(\d+(?:\.\d+)?),(\d+(?:\.\d+)?),(\d+(?:\.\d+)?)(?::(.+?))?\]",
+    )
+    .ok()
+});
+static RE_SCRIBBLE: LazyLock<Option<Regex>> = LazyLock::new(|| {
+    Regex::new(r"\[SCRIBBLE:((?:\d+(?:\.\d+)?,\d+(?:\.\d+)?;?)+)(?::(.+?))?\]").ok()
+});
 static RE_OFFER: LazyLock<Option<Regex>> = LazyLock::new(|| Regex::new(r"\[OFFER:(.+?)\]").ok());
-static RE_HIGHLIGHT: LazyLock<Option<Regex>> = LazyLock::new(||
-    Regex::new(r"\[HIGHLIGHT:(\d+(?:\.\d+)?),(\d+(?:\.\d+)?),(\d+(?:\.\d+)?),(\d+(?:\.\d+)?)(?::(.+?))?\]").ok()
-);
-static RE_SHAPE: LazyLock<Option<Regex>> = LazyLock::new(||
+static RE_HIGHLIGHT: LazyLock<Option<Regex>> = LazyLock::new(|| {
+    Regex::new(
+        r"\[HIGHLIGHT:(\d+(?:\.\d+)?),(\d+(?:\.\d+)?),(\d+(?:\.\d+)?),(\d+(?:\.\d+)?)(?::(.+?))?\]",
+    )
+    .ok()
+});
+static RE_SHAPE: LazyLock<Option<Regex>> = LazyLock::new(|| {
     Regex::new(r"\[SHAPE:(arrow|curve):(\d+(?:\.\d+)?),(\d+(?:\.\d+)?):(\d+(?:\.\d+)?),(\d+(?:\.\d+)?)(?::(.+?))?\]").ok()
-);
-static RE_STRIP: LazyLock<Option<Regex>> = LazyLock::new(||
-    Regex::new(r"\[(?:POINT|RECT|SCRIBBLE|OFFER|HIGHLIGHT|SHAPE)[^\]]*\]").ok()
-);
+});
+static RE_STRIP: LazyLock<Option<Regex>> =
+    LazyLock::new(|| Regex::new(r"\[(?:POINT|RECT|SCRIBBLE|OFFER|HIGHLIGHT|SHAPE)[^\]]*\]").ok());
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum GuidanceTag {
@@ -123,7 +133,14 @@ pub fn parse_guidance_tags(text: &str) -> Vec<GuidanceTag> {
             let x2: f64 = cap[4].parse().unwrap_or(0.0);
             let y2: f64 = cap[5].parse().unwrap_or(0.0);
             let label = cap.get(6).map(|m| m.as_str().to_string());
-            tags.push(GuidanceTag::Shape { shape_type, x1, y1, x2, y2, label });
+            tags.push(GuidanceTag::Shape {
+                shape_type,
+                x1,
+                y1,
+                x2,
+                y2,
+                label,
+            });
         }
     }
 
@@ -201,7 +218,14 @@ mod tests {
         let tags = parse_guidance_tags("[SHAPE:arrow:100,200:400,500:look here]");
         assert_eq!(tags.len(), 1);
         match &tags[0] {
-            GuidanceTag::Shape { shape_type, x1, y1, x2, y2, label } => {
+            GuidanceTag::Shape {
+                shape_type,
+                x1,
+                y1,
+                x2,
+                y2,
+                label,
+            } => {
                 assert_eq!(shape_type, "arrow");
                 assert_eq!(*x1, 100.0);
                 assert_eq!(*y1, 200.0);

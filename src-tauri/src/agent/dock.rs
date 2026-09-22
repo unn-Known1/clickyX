@@ -22,7 +22,13 @@ impl AgentDockState {
         }
     }
 
-    pub fn add_item(&mut self, slug: String, name: String, status: String, caption: Option<String>) {
+    pub fn add_item(
+        &mut self,
+        slug: String,
+        name: String,
+        status: String,
+        caption: Option<String>,
+    ) {
         if let Some(existing) = self.items.iter_mut().find(|i| i.slug == slug) {
             existing.status = status;
             existing.caption = caption;

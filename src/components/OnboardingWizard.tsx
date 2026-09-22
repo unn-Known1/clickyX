@@ -34,13 +34,8 @@ const STEPS: PermissionStep[] = [
     icon: "keyboard",
     osHint: "Windows: Settings > Accessibility > Keyboard\nmacOS: System Settings > Privacy & Security > Accessibility\nLinux: Install at-spi2-core for accessibility bridge",
   },
-  {
-    id: "camera",
-    title: "Camera Access",
-    description: "Optional: allow ClickyX to use your camera for visual context features.",
-    icon: "camera",
-    osHint: "Windows: Settings > Privacy & Security > Camera\nmacOS: System Settings > Privacy & Security > Camera\nLinux: Ensure V4L2 device is accessible",
-  },
+  // NOTE (P1 CUT): no camera step — ClickyX uses screen capture (xcap), not a
+  // camera. A camera permission step trained users to distrust the product.
   {
     id: "notifications",
     title: "Notifications",

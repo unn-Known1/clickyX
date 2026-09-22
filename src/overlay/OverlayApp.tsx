@@ -364,9 +364,13 @@ function OverlayAppInner() {
   const petRafRef = useRef<number>(0);
   const streamTimers = useRef<Record<string, number>>({});
 
-  // F-020: RAF-based pet animation with visibility pause
-  // Only animate when the pet is actually shown (active state) to save CPU across all monitors
-  const isPetActive = processing || waveformActive || cursors.length > 0 || rects.length > 0 || alwaysListening;
+  // F-020: RAF-based pet animation with visibility pause.
+  // P1 (CR-8): the pet used to wake on processing, waveform, cursors, rects
+  // AND always-listening — re-rendering the ENTIRE overlay tree at 60fps on
+  // every monitor in all ambient states. Now it only shows while the AI is
+  // actively processing. Full isolation (ref-driven position, zero parent
+  // re-renders) is P3/U5; the pet itself is deprecated (off by default there).
+  const isPetActive = processing;
 
   const scheduleNextPetFrame = useCallback(() => {
     petRafRef.current = requestAnimationFrame(() => {

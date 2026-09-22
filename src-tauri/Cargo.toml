@@ -60,8 +60,11 @@ tauri-plugin-single-instance = "2.0.0-rc.0"
 aes-gcm = "0.10.3"
 rand = "0.8.5"
 hex = "0.4.3"
+semver = "1.0.28"
+minisign-verify = "0.2.5"
 
 [dev-dependencies]
+actix-http = "3.13.6"
 tempfile = "3"
 
 [features]

@@ -8,14 +8,26 @@ to interact with ClickyX without using the Tauri IPC layer.
 
 ## Authentication
 
-When `bridge_token` is set in `config.json`, all requests must include:
+A high-entropy token is generated on first run and **auth is on by default**.
+All requests must include one of:
 
 ```
+Authorization: Bearer <your-token>
+x-openclicky-token: <your-token>
 X-Bridge-Token: <your-token>
 ```
 
-Requests without a valid token receive `401 Unauthorized`. When `bridge_token` is `null`
-(the default), no authentication is required.
+Requests without a valid token receive `401 Unauthorized`.
+
+**Tiers.** `GET /health` never requires auth. When `bridge_auth_disabled: true` is set
+(explicit opt-out — the Settings UI warns), read-only endpoints are open, but the
+**dangerous tier always requires a token**: `/click`, `/scroll`, `/screenshot`,
+`/v1/messages`, `/v1/responses`, `/mcp/call`, `/agent/*`, `/transcribe`, `/speak`.
+
+**Host validation.** The bridge binds `127.0.0.1:32123` and rejects any `Host` header
+outside `{127.0.0.1, localhost}` with `403` (DNS-rebinding defense).
+
+**Rate limiting.** 600 requests / 60 s per IP; excess receives `429`.
 
 ---
 

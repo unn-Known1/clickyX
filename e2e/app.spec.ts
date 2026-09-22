@@ -8,13 +8,13 @@ test.describe("App shell", () => {
 
   test("can switch to Agents tab", async ({ page }) => {
     await page.goto("/");
-    await page.click('[role="tab"][aria-controls="agents-panel"]');
-    await expect(page.locator("#agents-panel")).toBeVisible();
+    await page.click('[role="tab"][aria-controls="tabpanel-agents"]');
+    await expect(page.locator("#tabpanel-agents")).toBeVisible();
   });
 
   test("can open command palette with Ctrl+K", async ({ page }) => {
     await page.goto("/");
     await page.keyboard.press("Control+k");
-    await expect(page.locator(".command-palette")).toBeVisible();
+    await expect(page.locator(".palette-box")).toBeVisible();
   });
 });

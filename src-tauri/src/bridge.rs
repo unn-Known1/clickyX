@@ -1,7 +1,7 @@
 use std::io::Cursor;
 
-use actix_web::{web, App, HttpServer, HttpResponse, middleware};
-use crate::bridge_auth::{Auth, BridgeAuthConfig};
+use crate::bridge_auth::{Auth, BridgeAuthConfig, RateLimitState, SharedAuthSettings};
+use actix_web::{middleware, web, App, HttpResponse, HttpServer};
 use futures_util::stream::Stream;
 use futures_util::StreamExt;
 use serde::{Deserialize, Serialize};
@@ -150,7 +150,9 @@ async fn screenshot(data: web::Data<BridgeState>) -> HttpResponse {
 async fn show_cursor(data: web::Data<BridgeState>, body: web::Json<CursorRequest>) -> HttpResponse {
     let app = &data.app_handle;
     let result = match body.screen {
-        Some(idx) => crate::overlay::show_cursor_on_screen(app, body.x, body.y, body.label.clone(), idx),
+        Some(idx) => {
+            crate::overlay::show_cursor_on_screen(app, body.x, body.y, body.label.clone(), idx)
+        }
         None => crate::overlay::show_cursor(app, body.x, body.y, body.label.clone()),
     };
     match result {
@@ -162,7 +164,10 @@ async fn show_cursor(data: web::Data<BridgeState>, body: web::Json<CursorRequest
     }
 }
 
-async fn show_cursors(data: web::Data<BridgeState>, body: web::Json<CursorsRequest>) -> HttpResponse {
+async fn show_cursors(
+    data: web::Data<BridgeState>,
+    body: web::Json<CursorsRequest>,
+) -> HttpResponse {
     let app = &data.app_handle;
     for c in &body.cursors {
         let result = match c.screen {
@@ -179,10 +184,21 @@ async fn show_cursors(data: web::Data<BridgeState>, body: web::Json<CursorsReque
     HttpResponse::Ok().json(OkResponse { ok: true })
 }
 
-async fn show_rectangle(data: web::Data<BridgeState>, body: web::Json<RectRequest>) -> HttpResponse {
+async fn show_rectangle(
+    data: web::Data<BridgeState>,
+    body: web::Json<RectRequest>,
+) -> HttpResponse {
     let app = &data.app_handle;
     let result = match body.screen {
-        Some(idx) => crate::overlay::show_rect_on_screen(app, body.x, body.y, body.w, body.h, body.label.clone(), idx),
+        Some(idx) => crate::overlay::show_rect_on_screen(
+            app,
+            body.x,
+            body.y,
+            body.w,
+            body.h,
+            body.label.clone(),
+            idx,
+        ),
         None => crate::overlay::show_rect(app, body.x, body.y, body.w, body.h, body.label.clone()),
     };
     match result {
@@ -194,10 +210,18 @@ async fn show_rectangle(data: web::Data<BridgeState>, body: web::Json<RectReques
     }
 }
 
-async fn show_scribble(data: web::Data<BridgeState>, body: web::Json<ScribbleRequest>) -> HttpResponse {
+async fn show_scribble(
+    data: web::Data<BridgeState>,
+    body: web::Json<ScribbleRequest>,
+) -> HttpResponse {
     let app = &data.app_handle;
     let result = match body.screen {
-        Some(idx) => crate::overlay::show_scribble_on_screen(app, body.points.clone(), body.label.clone(), idx),
+        Some(idx) => crate::overlay::show_scribble_on_screen(
+            app,
+            body.points.clone(),
+            body.label.clone(),
+            idx,
+        ),
         None => crate::overlay::show_scribble(app, body.points.clone(), body.label.clone()),
     };
     match result {
@@ -209,7 +233,10 @@ async fn show_scribble(data: web::Data<BridgeState>, body: web::Json<ScribbleReq
     }
 }
 
-async fn show_caption(data: web::Data<BridgeState>, body: web::Json<CaptionRequest>) -> HttpResponse {
+async fn show_caption(
+    data: web::Data<BridgeState>,
+    body: web::Json<CaptionRequest>,
+) -> HttpResponse {
     let app = &data.app_handle;
     let result = match body.screen {
         Some(idx) => crate::overlay::show_caption_on_screen(app, &body.text, body.x, body.y, idx),
@@ -224,16 +251,20 @@ async fn show_caption(data: web::Data<BridgeState>, body: web::Json<CaptionReque
     }
 }
 
-
 #[derive(Deserialize)]
 struct ClearRequest {
     screen: Option<usize>,
 }
 
-async fn clear_overlays(data: web::Data<BridgeState>, body: Option<web::Json<ClearRequest>>) -> HttpResponse {
+async fn clear_overlays(
+    data: web::Data<BridgeState>,
+    body: Option<web::Json<ClearRequest>>,
+) -> HttpResponse {
     let app = &data.app_handle;
     let result = match body {
-        Some(ref req) if req.screen.is_some() => crate::overlay::clear_overlays_on_screen(app, req.screen.unwrap()),
+        Some(ref req) if req.screen.is_some() => {
+            crate::overlay::clear_overlays_on_screen(app, req.screen.unwrap())
+        }
         _ => crate::overlay::clear_overlays(app),
     };
     match result {
@@ -296,9 +327,7 @@ async fn speak(data: web::Data<BridgeState>, body: web::Json<SpeakRequest>) -> H
             }
         };
         match pipe.speak_response(&body.text) {
-            Ok(audio) => HttpResponse::Ok()
-                .content_type("audio/wav")
-                .body(audio),
+            Ok(audio) => HttpResponse::Ok().content_type("audio/wav").body(audio),
             Err(e) => HttpResponse::BadRequest().json(ErrorResponse {
                 error: "provider_error".into(),
                 message: e,
@@ -537,11 +566,13 @@ async fn proxy_messages(
 
     match serde_json::from_str::<serde_json::Value>(&text) {
         Ok(json) => HttpResponse::build(
-            actix_web::http::StatusCode::from_u16(status.as_u16()).unwrap_or(actix_web::http::StatusCode::OK),
+            actix_web::http::StatusCode::from_u16(status.as_u16())
+                .unwrap_or(actix_web::http::StatusCode::OK),
         )
         .json(json),
         Err(_) => HttpResponse::build(
-            actix_web::http::StatusCode::from_u16(status.as_u16()).unwrap_or(actix_web::http::StatusCode::OK),
+            actix_web::http::StatusCode::from_u16(status.as_u16())
+                .unwrap_or(actix_web::http::StatusCode::OK),
         )
         .body(text),
     }
@@ -631,11 +662,13 @@ async fn proxy_responses(
 
     match serde_json::from_str::<serde_json::Value>(&text) {
         Ok(json) => HttpResponse::build(
-            actix_web::http::StatusCode::from_u16(status.as_u16()).unwrap_or(actix_web::http::StatusCode::OK),
+            actix_web::http::StatusCode::from_u16(status.as_u16())
+                .unwrap_or(actix_web::http::StatusCode::OK),
         )
         .json(json),
         Err(_) => HttpResponse::build(
-            actix_web::http::StatusCode::from_u16(status.as_u16()).unwrap_or(actix_web::http::StatusCode::OK),
+            actix_web::http::StatusCode::from_u16(status.as_u16())
+                .unwrap_or(actix_web::http::StatusCode::OK),
         )
         .body(text),
     }
@@ -688,15 +721,17 @@ struct McpCallRequest {
 async fn events(data: web::Data<BridgeState>) -> HttpResponse {
     let rx = data.event_tx.subscribe();
     let stream: Box<dyn Stream<Item = Result<actix_web::web::Bytes, actix_web::Error>> + Unpin> =
-        Box::new(tokio_stream::wrappers::BroadcastStream::new(rx).map(|result| {
-            match result {
+        Box::new(
+            tokio_stream::wrappers::BroadcastStream::new(rx).map(|result| match result {
                 Ok(msg) => Ok(actix_web::web::Bytes::from(msg)),
                 Err(e) => {
                     log::warn!("SSE client issue: {e}, sending heartbeat");
-                    Ok(actix_web::web::Bytes::from("event: heartbeat\ndata: {}\n\n"))
+                    Ok(actix_web::web::Bytes::from(
+                        "event: heartbeat\ndata: {}\n\n",
+                    ))
                 }
-            }
-        }));
+            }),
+        );
     HttpResponse::Ok()
         .insert_header(("Content-Type", "text/event-stream"))
         .insert_header(("Cache-Control", "no-cache"))
@@ -704,22 +739,29 @@ async fn events(data: web::Data<BridgeState>) -> HttpResponse {
         .streaming(stream)
 }
 
-async fn click_handler(data: web::Data<BridgeState>, body: web::Json<ClickRequest>) -> HttpResponse {
+async fn click_handler(
+    data: web::Data<BridgeState>,
+    body: web::Json<ClickRequest>,
+) -> HttpResponse {
     let app = &data.app_handle;
     log::info!("Click at ({}, {})", body.x, body.y);
-    
+
     let config = crate::config::load_config(app).unwrap_or_default();
     let backend = if config.computer_use.native_cua {
         crate::cua::CuaBackend::Native
     } else {
         crate::cua::CuaBackend::Background
     };
-    
+
     let mut sim = crate::cua::InputSimulator::new(backend);
-    
+
     let result = sim.click(body.x, body.y);
     if result.success {
-        emit_event(&data, "guidance_update", &format!("{{\"action\":\"click\",\"x\":{},\"y\":{}}}", body.x, body.y));
+        emit_event(
+            &data,
+            "guidance_update",
+            &format!("{{\"action\":\"click\",\"x\":{},\"y\":{}}}", body.x, body.y),
+        );
         HttpResponse::Ok().json(OkResponse { ok: true })
     } else {
         HttpResponse::InternalServerError().json(ErrorResponse {
@@ -733,11 +775,14 @@ async fn notify(data: web::Data<BridgeState>, body: web::Json<NotifyRequest>) ->
     let app = &data.app_handle;
     use tauri::Emitter;
     // Emit a Tauri event so the frontend can show a notification
-    let _ = app.emit("bridge-notification", serde_json::json!({
-        "title": body.title,
-        "body": body.body,
-        "icon": body.icon,
-    }));
+    let _ = app.emit(
+        "bridge-notification",
+        serde_json::json!({
+            "title": body.title,
+            "body": body.body,
+            "icon": body.icon,
+        }),
+    );
     if let Some(window) = app.get_webview_window("main") {
         let _ = window.show();
         let _ = window.set_focus();
@@ -746,10 +791,70 @@ async fn notify(data: web::Data<BridgeState>, body: web::Json<NotifyRequest>) ->
     HttpResponse::Ok().json(OkResponse { ok: true })
 }
 
+/// Per-line deadline for MCP child-process I/O (P1/H-01).
+const MCP_IO_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30);
+
+/// Pump a child process's stdout line-by-line onto a channel.
+///
+/// Blocking `read_line` on a pipe has NO timeout, so the old code could stall
+/// a bridge worker forever on a hung MCP server. The pump owns stdout on its
+/// own thread; callers wait with `recv_timeout`. When the caller kills the
+/// child (all paths do), stdout closes and the pump thread exits — no leak.
+fn spawn_stdout_pump(
+    stdout: std::process::ChildStdout,
+    server_name: &str,
+) -> std::sync::mpsc::Receiver<std::io::Result<String>> {
+    use std::io::{BufRead, BufReader};
+    let (tx, rx) = std::sync::mpsc::channel();
+    let name = server_name.to_string();
+    std::thread::spawn(move || {
+        let mut reader = BufReader::new(stdout);
+        loop {
+            let mut line = String::new();
+            match reader.read_line(&mut line) {
+                Ok(0) => break, // EOF: child exited
+                Ok(_) => {
+                    if tx.send(Ok(line)).is_err() {
+                        break; // receiver gone
+                    }
+                }
+                Err(e) => {
+                    let _ = tx.send(Err(e));
+                    break;
+                }
+            }
+        }
+        log::debug!("MCP '{name}': stdout pump exiting");
+    });
+    rx
+}
+
+/// Wait for the next stdout line with a deadline. Timeout/EOF/IO errors all
+/// become `Err` so callers kill the child and fail fast.
+fn recv_child_line(
+    rx: &std::sync::mpsc::Receiver<std::io::Result<String>>,
+    server_name: &str,
+    what: &str,
+) -> Result<String, String> {
+    match rx.recv_timeout(MCP_IO_TIMEOUT) {
+        Ok(Ok(line)) => Ok(line),
+        Ok(Err(e)) => Err(format!(
+            "MCP '{server_name}': stdout read failed waiting for {what}: {e}"
+        )),
+        Err(std::sync::mpsc::RecvTimeoutError::Timeout) => Err(format!(
+            "MCP '{server_name}': timed out after {}s waiting for {what} (server killed)",
+            MCP_IO_TIMEOUT.as_secs()
+        )),
+        Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => Err(format!(
+            "MCP '{server_name}': server closed stdout while waiting for {what}"
+        )),
+    }
+}
+
 /// Spawn an MCP server process, perform JSON-RPC initialize + tools/list,
 /// and return the list of tool names/descriptions.
 fn mcp_list_tools_sync(server: &crate::config::McpServerConfig) -> Vec<McpToolInfo> {
-    use std::io::{BufRead, BufReader, Write};
+    use std::io::Write;
     use std::process::{Command, Stdio};
 
     let mut child = match Command::new(&server.command)
@@ -776,7 +881,9 @@ fn mcp_list_tools_sync(server: &crate::config::McpServerConfig) -> Vec<McpToolIn
         None => return Vec::new(),
     };
 
-    let mut reader = BufReader::new(stdout);
+    // P1 (H-01): all child-stdout reads go through a deadline pump — a hung
+    // server can no longer stall the bridge worker forever.
+    let lines = spawn_stdout_pump(stdout, &server.name);
 
     // Send initialize
     let init_req = serde_json::json!({
@@ -796,15 +903,31 @@ fn mcp_list_tools_sync(server: &crate::config::McpServerConfig) -> Vec<McpToolIn
         return Vec::new();
     }
 
-    // Read initialize response (one line of JSON-RPC)
+    // Read initialize response (match id, skip notifications/log lines).
+    let mut saw_init = false;
     for _ in 0..100 {
-        let mut line = String::new();
-        if reader.read_line(&mut line).unwrap_or(0) == 0 { break; }
-        if let Ok(val) = serde_json::from_str::<serde_json::Value>(line.trim()) {
-            if val.get("id").and_then(|v| v.as_i64()) == Some(1) {
-                break;
+        match recv_child_line(&lines, &server.name, "initialize response") {
+            Ok(line) => {
+                if let Ok(val) = serde_json::from_str::<serde_json::Value>(line.trim()) {
+                    if val.get("id").and_then(|v| v.as_i64()) == Some(1) {
+                        saw_init = true;
+                        break;
+                    }
+                }
+            }
+            Err(e) => {
+                log::warn!("MCP '{}': {e}", server.name);
+                let _ = child.kill();
+                let _ = child.wait();
+                return Vec::new();
             }
         }
+    }
+    if !saw_init {
+        log::warn!("MCP '{}': no initialize response, aborting", server.name);
+        let _ = child.kill();
+        let _ = child.wait();
+        return Vec::new();
     }
 
     // Send tools/list
@@ -824,11 +947,17 @@ fn mcp_list_tools_sync(server: &crate::config::McpServerConfig) -> Vec<McpToolIn
     // Read tools/list response
     let mut list_resp_line = String::new();
     for _ in 0..100 {
-        let mut line = String::new();
-        if reader.read_line(&mut line).unwrap_or(0) == 0 { break; }
-        if let Ok(val) = serde_json::from_str::<serde_json::Value>(line.trim()) {
-            if val.get("id").and_then(|v| v.as_i64()) == Some(2) {
-                list_resp_line = line;
+        match recv_child_line(&lines, &server.name, "tools/list response") {
+            Ok(line) => {
+                if let Ok(val) = serde_json::from_str::<serde_json::Value>(line.trim()) {
+                    if val.get("id").and_then(|v| v.as_i64()) == Some(2) {
+                        list_resp_line = line;
+                        break;
+                    }
+                }
+            }
+            Err(e) => {
+                log::warn!("MCP '{}': {e}", server.name);
                 break;
             }
         }
@@ -882,7 +1011,7 @@ fn mcp_call_tool_sync(
     tool: &str,
     args: &serde_json::Value,
 ) -> Result<serde_json::Value, String> {
-    use std::io::{BufRead, BufReader, Write};
+    use std::io::Write;
     use std::process::{Command, Stdio};
 
     let mut child = Command::new(&server.command)
@@ -894,9 +1023,15 @@ fn mcp_call_tool_sync(
         .spawn()
         .map_err(|e| format!("failed to spawn MCP server '{}': {}", server.name, e))?;
 
+    // If anything below fails, the child is killed (no orphaned servers).
+    let kill = |child: &mut std::process::Child| {
+        let _ = child.kill();
+        let _ = child.wait();
+    };
+
     let mut stdin = child.stdin.take().ok_or("no stdin")?;
     let stdout = child.stdout.take().ok_or("no stdout")?;
-    let mut reader = BufReader::new(stdout);
+    let lines = spawn_stdout_pump(stdout, &server.name);
 
     // Initialize
     let init_req = serde_json::json!({
@@ -914,8 +1049,29 @@ fn mcp_call_tool_sync(
         .write_all(init_str.as_bytes())
         .map_err(|e| format!("write init: {e}"))?;
 
-    let mut init_resp = String::new();
-    let _ = reader.read_line(&mut init_resp);
+    // Read initialize response with id correlation (P1/M-2: the old code read
+    // exactly one line with no id check, so notification/log lines desynced it).
+    let mut saw_init = false;
+    for _ in 0..100 {
+        match recv_child_line(&lines, &server.name, "initialize response") {
+            Ok(line) => {
+                if let Ok(val) = serde_json::from_str::<serde_json::Value>(line.trim()) {
+                    if val.get("id").and_then(|v| v.as_i64()) == Some(1) {
+                        saw_init = true;
+                        break;
+                    }
+                }
+            }
+            Err(e) => {
+                kill(&mut child);
+                return Err(e);
+            }
+        }
+    }
+    if !saw_init {
+        kill(&mut child);
+        return Err(format!("MCP '{}': no initialize response", server.name));
+    }
 
     // Call the tool
     let call_req = serde_json::json!({
@@ -932,13 +1088,33 @@ fn mcp_call_tool_sync(
         .write_all(call_str.as_bytes())
         .map_err(|e| format!("write call: {e}"))?;
 
+    // Read the tools/call response (id-correlated, deadline-bounded).
     let mut resp_line = String::new();
-    let _ = reader.read_line(&mut resp_line);
-    let _ = child.kill();
-    let _ = child.wait();
+    let mut saw_resp = false;
+    for _ in 0..100 {
+        match recv_child_line(&lines, &server.name, "tools/call response") {
+            Ok(line) => {
+                if let Ok(val) = serde_json::from_str::<serde_json::Value>(line.trim()) {
+                    if val.get("id").and_then(|v| v.as_i64()) == Some(2) {
+                        resp_line = line;
+                        saw_resp = true;
+                        break;
+                    }
+                }
+            }
+            Err(e) => {
+                kill(&mut child);
+                return Err(e);
+            }
+        }
+    }
+    kill(&mut child);
+    if !saw_resp {
+        return Err(format!("MCP '{}': no tools/call response", server.name));
+    }
 
-    let resp: serde_json::Value = serde_json::from_str(&resp_line)
-        .map_err(|e| format!("invalid JSON-RPC response: {e}"))?;
+    let resp: serde_json::Value =
+        serde_json::from_str(&resp_line).map_err(|e| format!("invalid JSON-RPC response: {e}"))?;
 
     if let Some(error) = resp.get("error") {
         return Err(format!("MCP error: {}", error));
@@ -1075,7 +1251,11 @@ async fn bridge_create_agent(
     let skills: Vec<String> = body
         .get("skills")
         .and_then(|v| v.as_array())
-        .map(|arr| arr.iter().filter_map(|v| v.as_str().map(String::from)).collect())
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|v| v.as_str().map(String::from))
+                .collect()
+        })
         .unwrap_or_default();
 
     if slug.is_empty() {
@@ -1116,10 +1296,7 @@ async fn bridge_run_agent(
 ) -> HttpResponse {
     let app = &data.app_handle;
     let slug = path.into_inner();
-    let prompt = body
-        .get("prompt")
-        .and_then(|v| v.as_str())
-        .unwrap_or("");
+    let prompt = body.get("prompt").and_then(|v| v.as_str()).unwrap_or("");
 
     if let Some(store) = app.try_state::<std::sync::Mutex<crate::agent::session::AgentStore>>() {
         match store.lock() {
@@ -1149,10 +1326,7 @@ async fn bridge_run_agent(
     }
 }
 
-async fn bridge_stop_agent(
-    data: web::Data<BridgeState>,
-    path: web::Path<String>,
-) -> HttpResponse {
+async fn bridge_stop_agent(data: web::Data<BridgeState>, path: web::Path<String>) -> HttpResponse {
     let app = &data.app_handle;
     let slug = path.into_inner();
 
@@ -1228,7 +1402,10 @@ struct ScrollRequest {
     delta_y: f64,
 }
 
-async fn scroll_handler(data: web::Data<BridgeState>, body: web::Json<ScrollRequest>) -> HttpResponse {
+async fn scroll_handler(
+    data: web::Data<BridgeState>,
+    body: web::Json<ScrollRequest>,
+) -> HttpResponse {
     let app = &data.app_handle;
     log::info!(
         "Scroll at ({}, {}) delta=({}, {})",
@@ -1277,101 +1454,61 @@ async fn not_found() -> HttpResponse {
     })
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_cursor_request_serde() {
-        let json = r#"{"x":100.0,"y":200.0,"label":"test","accent":null}"#;
-        let req: CursorRequest = serde_json::from_str(json).unwrap();
-        assert_eq!(req.x, 100.0);
-        assert_eq!(req.y, 200.0);
-        assert_eq!(req.label.unwrap(), "test");
-    }
-
-    #[test]
-    fn test_wav_to_pcm_f32_with_empty() {
-        let result = wav_to_pcm_f32(&[]);
-        assert!(result.is_empty());
-    }
-
-    #[test]
-    fn test_ok_response_serde() {
-        let r = OkResponse { ok: true };
-        let json = serde_json::to_string(&r).unwrap();
-        assert_eq!(json, r#"{"ok":true}"#);
-    }
-
-    #[test]
-    fn test_error_response_serde() {
-        let r = ErrorResponse { error: "test_error".into(), message: "test message".into() };
-        let json = serde_json::to_string(&r).unwrap();
-        assert!(json.contains("test_error"));
-    }
-
-    #[test]
-    fn test_health_response_struct() {
-        let h = HealthResponse { status: "ok".into(), version: "0.1.1".into() };
-        let json = serde_json::to_string(&h).unwrap();
-        assert!(json.contains("0.1.1"));
-    }
-
-    #[test]
-    fn test_bridge_state_new() {
-        // Just verify the struct exists and builds
-        let _ = HealthResponse { status: "ok".into(), version: "0.1.1".into() };
-    }
-}
-
 /// Start the HTTP bridge server on `127.0.0.1:32123`.
 ///
-/// **Security note**: This server binds to localhost only. When `bridge_token` is
-/// configured, all endpoints require Bearer token auth. Rate limiting is not
-/// currently implemented — a malicious localhost process could flood the bridge.
-/// Consider adding actix-rate-limiter in production.
-pub fn start_bridge(app_handle: AppHandle, bridge_token: Option<String>) {
+/// **Security posture (P0-T1):**
+/// - Binds to localhost only AND validates the `Host` header (DNS-rebinding defense).
+/// - Token auth is on by default (token generated on first run); `/health` is exempt.
+/// - The dangerous tier (computer use, screenshots, AI-key spend, process spawn)
+///   always requires a token, even when auth is explicitly disabled for read-only routes.
+/// - Per-IP rate limiting is enforced (600 req / 60 s).
+pub fn start_bridge(app_handle: AppHandle, auth_settings: SharedAuthSettings) {
     log::info!("Starting bridge server thread");
+    let auth_config = BridgeAuthConfig::shared(&auth_settings);
+    let limits = RateLimitState::new();
     std::thread::spawn(move || {
         let bridge_state = BridgeState::new(app_handle);
         let data = web::Data::new(bridge_state);
-        let auth_config = web::Data::new(BridgeAuthConfig { token: bridge_token });
+        let auth = Auth::new(auth_config, limits);
 
         #[cfg(target_os = "windows")]
         {
             // On Windows, create a single-threaded runtime to avoid any I/O
             // completion port interactions with Tauri's own tokio runtime.
             actix_web::rt::System::new().block_on(async {
-                run_bridge_server(data, auth_config).await;
+                run_bridge_server(data, auth).await;
             });
         }
         #[cfg(not(target_os = "windows"))]
         {
             actix_web::rt::System::new().block_on(async {
-                run_bridge_server(data, auth_config).await;
+                run_bridge_server(data, auth).await;
             });
         }
     });
 }
 
-async fn run_bridge_server(
-    data: web::Data<BridgeState>,
-    auth_config: web::Data<BridgeAuthConfig>,
-) {
+async fn run_bridge_server(data: web::Data<BridgeState>, auth: Auth) {
     let server = HttpServer::new(move || {
         App::new()
+            // NOTE on wrap order: in actix-web the LAST .wrap() is OUTERMOST.
+            // Cors must be outermost so preflight OPTIONS is answered before
+            // Auth (previously Auth ran first and preflight 401'd — H-4).
+            // Execution order: Cors → Logger → Auth → handler.
+            .wrap(auth.clone())
+            .wrap(middleware::Logger::default())
             .wrap(
                 actix_cors::Cors::default()
                     .allowed_origin("http://localhost:1420")
                     .allowed_origin("http://127.0.0.1:1420")
                     .allowed_methods(vec!["GET", "POST", "OPTIONS"])
-                    .allowed_headers(vec![actix_web::http::header::CONTENT_TYPE])
+                    .allowed_headers(vec![
+                        actix_web::http::header::AUTHORIZATION,
+                        actix_web::http::header::CONTENT_TYPE,
+                    ])
                     .max_age(3600),
             )
-            .wrap(Auth)
-            .wrap(middleware::Logger::default())
             .app_data(data.clone())
-            .app_data(auth_config.clone())
             .route("/health", web::get().to(health))
             .route("/panel/toggle", web::post().to(toggle_panel))
             .route("/v1/messages", web::post().to(proxy_messages))
@@ -1401,7 +1538,9 @@ async fn run_bridge_server(
             .route("/skills", web::get().to(bridge_list_skills))
             .default_service(web::route().to(not_found))
     })
-    .workers(1)
+    // P0-T1: more than one worker so a single slow/blocking request
+    // (MCP stdio, TTS, capture) cannot starve /health and SSE.
+    .workers(2)
     .bind("127.0.0.1:32123");
 
     match server {
@@ -1414,5 +1553,61 @@ async fn run_bridge_server(
         Err(e) => {
             log::error!("Failed to bind bridge server: {e}");
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_cursor_request_serde() {
+        let json = r#"{"x":100.0,"y":200.0,"label":"test","accent":null}"#;
+        let req: CursorRequest = serde_json::from_str(json).unwrap();
+        assert_eq!(req.x, 100.0);
+        assert_eq!(req.y, 200.0);
+        assert_eq!(req.label.unwrap(), "test");
+    }
+
+    #[test]
+    fn test_wav_to_pcm_f32_with_empty() {
+        let result = wav_to_pcm_f32(&[]);
+        assert!(result.is_empty());
+    }
+
+    #[test]
+    fn test_ok_response_serde() {
+        let r = OkResponse { ok: true };
+        let json = serde_json::to_string(&r).unwrap();
+        assert_eq!(json, r#"{"ok":true}"#);
+    }
+
+    #[test]
+    fn test_error_response_serde() {
+        let r = ErrorResponse {
+            error: "test_error".into(),
+            message: "test message".into(),
+        };
+        let json = serde_json::to_string(&r).unwrap();
+        assert!(json.contains("test_error"));
+    }
+
+    #[test]
+    fn test_health_response_struct() {
+        let h = HealthResponse {
+            status: "ok".into(),
+            version: "0.1.1".into(),
+        };
+        let json = serde_json::to_string(&h).unwrap();
+        assert!(json.contains("0.1.1"));
+    }
+
+    #[test]
+    fn test_bridge_state_new() {
+        // Just verify the struct exists and builds
+        let _ = HealthResponse {
+            status: "ok".into(),
+            version: "0.1.1".into(),
+        };
     }
 }

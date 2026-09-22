@@ -1,9 +1,9 @@
-pub mod catalog;
 pub mod anthropic;
+pub mod app_contexts;
+pub mod catalog;
+pub mod guidance;
 pub mod openai;
 pub mod streaming;
-pub mod guidance;
-pub mod app_contexts;
 
 use serde::{Deserialize, Serialize};
 
@@ -126,7 +126,10 @@ pub fn resolve_provider_for_model(model: &str) -> &str {
     }
 }
 
-pub fn create_provider_for_model(config: &AiConfig, model: &str) -> Result<Box<dyn AiProvider>, AiError> {
+pub fn create_provider_for_model(
+    config: &AiConfig,
+    model: &str,
+) -> Result<Box<dyn AiProvider>, AiError> {
     let provider_name = resolve_provider_for_model(model);
     let full_prompt = format!("{}\n{}", config.system_prompt, CUA_SYSTEM_PROMPT);
     match provider_name {
@@ -154,7 +157,6 @@ pub fn create_provider_for_model(config: &AiConfig, model: &str) -> Result<Box<d
         p => Err(AiError::Config(format!("Unknown provider for model: {p}"))),
     }
 }
-
 
 pub fn get_default_model(config: &AiConfig, provider: &str) -> String {
     match provider {
