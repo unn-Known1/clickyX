@@ -1,0 +1,91 @@
+{
+  "nav": {
+    "home": "Home",
+    "agents": "Agents",
+    "settings": "Settings"
+  },
+  "home": {
+    "greeting": "Hi, I'm ClickyX",
+    "subtitle": "Your AI companion — ask me anything about your screen.",
+    "startChat": "Start a conversation",
+    "suggestions": {
+      "help": "What can you help me with?",
+      "screenshot": "Take a screenshot and explain it",
+      "summarize": "Summarize what's on my screen",
+      "settings": "Open settings"
+    }
+  },
+  "chat": {
+    "placeholder": "Ask me anything…",
+    "placeholderImage": "Ask about the image…",
+    "send": "Send",
+    "stop": "Stop",
+    "clear": "Clear",
+    "empty": "Ask me anything — I can see your screen and help with tasks.",
+    "emptyHint": "Paste or drag images to attach them.",
+    "copy": "Copy",
+    "copied": "Copied",
+    "retry": "Retry",
+    "newConversation": "New conversation",
+    "conversations": "Conversations",
+    "noConversations": "No conversations yet."
+  },
+  "agents": {
+    "title": "Agents",
+    "newAgent": "New Agent",
+    "cancel": "Cancel",
+    "noAgents": "No agents yet. Create one to get started.",
+    "noMatch": "No agents match.",
+    "search": "Search agents…",
+    "createAgent": "Create Agent",
+    "namePlaceholder": "Agent name",
+    "slugPlaceholder": "Slug (auto-derived)",
+    "skills": "Skills:",
+    "transcript": "Transcript",
+    "noMessages": "No messages yet.",
+    "run": "Run",
+    "stop": "Stop",
+    "archive": "Archive"
+  },
+  "settings": {
+    "title": "Settings",
+    "sections": {
+      "general": "General",
+      "voice": "Voice",
+      "providers": "AI Providers",
+      "computerUse": "Computer Use",
+      "permissions": "Permissions",
+      "connections": "Connections",
+      "agents": "Agents",
+      "automations": "Automations",
+      "system": "System & Logs"
+    },
+    "save": "Save",
+    "saving": "Saving…",
+    "saved": "Saved!"
+  },
+  "connections": {
+    "title": "Connections & Integrations",
+    "mcpServers": "MCP Servers",
+    "automations": "Automations",
+    "noMcp": "No MCP servers configured",
+    "noAutomations": "No automations configured"
+  },
+  "status": {
+    "listening": "Listening",
+    "idle": "Idle",
+    "capturing": "Capturing",
+    "noCapture": "No capture"
+  },
+  "common": {
+    "loading": "Loading…",
+    "error": "Error",
+    "ok": "OK",
+    "cancel": "Cancel",
+    "delete": "Delete",
+    "remove": "Remove",
+    "add": "Add",
+    "close": "Close",
+    "search": "Search…"
+  }
+}
