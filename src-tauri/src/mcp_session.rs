@@ -230,6 +230,7 @@ impl McpSessionRegistry {
         }
     }
 
+    #[allow(dead_code)]
     pub fn with_idle_ttl(idle_ttl: Duration) -> Self {
         Self {
             inner: Arc::new(Mutex::new(RegistryInner::default())),
@@ -248,8 +249,13 @@ impl McpSessionRegistry {
     ) -> Result<serde_json::Value, String> {
         // Capacity gate first (cheap; before touching the session).
         {
-            let inner = self.inner.lock().map_err(|e| format!("registry lock: {e}"))?;
-            if inner.sessions.len() >= MAX_CONCURRENT_SESSIONS && !inner.sessions.contains_key(&server.name) {
+            let inner = self
+                .inner
+                .lock()
+                .map_err(|e| format!("registry lock: {e}"))?;
+            if inner.sessions.len() >= MAX_CONCURRENT_SESSIONS
+                && !inner.sessions.contains_key(&server.name)
+            {
                 return Err(format!(
                     "MCP session limit reached ({MAX_CONCURRENT_SESSIONS}); reuse or close an existing session"
                 ));
@@ -267,19 +273,15 @@ impl McpSessionRegistry {
             }
         };
         let result = guard.call_tool(tool, args);
-        match &result {
+        let evict_now = match &result {
             Ok(_) => {
                 guard.last_used = Instant::now();
                 guard.requests_served = guard.requests_served.saturating_add(1);
+                guard_recyclable(&guard)
             }
-            Err(_) => {
-                // Protocol/transport failure: evict this session so the next
-                // call gets a fresh handshake.
-                drop(guard);
-                self.evict(&server.name);
-            }
-        }
-        if guard_recyclable(&guard) {
+            Err(_) => true, // Protocol/transport failure: cycle the session.
+        };
+        if evict_now {
             drop(guard);
             self.evict(&server.name);
         }
@@ -288,6 +290,7 @@ impl McpSessionRegistry {
 
     /// Evict and kill the session for `name`, if any. Public so callers can
     /// force a clean cycle (e.g. after a config edit).
+    #[allow(dead_code)]
     pub fn evict(&self, name: &str) {
         if let Ok(mut inner) = self.inner.lock() {
             if let Some(session) = inner.sessions.remove(name) {
@@ -299,6 +302,7 @@ impl McpSessionRegistry {
     }
 
     /// Iterate registered session names (for diagnostics / tests).
+    #[allow(dead_code)]
     pub fn names(&self) -> Vec<String> {
         self.inner
             .lock()
@@ -307,11 +311,13 @@ impl McpSessionRegistry {
     }
 
     /// Number of currently live sessions.
+    #[allow(dead_code)]
     pub fn live_count(&self) -> usize {
         self.inner.lock().map(|i| i.sessions.len()).unwrap_or(0)
     }
 
     /// Kill all sessions and clear the registry. Called from shutdown.
+    #[allow(dead_code)]
     pub fn shutdown(&self) {
         if let Ok(mut inner) = self.inner.lock() {
             for (_, session) in inner.sessions.drain() {
@@ -351,7 +357,10 @@ impl McpSessionRegistry {
                 return Ok(s.clone());
             }
         }
-        let mut inner = self.inner.lock().map_err(|e| format!("registry lock: {e}"))?;
+        let mut inner = self
+            .inner
+            .lock()
+            .map_err(|e| format!("registry lock: {e}"))?;
         // Re-check after re-acquiring the write lock to avoid double-spawn.
         if let Some(s) = inner.sessions.get(&server.name) {
             return Ok(s.clone());
@@ -434,11 +443,10 @@ mod tests {
         // We avoid real spawns (none in tests) by direct map manipulation via
         // the public shutdown path; this test focuses on the gate logic.
         for i in 0..MAX_CONCURRENT_SESSIONS {
-            r.inner
-                .lock()
-                .unwrap()
-                .sessions
-                .insert(format!("s{i}"), Arc::new(Mutex::new(new_panicking_session())));
+            r.inner.lock().unwrap().sessions.insert(
+                format!("s{i}"),
+                Arc::new(Mutex::new(new_panicking_session())),
+            );
         }
         // Now ask for a NEW name; the gate must refuse.
         let cfg = stub_config("new", "true");
@@ -454,8 +462,17 @@ mod tests {
     fn new_panicking_session() -> Session {
         // Constructed only for the capacity test. We never lock this session
         // outside the registry cleanup, which calls `kill()` and `wait()`.
-        // Build a child that exits immediately so kill/wait succeed.
-        let mut child = Command::new("true").spawn().expect("spawn true");
+        // Build a child that exits immediately so kill/wait succeed. We use
+        // `sh -c 'exit 0'` because `true` is empty on some targets and
+        // doesn't always grant us a stdin/stdout pipe.
+        let mut child = Command::new("sh")
+            .arg("-c")
+            .arg("exit 0")
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::null())
+            .spawn()
+            .expect("spawn sh -c 'exit 0'");
         let stdin = child.stdin.take().expect("stdin");
         let stdout = child.stdout.take().expect("stdout");
         drop(stdout);

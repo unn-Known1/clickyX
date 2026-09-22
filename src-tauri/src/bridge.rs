@@ -1011,124 +1011,6 @@ fn mcp_list_tools_sync(server: &crate::config::McpServerConfig) -> Vec<McpToolIn
     tools
 }
 
-/// Spawn an MCP server, call a specific tool, and return the result JSON.
-fn mcp_call_tool_sync(
-    server: &crate::config::McpServerConfig,
-    tool: &str,
-    args: &serde_json::Value,
-) -> Result<serde_json::Value, String> {
-    use std::io::Write;
-    use std::process::{Command, Stdio};
-
-    let mut child = Command::new(&server.command)
-        .args(&server.args)
-        .envs(&server.env)
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::null())
-        .spawn()
-        .map_err(|e| format!("failed to spawn MCP server '{}': {}", server.name, e))?;
-
-    // If anything below fails, the child is killed (no orphaned servers).
-    let kill = |child: &mut std::process::Child| {
-        let _ = child.kill();
-        let _ = child.wait();
-    };
-
-    let mut stdin = child.stdin.take().ok_or("no stdin")?;
-    let stdout = child.stdout.take().ok_or("no stdout")?;
-    let lines = spawn_stdout_pump(stdout, &server.name);
-
-    // Initialize
-    let init_req = serde_json::json!({
-        "jsonrpc": "2.0",
-        "id": 1,
-        "method": "initialize",
-        "params": {
-            "protocolVersion": "2024-11-05",
-            "capabilities": {},
-            "clientInfo": {"name": "clickyx", "version": "1.0"}
-        }
-    });
-    let init_str = format!("{}\n", serde_json::to_string(&init_req).unwrap_or_default());
-    stdin
-        .write_all(init_str.as_bytes())
-        .map_err(|e| format!("write init: {e}"))?;
-
-    // Read initialize response with id correlation (P1/M-2: the old code read
-    // exactly one line with no id check, so notification/log lines desynced it).
-    let mut saw_init = false;
-    for _ in 0..100 {
-        match recv_child_line(&lines, &server.name, "initialize response") {
-            Ok(line) => {
-                if let Ok(val) = serde_json::from_str::<serde_json::Value>(line.trim()) {
-                    if val.get("id").and_then(|v| v.as_i64()) == Some(1) {
-                        saw_init = true;
-                        break;
-                    }
-                }
-            }
-            Err(e) => {
-                kill(&mut child);
-                return Err(e);
-            }
-        }
-    }
-    if !saw_init {
-        kill(&mut child);
-        return Err(format!("MCP '{}': no initialize response", server.name));
-    }
-
-    // Call the tool
-    let call_req = serde_json::json!({
-        "jsonrpc": "2.0",
-        "id": 2,
-        "method": "tools/call",
-        "params": {
-            "name": tool,
-            "arguments": args
-        }
-    });
-    let call_str = format!("{}\n", serde_json::to_string(&call_req).unwrap_or_default());
-    stdin
-        .write_all(call_str.as_bytes())
-        .map_err(|e| format!("write call: {e}"))?;
-
-    // Read the tools/call response (id-correlated, deadline-bounded).
-    let mut resp_line = String::new();
-    let mut saw_resp = false;
-    for _ in 0..100 {
-        match recv_child_line(&lines, &server.name, "tools/call response") {
-            Ok(line) => {
-                if let Ok(val) = serde_json::from_str::<serde_json::Value>(line.trim()) {
-                    if val.get("id").and_then(|v| v.as_i64()) == Some(2) {
-                        resp_line = line;
-                        saw_resp = true;
-                        break;
-                    }
-                }
-            }
-            Err(e) => {
-                kill(&mut child);
-                return Err(e);
-            }
-        }
-    }
-    kill(&mut child);
-    if !saw_resp {
-        return Err(format!("MCP '{}': no tools/call response", server.name));
-    }
-
-    let resp: serde_json::Value =
-        serde_json::from_str(&resp_line).map_err(|e| format!("invalid JSON-RPC response: {e}"))?;
-
-    if let Some(error) = resp.get("error") {
-        return Err(format!("MCP error: {}", error));
-    }
-
-    Ok(resp.get("result").cloned().unwrap_or(serde_json::json!({})))
-}
-
 async fn mcp_tools(data: web::Data<BridgeState>) -> HttpResponse {
     let app = &data.app_handle;
     let config = match crate::config::load_config(app) {
@@ -1211,9 +1093,13 @@ async fn mcp_call(data: web::Data<BridgeState>, body: web::Json<McpCallRequest>)
 
     let tool = body.tool.clone();
     let args = body.args.clone();
+    let registry = data.mcp_sessions.clone();
 
-    // Run MCP tool call in blocking task to avoid blocking actix worker
-    match tokio::task::spawn_blocking(move || mcp_call_tool_sync(&server, &tool, &args)).await {
+    // Run MCP tool call in blocking task to avoid blocking actix worker.
+    // P3: tools/call goes through the shared session registry so the JSON-RPC
+    // handshake is amortized across calls. Per-call spawn is kept only for
+    // tools/list (one-shot discovery) which doesn't benefit from caching.
+    match tokio::task::spawn_blocking(move || registry.call_tool(&server, &tool, &args)).await {
         Ok(Ok(result)) => HttpResponse::Ok().json(serde_json::json!({ "result": result })),
         Ok(Err(e)) => HttpResponse::InternalServerError().json(ErrorResponse {
             error: "mcp_error".into(),
