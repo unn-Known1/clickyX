@@ -13,6 +13,7 @@ use crate::screen::capture;
 pub struct BridgeState {
     pub app_handle: AppHandle,
     pub event_tx: tokio::sync::broadcast::Sender<String>,
+    pub mcp_sessions: crate::mcp_session::McpSessionRegistry,
 }
 
 impl BridgeState {
@@ -21,6 +22,7 @@ impl BridgeState {
         Self {
             app_handle,
             event_tx,
+            mcp_sessions: crate::mcp_session::McpSessionRegistry::new(),
         }
     }
 }
@@ -1474,7 +1476,6 @@ pub fn start_bridge(app_handle: AppHandle, auth_settings: SharedAuthSettings) {
         let bridge_state = BridgeState::new(app_handle);
         let data = web::Data::new(bridge_state);
         let auth = Auth::new(auth_config, limits);
-
         #[cfg(target_os = "windows")]
         {
             // On Windows, create a single-threaded runtime to avoid any I/O

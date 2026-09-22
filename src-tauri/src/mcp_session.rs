@@ -257,7 +257,7 @@ impl McpSessionRegistry {
         }
 
         let session = self.acquire(server)?;
-        let mut guard = match session.lock_timeout(CALL_ACQUIRE_TIMEOUT) {
+        let mut guard = match acquire_with_timeout(&session, CALL_ACQUIRE_TIMEOUT) {
             Ok(g) => g,
             Err(_) => {
                 return Err(format!(
@@ -367,6 +367,24 @@ fn guard_recyclable(g: &Session) -> bool {
     g.requests_served >= MAX_REQUESTS_PER_SESSION
 }
 
+/// Try to acquire the session lock within `timeout`. `std::sync::Mutex`
+/// doesn't expose a timeout-based lock, so we poll with `try_lock` plus a
+/// short sleep. The polling interval is tiny (5ms) so latency under
+/// contention is bounded by `timeout`.
+fn acquire_with_timeout(
+    session: &Arc<Mutex<Session>>,
+    timeout: Duration,
+) -> Result<std::sync::MutexGuard<'_, Session>, ()> {
+    let start = Instant::now();
+    loop {
+        match session.try_lock() {
+            Ok(g) => return Ok(g),
+            Err(_) if start.elapsed() >= timeout => return Err(()),
+            Err(_) => std::thread::sleep(Duration::from_millis(5)),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -437,15 +455,16 @@ mod tests {
         // Constructed only for the capacity test. We never lock this session
         // outside the registry cleanup, which calls `kill()` and `wait()`.
         // Build a child that exits immediately so kill/wait succeed.
-        let child = Command::new("true").spawn().expect("spawn true");
-        let (tx, rx) = mpsc::channel();
-        drop(tx);
+        let mut child = Command::new("true").spawn().expect("spawn true");
+        let stdin = child.stdin.take().expect("stdin");
+        let stdout = child.stdout.take().expect("stdout");
+        drop(stdout);
+        let (_tx, rx) = mpsc::channel();
+        drop(_tx);
         Session {
             config: stub_config("synthetic", "true"),
             child,
-            stdin: std::process::ChildStdin::from_std(std::io::sink()).unwrap_or_else(|_| {
-                panic!("stdin construction unsupported on this platform in tests")
-            }),
+            stdin,
             line_rx: rx,
             next_id: 2,
             last_used: Instant::now(),

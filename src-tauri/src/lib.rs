@@ -9,6 +9,7 @@ mod commands;
 mod config;
 mod cua;
 mod gen3d;
+mod mcp_session;
 mod overlay;
 mod permissions;
 pub mod platform;
@@ -461,7 +462,29 @@ pub fn run() {
                 config.bridge_auth_disabled,
             );
             handle.manage(bridge_auth.clone());
-            bridge::start_bridge(handle.clone(), bridge_auth);
+            bridge::start_bridge(handle.clone(), bridge_auth.clone());
+
+            // P3 / §9.6 — run the MCP idle-session sweep on a background task.
+            // The registry is also reachable from BridgeState (clone handle);
+            // the sweep task captures its own clone so it can shut down via
+            // Drop semantics (the actix runtime exit drops the registry).
+            {
+                let registry = crate::mcp_session::McpSessionRegistry::new();
+                handle.manage(registry.clone());
+                tauri::async_runtime::spawn(async move {
+                    loop {
+                        tokio::time::sleep(std::time::Duration::from_secs(60)).await;
+                        let killed = registry.sweep_idle();
+                        if !killed.is_empty() {
+                            log::info!(
+                                "MCP sweep: reaped {} idle session(s): {}",
+                                killed.len(),
+                                killed.join(", ")
+                            );
+                        }
+                    }
+                });
+            }
 
             // Check for updates on startup (non-blocking).
             // P0-T3: version-check traffic only; user-opt-out via config.
