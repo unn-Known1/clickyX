@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 
 import VoiceDiscovery from "../VoiceDiscovery";
@@ -15,13 +15,13 @@ function PttShortcutSelector({
   onChange: (hotkey: string) => void;
 }) {
   const { t } = useTranslation();
-  const presets = [
+  const presets = useMemo(() => [
     { label: "Shift + Fn", value: "shift+fn" },
     { label: "Ctrl + Space", value: "ctrl+space" },
     { label: "Ctrl + Alt", value: "ctrl+alt" },
     { label: "Shift + Ctrl", value: "shift+ctrl" },
     { label: t("voice.custom"), value: "custom" },
-  ];
+  ], [t]);
   // Determine if the current value matches a preset
   const matchedPreset = presets.find((p) => p.value !== "custom" && p.value === value);
   const [selectedPreset, setSelectedPreset] = useState<string>(
@@ -32,7 +32,7 @@ function PttShortcutSelector({
   useEffect(() => {
     const matched = presets.find((p) => p.value !== "custom" && p.value === value);
     setSelectedPreset(matched ? matched.value : "custom");
-  }, [value]);
+  }, [value, presets]);
 
   const handlePresetClick = (preset: { label: string; value: string }) => {
     setSelectedPreset(preset.value);

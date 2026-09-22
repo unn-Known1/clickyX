@@ -56,7 +56,7 @@ export default function UpdateBanner() {
     } finally {
       setInstalling(false);
     }
-  }, [info]);
+  }, [info, t]);
 
   if (!info || dismissed) return null;
 

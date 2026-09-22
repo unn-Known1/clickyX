@@ -37,7 +37,7 @@ export default function StatusBar({ typeModeActive }: { typeModeActive?: boolean
       console.error("Failed to start recording:", e);
       showToast(t("status.micFailed"), "error");
     }
-  }, [pttHeld, transcribing, showToast]);
+  }, [pttHeld, transcribing, showToast, t]);
 
   const endHold = useCallback(async () => {
     if (!pttHeld || transcribing) return;
@@ -47,7 +47,7 @@ export default function StatusBar({ typeModeActive }: { typeModeActive?: boolean
       const transcript = await commands.stopRecording();
       const text = (transcript ?? "").trim();
       if (text) {
-        showToast(`Voice: ${text.slice(0, 80)}${text.length > 80 ? "…" : ""}`, "success");
+        showToast(t("status.voiceToast", { text: `${text.slice(0, 80)}${text.length > 80 ? "…" : ""}` }), "success");
       }
     } catch (e) {
       console.error("Failed to stop/transcribe:", e);
@@ -55,7 +55,7 @@ export default function StatusBar({ typeModeActive }: { typeModeActive?: boolean
     } finally {
       setTranscribing(false);
     }
-  }, [pttHeld, transcribing, showToast]);
+  }, [pttHeld, transcribing, showToast, t]);
 
   // Auto-capture: react-query with refetchInterval + event-driven cache update
   const { data: acStatus } = useQuery<AutoCaptureStatus>({

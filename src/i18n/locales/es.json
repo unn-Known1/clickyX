@@ -202,7 +202,8 @@
     "pluralS": "s",
     "errorPlural": "es",
     "micFailed": "No se pudo iniciar el micrófono",
-    "transcribeFailed": "Falló la transcripción"
+    "transcribeFailed": "Falló la transcripción",
+    "voiceToast": "Voz: {{text}}"
   },
   "common": {
     "loading": "Cargando…",

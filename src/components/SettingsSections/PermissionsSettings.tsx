@@ -45,7 +45,7 @@ function PermissionsSettings() {
     } finally {
       setRequesting(null);
     }
-  }, [queryClient]);
+  }, [queryClient, t]);
 
   const labelMap: Record<string, string> = {
     microphone: t("perms.microphone"),

@@ -102,7 +102,7 @@ function AiProviderSettings() {
   }, [
     anthropicKey, anthropicModel, openaiKey, openaiModel, openaiBaseUrl,
     defaultProvider, systemPrompt, elevenlabsKey, cartesiaKey, deepgramKey, assemblyaiKey,
-    appConfig, updateAiConfig, updateAppConfig, showToast
+    appConfig, updateAiConfig, updateAppConfig, showToast, t
   ]);
 
   const error = aiError || appError;

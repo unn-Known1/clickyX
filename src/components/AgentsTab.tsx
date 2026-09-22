@@ -148,7 +148,7 @@ function AgentDetail({
   const copyTranscript = useCallback(() => {
     const text = agent.transcript.map((m) => `${m.role}: ${m.content}`).join("\n\n");
     navigator.clipboard.writeText(text).then(() => showToast(t("agents.transcriptCopied"), "success")).catch(() => {});
-  }, [agent.transcript, showToast]);
+  }, [agent.transcript, showToast, t]);
 
   return (
     <div className="agent-detail">

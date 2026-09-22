@@ -254,7 +254,7 @@ function AppInner() {
       console.error("Failed to toggle pin:", e);
       showToast(t("app.pinFailed"), "error");
     }
-  }, [config, updateConfig, showToast]);
+  }, [config, updateConfig, showToast, t]);
 
   // F-009: Tab skeleton loading fallback
   const tabFallback = (

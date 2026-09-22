@@ -54,7 +54,7 @@ function SystemSettings({ onOpenAbout }: Props) {
       console.error("Failed to rotate bridge token:", e);
       showToast(t("sys.rotateFailed"), "error");
     }
-  }, [showToast, refreshBridgeStatus]);
+  }, [showToast, refreshBridgeStatus, t]);
 
   const toggleBridgeAuth = useCallback(async () => {
     const disabling = !bridgeStatus?.auth_disabled;
@@ -67,7 +67,7 @@ function SystemSettings({ onOpenAbout }: Props) {
       console.error("Failed to toggle bridge auth:", e);
       showToast(t("sys.authUpdateFailed"), "error");
     }
-  }, [bridgeStatus, showToast, refreshBridgeStatus]);
+  }, [bridgeStatus, showToast, refreshBridgeStatus, t]);
 
   useEffect(() => {
     commands.getAppVersion().then(setAppVersion).catch(console.error);
@@ -84,7 +84,7 @@ function SystemSettings({ onOpenAbout }: Props) {
     } finally {
       setLoading(false);
     }
-  }, [showToast]);
+  }, [showToast, t]);
 
   const clearLogs = useCallback(async () => {
     try {
@@ -94,12 +94,12 @@ function SystemSettings({ onOpenAbout }: Props) {
     } catch (e) {
       console.error("Failed to clear logs:", e);
     }
-  }, [showToast]);
+  }, [showToast, t]);
 
   const copyLogs = useCallback(() => {
     const text = logs.map((e) => `[${e.timestamp}] [${e.level}] ${e.target}: ${e.message}`).join("\n");
     navigator.clipboard.writeText(text).then(() => showToast(t("sys.logsCopied"), "success")).catch(() => {});
-  }, [logs, showToast]);
+  }, [logs, showToast, t]);
 
   const exportConfig = useCallback(async () => {
     try {
@@ -117,7 +117,7 @@ function SystemSettings({ onOpenAbout }: Props) {
       console.error("Failed to export config:", e);
       showToast(t("sys.exportFailed"), "error");
     }
-  }, [showToast, includeSecrets]);
+  }, [showToast, includeSecrets, t]);
 
   const importConfig = useCallback(async () => {
     const input = document.createElement("input");
@@ -136,7 +136,7 @@ function SystemSettings({ onOpenAbout }: Props) {
       }
     };
     input.click();
-  }, [showToast]);
+  }, [showToast, t]);
 
   const resetConfig = useCallback(async () => {
     if (!confirm(t("sys.resetConfirm"))) return;
@@ -147,7 +147,7 @@ function SystemSettings({ onOpenAbout }: Props) {
       console.error("Failed to reset config:", e);
       showToast(t("sys.resetFailed"), "error");
     }
-  }, [showToast]);
+  }, [showToast, t]);
 
   const filteredLogs = logs.filter((e) => {
     const matchLevel = logFilter === "all" || e.level.toLowerCase() === logFilter;

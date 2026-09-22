@@ -202,7 +202,8 @@
     "pluralS": "s",
     "errorPlural": "s",
     "micFailed": "Could not start microphone",
-    "transcribeFailed": "Transcription failed"
+    "transcribeFailed": "Transcription failed",
+    "voiceToast": "Voice: {{text}}"
   },
   "common": {
     "loading": "Loading…",

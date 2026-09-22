@@ -21,7 +21,7 @@ function ComputerUseSettings() {
     } finally {
       setSaving(false);
     }
-  }, [config, updateConfig, showToast]);
+  }, [config, updateConfig, showToast, t]);
 
   if (error && !config) {
     return (

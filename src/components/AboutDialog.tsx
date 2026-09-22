@@ -14,7 +14,7 @@ export default function AboutDialog({ onClose }: Props) {
     let cancelled = false;
     commands.getAppVersion().then((v) => { if (!cancelled) setVersion(v); }).catch(() => { if (!cancelled) setVersion(t("about.unknown")); });
     return () => { cancelled = true; };
-  }, []);
+  }, [t]);
 
   // Close on Escape
   useEffect(() => {
