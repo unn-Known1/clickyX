@@ -39,7 +39,7 @@
     "@eslint/js": "^10.0.1",
     "@playwright/test": "^1",
     "@tauri-apps/cli": "^2",
-    "@testing-library/jest-dom": "^6",
+    "@testing-library/jest-dom": "^7",
     "@testing-library/react": "^16",
     "@testing-library/user-event": "^14",
     "@types/react": "^19",
