@@ -1,12 +1,15 @@
 import { useCallback } from "react";
+import { useTranslation } from "react-i18next";
 import { useQueryClient } from "@tanstack/react-query";
 import { useConfig } from "../../hooks/useConfig";
 import type { AppConfig } from "../../bindings";
 import { AppearanceSettings } from "./AppearanceSettings";
 import { OverlayPrefsSettings } from "./OverlayPrefsSettings";
 import { CaptureSettings } from "./CaptureSettings";
+import { SUPPORTED_LOCALES } from "../../i18n";
 
 function GeneralSettings() {
+  const { t, i18n } = useTranslation();
   const { config, updateConfig, loading, error } = useConfig();
   const queryClient = useQueryClient();
 
@@ -50,6 +53,24 @@ function GeneralSettings() {
         </div>
         <p className="settings-hint">
           Version-check traffic only (no identifiers). Disable for a fully offline launch.
+        </p>
+      </section>
+      <section className="settings-section elevated-card">
+        <h3>{t("settings.languageTitle", "Language")}</h3>
+        <div className="setting-row">
+          <label>{t("settings.languageLabel", "Interface language")}</label>
+          <select
+            className="setting-select"
+            value={i18n.language}
+            onChange={(e) => void i18n.changeLanguage(e.target.value)}
+          >
+            {SUPPORTED_LOCALES.map((l) => (
+              <option key={l.code} value={l.code}>{l.label}</option>
+            ))}
+          </select>
+        </div>
+        <p className="settings-hint">
+          {t("settings.languageHint", "Navigation, palette, and settings chrome are translated. Deeper screens still fall back to English.")}
         </p>
       </section>
       <AppearanceSettings config={config} onConfigUpdate={syncConfigCache} />

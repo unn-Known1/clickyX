@@ -33,7 +33,7 @@ export function SkeletonCard() {
 
 export function SkeletonList({ count = 3 }: { count?: number }) {
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+    <div className="skeleton-stack">
       {Array.from({ length: count }).map((_, i) => (
         <SkeletonCard key={i} />
       ))}

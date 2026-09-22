@@ -4599,3 +4599,25 @@ html, body, #root {
   }
 }
 
+
+/* ── P3/theme: static utilities (replaces literal inline styles) ───────────── */
+.padded-block { padding: 12px; }
+.run-empty { padding: 6px 0; }
+.interval-input { width: 90px; }
+.cron-input { flex: 1; }
+.ptt-custom-row { margin-top: 8px; }
+.voice-hint-tight { margin-top: -8px; margin-bottom: 12px; }
+.skill-search-input { margin-bottom: 4px; }
+.model-empty { padding: 24px 0; text-align: center; color: var(--color-muted); }
+.model-empty-title { margin: 0; font-size: 13px; }
+.model-empty-sub { margin: 4px 0 0; font-size: 11px; opacity: 0.6; word-break: break-all; }
+.model-skeleton-tall { height: 300px; }
+.model-skeleton-thin { height: 8px; width: 60%; margin: 8px auto; }
+.model-hint-centered { text-align: center; }
+.model-value-ellipsis { max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.model-add-row { display: inline-flex; align-items: center; gap: 6px; margin-top: 8px; }
+.clickable { cursor: pointer; }
+.model-note { font-size: 11px; opacity: 0.7; }
+.model-link { text-decoration: underline; cursor: pointer; }
+.skeleton-stack { display: flex; flex-direction: column; gap: 8px; }
+.settings-hint-success { color: var(--color-success, #4caf50); }

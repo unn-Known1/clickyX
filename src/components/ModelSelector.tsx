@@ -53,10 +53,10 @@ function ModelSelector({ selectedModel, onModelChange }: ModelSelectorProps) {
   if (!isLoading && !hasAnyProvider) {
     return (
       <div className="model-selector-empty" title="No AI providers configured">
-        <span style={{ fontSize: 11, opacity: 0.7 }}>
+        <span className="model-note">
           No AI provider configured —{" "}
           <span
-            style={{ textDecoration: "underline", cursor: "pointer" }}
+            className="model-link"
             onClick={() => setActiveTab("settings")}
           >
             set up in Settings

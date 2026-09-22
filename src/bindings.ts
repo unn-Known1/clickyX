@@ -15,7 +15,7 @@ export type { UnlistenFn, Event };
 
 export const isTauri =
   (typeof window !== "undefined" && "__TAURI_INTERNALS__" in window) ||
-  (typeof process !== "undefined" && process.env.NODE_ENV === "test");
+  (globalThis as unknown as Record<string, { env?: Record<string, string> }>).process?.env?.NODE_ENV === "test";
 
 export function invoke<T>(cmd: string, args?: any): Promise<T> {
   if (!isTauri) {

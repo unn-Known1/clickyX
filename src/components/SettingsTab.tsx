@@ -1,4 +1,6 @@
 import { useState, useEffect, useRef, lazy, Suspense } from "react";
+import { useTranslation } from "react-i18next";
+import { useAppContext } from "../context/AppContext";
 import GeneralSettings from "./SettingsSections/GeneralSettings";
 import VoiceSettings from "./SettingsSections/VoiceSettings";
 import AiProviderSettings from "./SettingsSections/AiProviderSettings";
@@ -22,14 +24,14 @@ interface NavItem {
 }
 
 const SETTINGS_TABS: NavItem[] = [
-  { id: "general",      label: "General",       icon: "settings" },
-  { id: "providers",    label: "AI Providers",  icon: "ai" },
-  { id: "voice",        label: "Voice & Audio", icon: "microphone" },
-  { id: "computer_use", label: "Computer Use",  icon: "cursor" },
-  { id: "connections",  label: "Connections",   icon: "link" },
-  { id: "permissions",  label: "Permissions",   icon: "shield" },
-  { id: "system",       label: "System",        icon: "info" },
-  { id: "3d_models",    label: "3D Models",     icon: "cube" },
+  { id: "general",      label: "settings.sections.general",      icon: "settings" },
+  { id: "providers",    label: "settings.sections.providers",    icon: "ai" },
+  { id: "voice",        label: "settings.sections.voice",        icon: "microphone" },
+  { id: "computer_use", label: "settings.sections.computerUse",  icon: "cursor" },
+  { id: "connections",  label: "settings.sections.connections",  icon: "connections" },
+  { id: "permissions",  label: "settings.sections.permissions",  icon: "shield" },
+  { id: "system",       label: "settings.sections.system",       icon: "info" },
+  { id: "3d_models",    label: "palette.models3d",               icon: "cube" },
 ];
 
 interface NavGroup {
@@ -38,10 +40,10 @@ interface NavGroup {
 }
 
 const NAV_GROUPS: NavGroup[] = [
-  { label: "Appearance",  items: ["general"] },
-  { label: "AI & Voice",  items: ["providers", "voice"] },
-  { label: "Automation",  items: ["computer_use", "connections"] },
-  { label: "System",      items: ["permissions", "system", "3d_models"] },
+  { label: "settings.groups.appearance",  items: ["general"] },
+  { label: "settings.groups.aiVoice",  items: ["providers", "voice"] },
+  { label: "settings.groups.automation",  items: ["computer_use", "connections"] },
+  { label: "settings.groups.system",      items: ["permissions", "system", "3d_models"] },
 ];
 
 interface Props {
@@ -49,20 +51,20 @@ interface Props {
 }
 
 function SettingsTab({ onOpenAbout }: Props) {
+  const { t } = useTranslation();
+  const { pendingSection, consumeSection } = useAppContext();
   const [activeSection, setActiveSection] = useState<SettingsTabId>("general");
   const contentRef = useRef<HTMLDivElement>(null);
   // Scroll memory: save scroll position per section
   const scrollMemory = useRef<Record<string, number>>({});
 
-  // Consume pending section from CommandPalette / deep-links on mount
+  // Consume pending section from CommandPalette / deep-links (via AppContext)
   useEffect(() => {
-    const pending = window.__paletteSection;
-    if (typeof pending === "string" && SETTINGS_TABS.some((t) => t.id === pending)) {
-      setActiveSection(pending as SettingsTabId);
+    if (pendingSection && SETTINGS_TABS.some((tab) => tab.id === pendingSection)) {
+      setActiveSection(pendingSection as SettingsTabId);
+      consumeSection();
     }
-    window.__paletteSection = undefined;
-    return () => { window.__paletteSection = undefined; };
-  }, []);
+  }, [pendingSection, consumeSection]);
 
   // Save scroll when leaving a section
   const handleSectionChange = (next: SettingsTabId) => {
@@ -84,11 +86,11 @@ function SettingsTab({ onOpenAbout }: Props) {
   return (
     <div className="settings-layout glass-panel">
       <aside className="settings-sidebar">
-        <h2 className="settings-header">Settings</h2>
+        <h2 className="settings-header">{t("settings.title")}</h2>
         <nav className="settings-nav" role="tablist" aria-label="Settings sections">
           {NAV_GROUPS.map((group) => (
             <div key={group.label} className="settings-nav-group">
-              <span className="settings-nav-group-label">{group.label}</span>
+              <span className="settings-nav-group-label">{t(group.label)}</span>
               {group.items.map((id) => {
                 const tab = tabById(id);
                 return (
@@ -102,7 +104,7 @@ function SettingsTab({ onOpenAbout }: Props) {
                     <span className="settings-nav-btn-icon">
                       <Icon name={tab.icon} size={16} />
                     </span>
-                    <span className="settings-nav-btn-label">{tab.label}</span>
+                    <span className="settings-nav-btn-label">{t(tab.label)}</span>
                     {activeSection === tab.id && <div className="settings-nav-active-indicator" />}
                   </button>
                 );
@@ -118,6 +120,7 @@ function SettingsTab({ onOpenAbout }: Props) {
           {activeSection === "voice"        && <VoiceSettings />}
           {activeSection === "providers"    && <AiProviderSettings />}
           {activeSection === "computer_use" && <ComputerUseSettings />}
+          {activeSection === "connections"  && <ConnectionsSettings />}
           {activeSection === "permissions"  && <PermissionsSettings />}
           {activeSection === "3d_models" && (
             <Suspense fallback={<div className="skeleton-loader" />}>

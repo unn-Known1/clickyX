@@ -100,15 +100,15 @@ export default function ModelGeneratorTab() {
           </div>
           <div className="setting-row">
             <label>Prompt</label>
-            <span className="setting-value" style={{ maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            <span className="setting-value model-value-ellipsis">
               {task.prompt}
             </span>
           </div>
 
           {(task.status === "pending" || task.status === "processing") && (
             <div className="model-gen-spinner">
-              <div className="skeleton-loader" style={{ height: 8, width: "60%", margin: "8px auto" }} />
-              <p className="settings-hint" style={{ textAlign: "center" }}>
+              <div className="skeleton-loader model-skeleton-thin" />
+              <p className="settings-hint model-hint-centered">
                 Generating… this usually takes 30–120 seconds.
               </p>
             </div>
@@ -117,24 +117,23 @@ export default function ModelGeneratorTab() {
           {task.status === "success" && task.model_url && (
             <div className="model-gen-viewer">
               {task.model_url.startsWith("http") ? (
-                <Suspense fallback={<div className="skeleton-loader" style={{ height: 300 }} />}>
+                <Suspense fallback={<div className="skeleton-loader model-skeleton-tall" />}>
                   <ThreeViewer modelUrl={task.model_url} />
                 </Suspense>
               ) : (
-                <div style={{ padding: "24px 0", textAlign: "center", color: "var(--color-muted)" }}>
-                  <p style={{ margin: 0, fontSize: 13 }}>
+                <div className="model-empty">
+                  <p className="model-empty-title">
                     Model saved locally — click Download to save the GLB file.
                   </p>
-                  <p style={{ margin: "4px 0 0", fontSize: 11, opacity: 0.6, wordBreak: "break-all" }}>
+                  <p className="model-empty-sub">
                     {task.model_url}
                   </p>
                 </div>
               )}
               <a
-                className="btn btn-primary"
                 href={task.model_url}
                 download={`model-${task.task_id}.glb`}
-                style={{ display: "inline-flex", alignItems: "center", gap: 6, marginTop: 8 }}
+                className="btn btn-primary model-add-row"
               >
                 Download GLB
               </a>

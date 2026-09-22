@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import CommandPalette from "../components/CommandPalette";
+import { AppProvider } from "../context/AppContext";
 
 describe("CommandPalette", () => {
   const mockClose = vi.fn();
@@ -9,7 +10,9 @@ describe("CommandPalette", () => {
 
   function renderPalette() {
     return render(
-      <CommandPalette onClose={mockClose} onNavigate={mockNavigate} />,
+      <AppProvider>
+        <CommandPalette onClose={mockClose} onNavigate={mockNavigate} />
+      </AppProvider>,
     );
   }
 

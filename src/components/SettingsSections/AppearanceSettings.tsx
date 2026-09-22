@@ -1,16 +1,7 @@
 import { useState, useCallback } from "react";
 import { commands } from "../../bindings";
 import type { AppConfig } from "../../bindings";
-
-const THEME_VARIANTS = [
-  { value: "", label: "Default" },
-  { value: "sunset", label: "Sunset" },
-  { value: "forest", label: "Forest" },
-  { value: "ocean", label: "Ocean" },
-  { value: "lavender", label: "Lavender" },
-  { value: "rose", label: "Rose" },
-  { value: "amber", label: "Amber" },
-];
+import { THEME_VARIANTS, getStoredVariant, setStoredVariant, applyTheme } from "../../utils/theme";
 
 interface Props {
   config: AppConfig;
@@ -20,24 +11,20 @@ interface Props {
 }
 
 export function AppearanceSettings({ config, onConfigUpdate }: Props) {
-  // Track selected color variant separately from base light/dark theme
-  const [themeVariant, setThemeVariant] = useState<string>("");
+  // Color variant persists in localStorage (presentation-only; the backend
+  // `theme` owns light/dark/system). Initialized from storage so the select
+  // survives remounts; App.tsx's sync effect respects the stored variant.
+  const [themeVariant, setThemeVariant] = useState<string>(() => getStoredVariant());
 
   const updateTheme = useCallback(async (theme: string) => {
     try {
       const updated = await commands.updateConfig({ theme });
       onConfigUpdate(updated);
-      // Apply base theme only when no color variant is active
-      if (!themeVariant) {
-        const effective = theme === "system"
-          ? (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light")
-          : theme;
-        document.documentElement.setAttribute("data-theme", effective);
-      }
+      applyTheme(theme);
     } catch (e) {
       console.error("Failed to update theme:", e);
     }
-  }, [onConfigUpdate, themeVariant]);
+  }, [onConfigUpdate]);
 
   const setAccent = useCallback(async (color: string) => {
     try {
@@ -52,16 +39,8 @@ export function AppearanceSettings({ config, onConfigUpdate }: Props) {
 
   const applyThemeVariant = (variant: string) => {
     setThemeVariant(variant);
-    if (variant) {
-      // Apply the color variant as the data-theme attribute
-      document.documentElement.setAttribute("data-theme", variant);
-    } else {
-      // Restore the base theme
-      const base = config.theme === "system"
-        ? (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light")
-        : config.theme;
-      document.documentElement.setAttribute("data-theme", base);
-    }
+    setStoredVariant(variant);
+    applyTheme(config.theme);
   };
 
   const presets = config.overlay.accent_presets ?? [];

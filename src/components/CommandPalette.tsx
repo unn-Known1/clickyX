@@ -1,20 +1,13 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import { useTranslation } from "react-i18next";
 import type { Tab } from "../context/AppContext";
+import { useAppContext } from "../context/AppContext";
 import { Icon } from "./Icon";
-import type { IconName } from "./Icon";
+import { getPaletteItems, searchPalette, type PaletteItem } from "./paletteRegistry";
 
 interface Props {
   onClose: () => void;
   onNavigate: (tab: Tab) => void;
-}
-
-interface PaletteItem {
-  id: string;
-  label: string;
-  description: string;
-  icon: IconName;
-  action: () => void;
-  category: string;
 }
 
 /** Case-insensitive substring highlighting for search results */
@@ -33,31 +26,41 @@ function Highlight({ text, query }: { text: string; query: string }) {
 }
 
 export default function CommandPalette({ onClose, onNavigate }: Props) {
+  const { t } = useTranslation();
+  const { requestSection } = useAppContext();
   const [query, setQuery] = useState("");
   const [selected, setSelected] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const items: PaletteItem[] = [
-    { id: "nav-home",        label: "Go to Home",        description: "Open the Home tab",        icon: "home",        action: () => onNavigate("home"),        category: "Navigation" },
-    { id: "nav-agents",      label: "Go to Agents",      description: "Open the Agents tab",      icon: "agents",      action: () => onNavigate("agents"),      category: "Navigation" },
-    { id: "nav-connections", label: "Go to Connections", description: "Open Connections (under Settings)", icon: "connections", action: () => { window.__paletteSection = "connections"; onNavigate("settings"); }, category: "Navigation" },
-    { id: "nav-settings",    label: "Go to Settings",    description: "Open the Settings tab",    icon: "settings",    action: () => onNavigate("settings"),    category: "Navigation" },
-    { id: "nav-settings-voice",    label: "Voice Settings",    description: "Settings › Voice",          icon: "microphone", action: () => { window.__paletteSection = "voice"; onNavigate("settings"); },        category: "Settings" },
-    { id: "nav-settings-ai",       label: "AI Providers",      description: "Settings › AI Providers",   icon: "ai",         action: () => { window.__paletteSection = "providers"; onNavigate("settings"); },    category: "Settings" },
-    { id: "nav-settings-general",  label: "General Settings",  description: "Settings › General",        icon: "settings",   action: () => { window.__paletteSection = "general"; onNavigate("settings"); },     category: "Settings" },
-    { id: "nav-settings-system",   label: "System & Logs",     description: "Settings › System & Logs", icon: "info",       action: () => { window.__paletteSection = "system"; onNavigate("settings"); },      category: "Settings" },
-    { id: "nav-settings-perm",     label: "Permissions",       description: "Settings › Permissions",   icon: "shield",     action: () => { window.__paletteSection = "permissions"; onNavigate("settings"); }, category: "Settings" },
-    { id: "new-agent", label: "New Agent", description: "Create a new agent in the Agents tab", icon: "plus", action: () => onNavigate("agents"), category: "Actions" },
-  ];
+  // Builtins close over onNavigate; registry extras (registered by feature
+  // modules via registerPaletteItems) are merged in — deduped by id with
+  // builtins winning.
+  const items: PaletteItem[] = useMemo(() => {
+    const section = (id: string) => {
+      requestSection(id);
+      onNavigate("settings");
+    };
+    const builtins: PaletteItem[] = [
+      { id: "nav-home",        label: t("palette.navHome"),        description: t("palette.navHomeDesc"),        icon: "home",        keywords: ["home", "ask", "chat"], action: () => onNavigate("home"),        category: t("palette.navNavigation") },
+      { id: "nav-agents",      label: t("palette.navAgents"),      description: t("palette.navAgentsDesc"),      icon: "agents",      keywords: ["agents", "background"], action: () => onNavigate("agents"),      category: t("palette.navNavigation") },
+      { id: "nav-settings",    label: t("palette.navSettings"),    description: t("palette.navSettingsDesc"),    icon: "settings",    keywords: ["settings", "preferences"], action: () => onNavigate("settings"),    category: t("palette.navNavigation") },
+      { id: "nav-connections", label: t("palette.navConnections"), description: t("palette.navConnectionsDesc"), icon: "connections", keywords: ["connections", "mcp", "integrations", "automations"], action: () => section("connections"), category: t("palette.navNavigation") },
+      { id: "nav-settings-voice",    label: t("settings.sections.voice"),      description: `${t("palette.navSettingsSection")} › ${t("settings.sections.voice")}`,      icon: "microphone", keywords: ["voice", "audio", "microphone", "stt", "tts"], action: () => section("voice"),        category: t("palette.navSettingsSection") },
+      { id: "nav-settings-ai",       label: t("settings.sections.providers"),  description: `${t("palette.navSettingsSection")} › ${t("settings.sections.providers")}`,  icon: "ai",         keywords: ["ai", "providers", "models", "keys"], action: () => section("providers"),    category: t("palette.navSettingsSection") },
+      { id: "nav-settings-general",  label: t("settings.sections.general"),    description: `${t("palette.navSettingsSection")} › ${t("settings.sections.general")}`,    icon: "settings",   keywords: ["general", "theme", "startup"], action: () => section("general"),     category: t("palette.navSettingsSection") },
+      { id: "nav-settings-computer", label: t("settings.sections.computerUse"), description: `${t("palette.navSettingsSection")} › ${t("settings.sections.computerUse")}`, icon: "cursor",     keywords: ["computer", "cua", "click", "automation"], action: () => section("computer_use"), category: t("palette.navSettingsSection") },
+      { id: "nav-settings-conn",     label: t("settings.sections.connections"), description: `${t("palette.navSettingsSection")} › ${t("settings.sections.connections")}`, icon: "connections", keywords: ["connections", "mcp", "servers"], action: () => section("connections"), category: t("palette.navSettingsSection") },
+      { id: "nav-settings-perm",     label: t("settings.sections.permissions"), description: `${t("palette.navSettingsSection")} › ${t("settings.sections.permissions")}`, icon: "shield",     keywords: ["permissions", "privacy", "tcc"], action: () => section("permissions"), category: t("palette.navSettingsSection") },
+      { id: "nav-settings-system",   label: t("settings.sections.system"),      description: `${t("palette.navSettingsSection")} › ${t("settings.sections.system")}`,      icon: "info",       keywords: ["system", "logs", "updates", "about"], action: () => section("system"),      category: t("palette.navSettingsSection") },
+      { id: "nav-settings-models",   label: t("palette.models3d"),         description: `${t("palette.navSettingsSection")} › ${t("palette.models3d")}`,      icon: "cube",       keywords: ["3d", "models", "gen3d"], action: () => section("3d_models"),   category: t("palette.navSettingsSection") },
+      { id: "new-agent", label: t("palette.newAgent"), description: t("palette.newAgentDesc"), icon: "plus", keywords: ["new", "create", "agent"], action: () => onNavigate("agents"), category: t("palette.navActions") },
+    ];
+    const seen = new Set(builtins.map((b) => b.id));
+    const extras = getPaletteItems().filter((e) => !seen.has(e.id));
+    return [...builtins, ...extras];
+  }, [onNavigate, requestSection, t]);
 
-  const filtered = query.trim()
-    ? items.filter(
-        (it) =>
-          it.label.toLowerCase().includes(query.toLowerCase()) ||
-          it.description.toLowerCase().includes(query.toLowerCase()) ||
-          it.category.toLowerCase().includes(query.toLowerCase()),
-      )
-    : items;
+  const filtered = useMemo(() => searchPalette(query, items), [query, items]);
 
   // Focus input on mount
   useEffect(() => { inputRef.current?.focus(); }, []);
@@ -87,7 +90,7 @@ export default function CommandPalette({ onClose, onNavigate }: Props) {
           <input
             ref={inputRef}
             className="palette-input"
-            placeholder="Search commands…"
+            placeholder={t("palette.searchPlaceholder")}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={handleKeyDown}
@@ -99,7 +102,7 @@ export default function CommandPalette({ onClose, onNavigate }: Props) {
 
         <div className="palette-list" id="palette-list" role="listbox">
           {filtered.length === 0 ? (
-            <div className="palette-empty">No results for "{query}"</div>
+            <div className="palette-empty">{t("palette.noResults")} "{query}"</div>
           ) : (
             categories.map((cat) => (
               <div key={cat}>

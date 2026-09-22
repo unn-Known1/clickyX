@@ -111,8 +111,8 @@ function CreateAgentForm({ skills, onCreate }: {
         <div className="skill-selector">
           <label>Skills:</label>
           {skills.length > 5 && (
-            <input className="settings-input" placeholder="Search skills…" value={skillSearch}
-              onChange={(e) => setSkillSearch(e.target.value)} style={{ marginBottom: 4 }} />
+            <input className="settings-input skill-search-input" placeholder="Search skills…" value={skillSearch}
+              onChange={(e) => setSkillSearch(e.target.value)} />
           )}
           <div className="skill-checkboxes">
             {filteredSkills.map((skill) => (
@@ -277,7 +277,7 @@ function AgentsTab() {
   );
 
   if (error) return <div className="agents-tab"><div className="agent-error">Error: {error}</div></div>;
-  if (loading) return <div className="agents-tab" style={{ padding: 12 }}><SkeletonList count={3} /></div>;
+  if (loading) return <div className="agents-tab padded-block"><SkeletonList count={3} /></div>;
 
   return (
     <div className="agents-tab">

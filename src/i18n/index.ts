@@ -29,7 +29,6 @@ i18n
     saveMissing: import.meta.env.DEV,
     missingKeyHandler: (_lngs, _ns, key) => {
       if (import.meta.env.DEV) {
-        // eslint-disable-next-line no-console
         console.warn(`[i18n] missing key: ${key}`);
       }
     },

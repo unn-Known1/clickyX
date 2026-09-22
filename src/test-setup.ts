@@ -21,13 +21,29 @@ vi.mock("@tauri-apps/plugin-updater", () => ({
   check: vi.fn().mockResolvedValue(null),
 }));
 
-vi.mock("react-i18next", () => ({
-  useTranslation: () => ({
-    t: (key: string) => key,
-    i18n: { language: "en", changeLanguage: vi.fn() },
-  }),
-  initReactI18next: { type: "3rdParty", init: vi.fn() },
-}));
+vi.mock("react-i18next", async () => {
+  // Resolve keys against the real EN locale so tests assert real strings.
+  const en = (await import("./i18n/locales/en.json")).default as Record<string, unknown>;
+  const lookup = (key: string): string => {
+    const parts = key.split(".");
+    let cur: unknown = en;
+    for (const p of parts) {
+      if (cur && typeof cur === "object" && p in (cur as Record<string, unknown>)) {
+        cur = (cur as Record<string, unknown>)[p];
+      } else {
+        return key;
+      }
+    }
+    return typeof cur === "string" ? cur : key;
+  };
+  return {
+    useTranslation: () => ({
+      t: (key: string) => lookup(key),
+      i18n: { language: "en", changeLanguage: vi.fn() },
+    }),
+    initReactI18next: { type: "3rdParty", init: vi.fn() },
+  };
+});
 
 // Silence console.error for expected React errors in tests
 const originalError = console.error;

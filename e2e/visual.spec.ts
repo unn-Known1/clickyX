@@ -41,10 +41,11 @@ test.describe("Visual regression", () => {
     });
   });
 
-  test("connections tab matches snapshot", async ({ page }) => {
+  test("settings connections section matches snapshot", async ({ page }) => {
+    await page.click('[role="tab"]:has-text("Settings")');
     await page.click('[role="tab"]:has-text("Connections")');
     await page.waitForTimeout(300);
-    await expect(page).toHaveScreenshot("connections-tab.png", {
+    await expect(page).toHaveScreenshot("settings-connections.png", {
       maxDiffPixelRatio: THRESHOLD,
       animations: "disabled",
     });

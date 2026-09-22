@@ -1,9 +1,9 @@
 import { useState, useCallback, useRef } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { commands } from "../../bindings";
+import { useTranslation } from "react-i18next";
 import { useAppContext } from "../../context/AppContext";
 import { SkeletonList } from "../SkeletonLoader";
-import { Icon } from "../Icon";
 import ConfirmDialog from "../ConfirmDialog";
 
 interface McpServer {
@@ -35,6 +35,7 @@ interface AutomationRun {
 }
 
 function ConnectionsSettings() {
+  const { t } = useTranslation();
   const { showToast } = useAppContext();
   const queryClient = useQueryClient();
 
@@ -191,29 +192,29 @@ function ConnectionsSettings() {
 
   return (
     <div className="connections-section-wrapper">
-      <h2>Connections &amp; Integrations</h2>
-      <p className="section-hint">External services and scheduled automations ClickyX can call on your behalf.</p>
+      <h2>{t("connections.title")}</h2>
+      <p className="section-hint">{t("connections.hint")}</p>
 
       {initialLoading && (
-        <div style={{ padding: 12 }}>
+        <div className="padded-block">
           <SkeletonList count={2} />
         </div>
       )}
 
       {/* MCP Servers */}
       <section className="connections-section">
-        <h3>MCP Servers</h3>
+        <h3>{t("connections.mcpServers")}</h3>
         {mcpServers.length > 1 && (
           <input
             className="search-input"
-            placeholder="Search MCP servers…"
+            placeholder={t("connections.searchServers")}
             value={mcpSearch}
             onChange={(e) => setMcpSearch(e.target.value)}
             aria-label="Search MCP servers"
           />
         )}
         {filteredMcp.length === 0 ? (
-          <p className="section-empty">{mcpSearch ? "No servers match." : "No MCP servers configured"}</p>
+          <p className="section-empty">{mcpSearch ? t("connections.noServersMatch") : t("connections.noMcp")}</p>
         ) : (
           <div className="mcp-list">
             {filteredMcp.map((server) => (
@@ -235,10 +236,10 @@ function ConnectionsSettings() {
                     className="btn btn-secondary btn-sm"
                     onClick={() => testMcpServer(server)}
                   >
-                    Test
+                    {t("connections.test")}
                   </button>
                   <button className="btn btn-small btn-danger" onClick={() => setConfirmRemoveMcp(server.name)}>
-                    Remove
+                    {t("connections.remove")}
                   </button>
                 </div>
               </div>
@@ -248,13 +249,13 @@ function ConnectionsSettings() {
 
         {/* Add MCP form */}
         <div className="add-form">
-          <input placeholder="Server name" value={newMcp.name}
+          <input placeholder={t("connections.serverName")} value={newMcp.name}
             onChange={(e) => setNewMcp({ ...newMcp, name: e.target.value })} />
-          <input placeholder="Command (e.g. npx)" value={newMcp.command}
+          <input placeholder={t("connections.serverCommand")} value={newMcp.command}
             onChange={(e) => setNewMcp({ ...newMcp, command: e.target.value })} />
 
           <div className="mcp-args-editor">
-            <label className="mcp-env-label">Arguments</label>
+            <label className="mcp-env-label">{t("connections.arguments")}</label>
             <div className="mcp-args-tags">
               {newMcp.args.map((arg, i) => (
                 <span key={i} className="mcp-arg-tag">
@@ -262,7 +263,7 @@ function ConnectionsSettings() {
                   <button
                     className="mcp-arg-remove"
                     onClick={() => removeArg(i)}
-                    aria-label={`Remove arg ${arg}`}
+                    aria-label={`${t("connections.removeArg")} ${arg}`}
                   >
                     ×
                   </button>
@@ -271,19 +272,19 @@ function ConnectionsSettings() {
             </div>
             <div className="form-row mcp-arg-add-row">
               <input
-                placeholder="Add argument…"
+                placeholder={t("connections.addArgument")}
                 value={editingArg}
                 onChange={(e) => setEditingArg(e.target.value)}
                 onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addArg(); } }}
                 className="mcp-arg-input"
-                aria-label="New argument"
+                aria-label={t("connections.newArgument")}
               />
-              <button className="btn btn-small btn-primary" onClick={addArg} type="button">Add</button>
+              <button className="btn btn-small btn-primary" onClick={addArg} type="button">{t("connections.add")}</button>
             </div>
           </div>
 
           <div className="mcp-env-editor">
-            <label className="mcp-env-label">Environment Variables</label>
+            <label className="mcp-env-label">{t("connections.envVars")}</label>
             {Object.entries(newMcp.env).map(([k, v]) => (
               <div key={k} className="mcp-env-row">
                 <span className="mcp-env-key">{k}</span>
@@ -293,12 +294,12 @@ function ConnectionsSettings() {
               </div>
             ))}
             <div className="form-row mcp-env-add-row">
-              <input placeholder="KEY" value={newEnvKey}
+              <input placeholder={t("connections.envKey")} value={newEnvKey}
                 onChange={(e) => setNewEnvKey(e.target.value)}
                 className="mcp-env-input-key"
                 aria-label="Env key" />
               <span className="mcp-env-eq">=</span>
-              <input placeholder="value" value={newEnvVal}
+              <input placeholder={t("connections.envValue")} value={newEnvVal}
                 onChange={(e) => setNewEnvVal(e.target.value)}
                 className="mcp-env-input-val"
                 aria-label="Env value" />
@@ -306,24 +307,24 @@ function ConnectionsSettings() {
             </div>
           </div>
 
-          <button className="btn btn-primary" onClick={addMcpServer}>Add MCP Server</button>
+          <button className="btn btn-primary" onClick={addMcpServer}>{t("connections.addServer")}</button>
         </div>
       </section>
 
       {/* Automations */}
       <section className="connections-section">
-        <h3>Automations</h3>
+        <h3>{t("connections.automations")}</h3>
         {automations.length > 1 && (
           <input
             className="search-input"
-            placeholder="Search automations…"
+            placeholder={t("connections.searchAutomations")}
             value={automationSearch}
             onChange={(e) => setAutomationSearch(e.target.value)}
             aria-label="Search automations"
           />
         )}
         {filteredAuto.length === 0 ? (
-          <p className="section-empty">{automationSearch ? "No automations match." : "No automations configured"}</p>
+          <p className="section-empty">{automationSearch ? t("connections.noAutomationsMatch") : t("connections.noAutomations")}</p>
         ) : (
           <div className="automation-list">
             {filteredAuto.map((a) => {
@@ -344,21 +345,21 @@ function ConnectionsSettings() {
                     <label className="toggle-label">
                       <input type="checkbox" checked={a.enabled}
                         onChange={(e) => toggleAutomation(a.id, e.target.checked)} />
-                      Enabled
+                      {t("connections.enabled")}
                     </label>
                     <button
                       className="btn-small automation-history-btn"
                       onClick={() => toggleRunHistory(a.id)}
                     >
-                      History{historyRuns.length > 0 ? ` (${historyRuns.length} runs)` : ""}
+                      {t("connections.history")}{historyRuns.length > 0 ? ` (${historyRuns.length} runs)` : ""}
                     </button>
-                    <button className="btn btn-small btn-danger" onClick={() => setConfirmDeleteAuto(a.id)}>Delete</button>
+                    <button className="btn btn-small btn-danger" onClick={() => setConfirmDeleteAuto(a.id)}>{t("connections.delete")}</button>
                   </div>
 
                   {isHistoryExpanded && (
                     <div className="automation-run-history">
                       {historyRuns.length === 0 ? (
-                        <p className="section-empty" style={{ padding: "6px 0" }}>No runs yet.</p>
+                        <p className="section-empty run-empty">{t("connections.noRuns")}</p>
                       ) : (
                         historyRuns.slice(0, 10).map((run) => (
                           <div key={run.id} className={`automation-run-item run-${run.status}`}>
@@ -388,51 +389,51 @@ function ConnectionsSettings() {
         )}
 
         <div className="add-form">
-          <input placeholder="Automation name" value={newAutomation.name}
+          <input placeholder={t("connections.automationName")} value={newAutomation.name}
             onChange={(e) => setNewAutomation({ ...newAutomation, name: e.target.value })} />
-          <input placeholder="Prompt for the agent" value={newAutomation.prompt}
+          <input placeholder={t("connections.automationPrompt")} value={newAutomation.prompt}
             onChange={(e) => setNewAutomation({ ...newAutomation, prompt: e.target.value })} />
 
           <div className="form-row">
-            <label>Schedule type:</label>
+            <label>{t("connections.scheduleType")}</label>
             <select className="setting-select" value={scheduleType}
               onChange={(e) => setScheduleType(e.target.value as "interval" | "cron")}>
-              <option value="interval">Interval</option>
-              <option value="cron">Cron expression</option>
+              <option value="interval">{t("connections.interval")}</option>
+              <option value="cron">{t("connections.cron")}</option>
             </select>
           </div>
 
           {scheduleType === "interval" ? (
             <div className="form-row">
-              <label>Interval (seconds):</label>
+              <label>{t("connections.intervalSecs")}</label>
               <input type="number" value={newAutomation.schedule.seconds || 3600}
                 onChange={(e) => setNewAutomation({
                   ...newAutomation,
                   schedule: { type: "interval", seconds: parseInt(e.target.value) || 3600 },
-                })} style={{ width: 90 }} />
+                })} className="interval-input" />
             </div>
           ) : (
             <div className="form-row">
-              <label>Cron:</label>
+              <label>{t("connections.cronLabel")}</label>
               <input placeholder="0 * * * *"
                 value={newAutomation.schedule.expression || ""}
                 onChange={(e) => setNewAutomation({
                   ...newAutomation,
                   schedule: { type: "cron", expression: e.target.value },
                 })}
-                style={{ flex: 1 }} />
+                className="cron-input" />
             </div>
           )}
 
-          <button className="btn btn-primary" onClick={createAutomation}>Create Automation</button>
+          <button className="btn btn-primary" onClick={createAutomation}>{t("connections.createAutomation")}</button>
         </div>
       </section>
 
       {confirmRemoveMcp && (
         <ConfirmDialog
-          title="Remove MCP server?"
-          message={`"${confirmRemoveMcp}" will be removed from your configuration.`}
-          confirmLabel="Remove"
+          title={t("connections.removeTitle")}
+          message={`"${confirmRemoveMcp}" ${t("connections.removeMsg")}` }
+          confirmLabel={t("connections.remove")}
           onConfirm={() => removeMcpServer(confirmRemoveMcp)}
           onCancel={() => setConfirmRemoveMcp(null)}
         />
@@ -440,9 +441,9 @@ function ConnectionsSettings() {
 
       {confirmDeleteAuto && (
         <ConfirmDialog
-          title="Delete automation?"
-          message="This automation and its run history will be permanently deleted."
-          confirmLabel="Delete"
+          title={t("connections.deleteTitle")}
+          message={t("connections.deleteMsg")}
+          confirmLabel={t("connections.delete")}
           onConfirm={() => deleteAutomation(confirmDeleteAuto)}
           onCancel={() => setConfirmDeleteAuto(null)}
         />

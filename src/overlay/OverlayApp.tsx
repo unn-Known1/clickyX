@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useCallback, Component, ReactNode } from "react";
+import { useEffect, useRef, useState, useCallback, memo, Component, ReactNode } from "react";
 import { listen } from "../bindings";
 import "./overlay.css";
 
@@ -97,6 +97,99 @@ function Spinner({ accent }: { accent: string }) {
     </div>
   );
 }
+
+// ── P3/U5: Isolated pet layer ────────────────────────────────────────────────
+// The pet owns its position state + RAF loop internally and is memoized, so
+// its 60fps chase animation never re-renders the parent overlay tree (the old
+// code called the parent's setPetPos every frame, re-rendering every overlay
+// on every monitor). Mouse/resize/visibility listeners live here too — the
+// parent only passes stable primitive props.
+const PetLayer = memo(function PetLayer({
+  visible,
+  processing,
+  waveformActive,
+  accent,
+}: {
+  visible: boolean;
+  processing: boolean;
+  waveformActive: boolean;
+  accent: string;
+}) {
+  const { w, h } = safeWindowSize();
+  const [pos, setPos] = useState({ x: w / 2, y: h / 2 });
+  const target = useRef({ x: w / 2, y: h / 2 });
+  const rafRef = useRef<number>(0);
+
+  useEffect(() => {
+    const onMouseMove = (e: MouseEvent) => {
+      target.current = { x: e.clientX, y: e.clientY };
+    };
+    const onResize = () => {
+      const s = safeWindowSize();
+      target.current = { x: s.w / 2, y: s.h / 2 };
+    };
+    window.addEventListener("mousemove", onMouseMove);
+    window.addEventListener("resize", onResize);
+    return () => {
+      window.removeEventListener("mousemove", onMouseMove);
+      window.removeEventListener("resize", onResize);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!visible) {
+      cancelAnimationFrame(rafRef.current);
+      return;
+    }
+    let alive = true;
+    const frame = () => {
+      if (!alive) return;
+      setPos((prev) => ({
+        x: prev.x + (target.current.x - prev.x) * 0.08,
+        y: prev.y + (target.current.y - prev.y) * 0.08,
+      }));
+      rafRef.current = requestAnimationFrame(frame);
+    };
+    const onVisibility = () => {
+      if (document.hidden) {
+        cancelAnimationFrame(rafRef.current);
+      } else if (alive) {
+        rafRef.current = requestAnimationFrame(frame);
+      }
+    };
+    rafRef.current = requestAnimationFrame(frame);
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      alive = false;
+      cancelAnimationFrame(rafRef.current);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
+  }, [visible]);
+
+  if (!visible) return null;
+  return (
+    <>
+      <div className="pet-sprite" style={{ left: pos.x, top: pos.y - 30 }}>
+        <svg width="32" height="32" viewBox="0 0 32 32">
+          <circle cx="16" cy="16" r="14" fill={withAlpha(accent, 0.35)} stroke={accent} strokeWidth="1.5" />
+          <circle cx="12" cy="13" r="2" fill="#fff" />
+          <circle cx="20" cy="13" r="2" fill="#fff" />
+          <path d="M12 20 Q16 24 20 20" fill="none" stroke={accent} strokeWidth="1.5" strokeLinecap="round" />
+        </svg>
+      </div>
+      {processing && (
+        <div className="processing-indicator" style={{ left: pos.x + 20, top: pos.y - 20 }}>
+          <Spinner accent={accent} />
+        </div>
+      )}
+      {waveformActive && (
+        <div className="waveform-wrapper" style={{ left: pos.x - 80, top: pos.y + 20 }}>
+          <Waveform active={waveformActive} accent={accent} />
+        </div>
+      )}
+    </>
+  );
+});
 
 // ── P-006: Real waveform data ─────────────────────────────────────────────────
 function Waveform({ active, accent }: { active: boolean; accent: string }) {
@@ -338,8 +431,6 @@ function ShapeOverlay({ shapes, accent }: { shapes: ShapeState[]; accent: string
 
 // ── Main overlay component ────────────────────────────────────────────────────
 function OverlayAppInner() {
-  const { w, h } = safeWindowSize();
-
   const [cursors, setCursors] = useState<CursorState[]>([]);
   const [animatedCursors, setAnimatedCursors] = useState<Record<string, AnimatedCursor>>({});
   const [rects, setRects] = useState<RectState[]>([]);
@@ -359,50 +450,7 @@ function OverlayAppInner() {
   const [alwaysListening, setAlwaysListening] = useState(false);
 
   const animRefs = useRef<Record<string, () => void>>({});
-  const [petPos, setPetPos] = useState({ x: w / 2, y: h / 2 });
-  const petTarget = useRef({ x: w / 2, y: h / 2 });
-  const petRafRef = useRef<number>(0);
   const streamTimers = useRef<Record<string, number>>({});
-
-  // F-020: RAF-based pet animation with visibility pause.
-  // P1 (CR-8): the pet used to wake on processing, waveform, cursors, rects
-  // AND always-listening — re-rendering the ENTIRE overlay tree at 60fps on
-  // every monitor in all ambient states. Now it only shows while the AI is
-  // actively processing. Full isolation (ref-driven position, zero parent
-  // re-renders) is P3/U5; the pet itself is deprecated (off by default there).
-  const isPetActive = processing;
-
-  const scheduleNextPetFrame = useCallback(() => {
-    petRafRef.current = requestAnimationFrame(() => {
-      setPetPos(prev => ({
-        x: prev.x + (petTarget.current.x - prev.x) * 0.08,
-        y: prev.y + (petTarget.current.y - prev.y) * 0.08,
-      }));
-      scheduleNextPetFrame();
-    });
-  }, []);
-
-  useEffect(() => {
-    if (!isPetActive) {
-      cancelAnimationFrame(petRafRef.current);
-      return;
-    }
-    scheduleNextPetFrame();
-    return () => cancelAnimationFrame(petRafRef.current);
-  }, [isPetActive, scheduleNextPetFrame]);
-
-  // F-020: Pause RAF when overlay is hidden
-  useEffect(() => {
-    const handleVisibility = () => {
-      if (document.hidden) {
-        cancelAnimationFrame(petRafRef.current);
-      } else if (isPetActive) {
-        scheduleNextPetFrame();
-      }
-    };
-    document.addEventListener("visibilitychange", handleVisibility);
-    return () => document.removeEventListener("visibilitychange", handleVisibility);
-  }, [scheduleNextPetFrame, isPetActive]);
 
   const startStreamingCaption = useCallback((cap: CaptionState) => {
     const id = `stream-${Date.now()}-${Math.random()}`;
@@ -605,24 +653,12 @@ function OverlayAppInner() {
       if (!cancelled) unlisten.push(u22);
     })().catch((err) => console.error("[OverlayApp] listen setup failed:", err));
 
-    const onMouseMove = (e: MouseEvent) => { petTarget.current = { x: e.clientX, y: e.clientY }; };
-    window.addEventListener("mousemove", onMouseMove);
-
-    // Update pet position based on window resize
-    const onResize = () => {
-      const { w: nw, h: nh } = safeWindowSize();
-      petTarget.current = { x: nw / 2, y: nh / 2 };
-    };
-    window.addEventListener("resize", onResize);
-
     return () => {
       cancelled = true;
       Object.values(streamTimers.current).forEach(clearTimeout);
       streamTimers.current = {};
       Object.values(animRefs.current).forEach(cancel => cancel());
       animRefs.current = {};
-      window.removeEventListener("mousemove", onMouseMove);
-      window.removeEventListener("resize", onResize);
       unlisten.forEach(fn => fn());
     };
   }, []);
@@ -635,32 +671,17 @@ function OverlayAppInner() {
       {/* F-014: Always-listening indicator — top-right corner */}
       {alwaysListening && <AlwaysListeningIndicator accent={accent} />}
 
-      {/* Pet sprite — only shown during active AI operations, hidden during calibration or idle */}
-      {!calibration.active && (processing || waveformActive || cursors.length > 0 || rects.length > 0 || alwaysListening) && (
-        <div className="pet-sprite" style={{ left: petPos.x, top: petPos.y - 30 }}>
-          <svg width="32" height="32" viewBox="0 0 32 32">
-            <circle cx="16" cy="16" r="14" fill={withAlpha(accent, 0.35)} stroke={accent} strokeWidth="1.5" />
-            <circle cx="12" cy="13" r="2" fill="#fff" />
-            <circle cx="20" cy="13" r="2" fill="#fff" />
-            <path d="M12 20 Q16 24 20 20" fill="none" stroke={accent} strokeWidth="1.5" strokeLinecap="round" />
-          </svg>
-        </div>
-      )}
+      {/* Pet layer — isolated (P3/U5): owns its RAF loop, never re-renders this tree.
+          Shown during active AI operations, hidden during calibration or idle. */}
+      <PetLayer
+        visible={!calibration.active && (processing || waveformActive || cursors.length > 0 || rects.length > 0 || alwaysListening)}
+        processing={processing}
+        waveformActive={waveformActive}
+        accent={accent}
+      />
 
       {/* Calibration box */}
       <CalibrationBox cal={calibration} accent={accent} />
-
-      {processing && (
-        <div className="processing-indicator" style={{ left: petPos.x + 20, top: petPos.y - 20 }}>
-          <Spinner accent={accent} />
-        </div>
-      )}
-
-      {waveformActive && (
-        <div className="waveform-wrapper" style={{ left: petPos.x - 80, top: petPos.y + 20 }}>
-          <Waveform active={waveformActive} accent={accent} />
-        </div>
-      )}
 
       {/* Active-control glow */}
       <GlowOverlay glows={glows} accent={accent} />

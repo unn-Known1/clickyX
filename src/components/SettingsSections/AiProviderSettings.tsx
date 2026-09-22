@@ -139,7 +139,7 @@ function AiProviderSettings() {
             autoComplete="new-password"
           />
           {hasAnthropicKey && !anthropicKey && (
-            <span className="settings-hint" style={{ color: "var(--color-success, #4caf50)" }}>
+            <span className="settings-hint settings-hint-success">
               ✓ API key is saved
             </span>
           )}
@@ -162,7 +162,7 @@ function AiProviderSettings() {
             autoComplete="new-password"
           />
           {hasOpenaiKey && !openaiKey && (
-            <span className="settings-hint" style={{ color: "var(--color-success, #4caf50)" }}>
+            <span className="settings-hint settings-hint-success">
               ✓ API key is saved
             </span>
           )}

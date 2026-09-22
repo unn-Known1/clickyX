@@ -73,11 +73,10 @@ function AgentDockStrip() {
           return (
             <div
               key={agent.slug}
-              className="agent-dock-item"
+              className="agent-dock-item clickable"
               title={`${agent.name} (${label})`}
               role="listitem"
               onClick={() => setActiveTab("agents")}
-              style={{ cursor: "pointer" }}
             >
               <span className="agent-dock-dot" style={{ backgroundColor: color }} />
               <span className="agent-dock-name">{agent.name}</span>

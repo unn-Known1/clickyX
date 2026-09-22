@@ -1202,14 +1202,47 @@ P3 workstream scope per §9: keyring-backed secret store, full `commands.rs` spl
 - Playwright specs fixed by inspection against markup; **browsers never ran them here** — CI job is the gate; visual baselines still uncommitted.
 - `cargo-audit` step is best-effort (`|| true` on install, warning annotation on findings).
 - Skills-error swallowing codified in test (known; decision deferred: bug vs intended).
-- Full `commands.rs` split, axum evaluation, ConfigService, keychain, i18n wire-up, IA re-cut: **P3, untouched**.
+- ~~Full `commands.rs` split, axum evaluation, ConfigService, keychain, i18n wire-up, IA re-cut: **P3, untouched**~~ — **done in P3, see §10.6** (axum evaluation and full ConfigService intentionally not pursued: actix handlers + `CONFIG_CACHE` cover the need; documented as a non-goal).
 
 ## 10.5 Rust test run — final: **176 passed, 0 failed**
 
 - First full run: 175 passed / 1 failed (`test_score_github_asset_linux_prefers_install_format` — the new matcher itself repeated the original bug class by requiring a `"linux"` substring real names don't contain). Fixed by matching installer signals (`.deb`/`.rpm`/`.appimage`, `.msi`/`.exe`/`setup`, `.dmg`) + extended assertions for all three platforms' real names.
 - `cargo clippy -- -D warnings` clean; `cargo fmt --check` clean. Both gates now match what CI enforces.
 
+## 10.6 P3 implementation (2026-09-22) — all §9 workstreams closed
+
+**P3/foundation (Rust)** — `secret_store.rs` (new): `SecretStore` trait, `KeychainStore` (OS keychain via `keyring`), `MemoryStore` (tests), `migrate_secrets_to_store` / `hydrate_secrets_from_store` / `persist_secret` / `strip_verified_secrets`, `keys::*` namespace; 11 unit tests. `config.rs`: `CONFIG_CACHE`, `secrets_in_keychain` flag, keychain sync on load/save. `commands.rs` (2578-line god-file) split into `commands/{types,config_cmds,panel_cmds,chat_cmds,ai_cmds,screen_cmds,overlay_cmds,audio_cmds,agent_cmds,automation_cmds,mcp_cmds,system_cmds,cua_cmds,error,mod}.rs` with re-exports preserving `commands::foo` paths. Crate-wide `#![allow(dead_code)]` removed; dead methods/fields/variants pruned (targeted allows kept where tests reference them). Codex sidecar (`agent/codex.rs`, `CodexState`, `codex_path`/`codex_home`) and `ai/app_contexts.rs` deleted per §7. Verification: `cargo check` 0 warnings · clippy `-D warnings` clean · `fmt --check` clean · `cargo test --lib` **162 passed**.
+
+**P3/MCP (Rust)** — `mcp_session.rs` (new): `McpSessionRegistry` keeps one persistent child per server (amortizes the JSON-RPC handshake; previously respawned per call). Bounds: `MAX_CONCURRENT_SESSIONS=8` (fail-fast structured error when full), `DEFAULT_IDLE_TTL=5min` with `sweep_idle()`, `CALL_ACQUIRE_TIMEOUT=10s` try-lock polling, `MAX_REQUESTS_PER_SESSION=1024` cycling, immediate evict on transport/protocol error. Wired into `BridgeState`; `mcp_call` goes through the registry (per-call spawn kept only for one-shot `tools/list`). `lib.rs` runs a 60 s sweep task. `mcp_call_tool_sync` deleted. 4 unit tests. Verification: `cargo test --lib` **166 passed** · clippy clean · fmt clean.
+
+**P3/IA (frontend)** — Connections top-level tab deleted (`ConnectionsTab.tsx` removed; `Tab` type now `"home" | "agents" | "settings"`). New `SettingsSections/ConnectionsSettings.tsx` owns the MCP + automations surface (same react-query CRUD, minus the dashboard widgets); registered as Settings › Automation › Connections. Deep-links (`connections`, `settings/<section>`) and the palette route into it. `e2e/visual.spec.ts`: connections-tab snapshot replaced with settings-connections snapshot.
+
+**P3/palette (frontend)** — `components/paletteRegistry.ts` (new): `registerPaletteItems` / `getPaletteItems` extension point + subsequence-fuzzy `searchPalette` (contiguity + word-boundary scoring, best-first). `CommandPalette` rebuilt on it (builtins merged with registry extras, `useMemo`); all 8 settings sections + New Agent actionable. `paletteRegistry.test.ts`: 11 tests (scoring, ranking, keyword match, register/unregister, id-collision).
+
+**P3/theme (frontend)** — `utils/theme.ts` (new): variant persisted in localStorage, `resolveTheme`/`applyTheme` single owner. Fixed the real bug where `App.tsx`'s config-sync effect stomped any active color variant on every config change (and the variant reset on every remount). `AppearanceSettings` uses the shared module. 5 `theme.test.ts` tests. Static literal inline styles moved to `theme.css` utilities (`padded-block`, `model-empty*`, `skeleton-stack`, etc.); 16 remaining inline styles are all data-driven (status colors, positions, sizes) and stay inline by design.
+
+**P3/i18n (frontend)** — First real `t()` wiring (was 0 calls — "i18n theater"): tab bar, palette (labels/descriptions/categories/placeholder/empty), settings nav + groups, full Connections surface, General language switcher (EN/ES/FR/JA via `SUPPORTED_LOCALES`, `fallbackLng: en`). EN+ES JSON locale files extracted from the inline blobs in `i18n/index.ts` (which now loads all four locales from JSON + dev `missingKeyHandler`); FR/JA fall back to EN for new keys. Test mock resolves keys against real `en.json` so tests assert real strings. Honest scope: deeper screens (chat, agents CRUD, voice settings) still hardcode English — tracked below.
+
+**P3/overlay (frontend)** — `PetLayer`: memoized, owns pet position state + RAF loop + mouse/resize/visibility listeners internally. The parent `OverlayApp` no longer `setState`s at 60 fps (the whole-tree-per-frame re-render on every monitor is gone); it passes only `visible/processing/waveformActive/accent` primitives.
+
+**P3/residuals (frontend)** — `window.__paletteSection` eliminated: section-targeting now lives in `AppContext` (`pendingSection`/`requestSection`/`consumeSection`, +2 tests); `global.d.ts` trimmed to the Tauri-injected `__AGENT_SLUG` only. Dead deps removed: `@react-three/drei`, `@react-three/fiber` (only `three` is used). Dead dashboard widgets deleted (`ActiveAgentsWidget`, `TodayStatsWidget`, `NeedsAttentionWidget` — unreferenced since the Connections tab died). `bindings.ts`: fixed a pre-existing `process` typing error that failed `tsc` on fresh installs without `@types/node`.
+
+**P3 verification (final):**
+
+| Check | Result |
+|-------|--------|
+| `cargo check --all-features --tests` | **EXIT 0**, zero warnings (no Rust changes since MCP commit; gates re-verified there) |
+| `cargo test --all-features --lib` | **166 passed, 0 failed** (162 foundation + 4 MCP) |
+| `cargo clippy --all-features --tests -- -D warnings` | **clean** |
+| `cargo fmt --check` | **clean** |
+| `npm run build` (tsc + vite) | **pass** |
+| `npm test` | **15 files / 113 tests pass** (was 13/95; +paletteRegistry 11, +theme 5, +AppContext section 2) |
+| ESLint (src+e2e) | **0 errors**, 29 warnings (`any` ratchet + pre-existing exhaustive-deps) |
+| `npm audit --audit-level=high` | **0 vulnerabilities** |
+
+**P3 residual gaps (not hidden):** `npm run lint` reports 40 errors, all pre-existing in `skills/*` and `.opencode/*` skill JS (untouched; P0's "0 errors" claim was always src+e2e-scoped). Deeper-screen i18n (chat/agents/voice/providers/computer-use/permissions/system copy) still hardcoded — chrome is translated, bodies fall back to English by design until a follow-up pass. `display_to_screenshot` in `screen/coordinate.rs` is an `#[allow(dead_code)]` origin-returning stub (callers kept for API stability; flagged for the coordinate follow-up). Windows/macOS-only paths still never executed here — 3-OS CI is the gate. Playwright ran green nowhere locally (no browsers); CI + uncommitted baselines still the gate.
+
 ---
 
-*End of report (updated 2026-09-22 with strategic decision, file-level inventory, traceability, phased plan, gap-closure audit, and P0/P1/P2 implementation log). No unverified claims above: every statement maps to a diff hunk or a check output cited in §10.3.*
+*End of report (updated 2026-09-22 with strategic decision, file-level inventory, traceability, phased plan, gap-closure audit, P0/P1/P2 log, and the full P3 implementation log in §10.6). No unverified claims above: every statement maps to a diff hunk or a check output cited in §10.3/§10.6.*
 

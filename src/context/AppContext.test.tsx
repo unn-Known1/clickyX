@@ -97,4 +97,31 @@ describe("AppContext", () => {
       vi.useRealTimers();
     });
   });
+
+  describe("pending section", () => {
+    function SectionConsumer() {
+      const { pendingSection, requestSection, consumeSection } = useAppContext();
+      return (
+        <div>
+          <span data-testid="pending">{pendingSection ?? "none"}</span>
+          <button onClick={() => requestSection("voice")}>Request voice</button>
+          <button onClick={() => consumeSection()}>Consume</button>
+        </div>
+      );
+    }
+
+    it("starts with no pending section", () => {
+      render(<AppProvider><SectionConsumer /></AppProvider>);
+      expect(screen.getByTestId("pending")).toHaveTextContent("none");
+    });
+
+    it("requests and consumes a section", async () => {
+      const user = userEvent.setup();
+      render(<AppProvider><SectionConsumer /></AppProvider>);
+      await user.click(screen.getByText("Request voice"));
+      expect(screen.getByTestId("pending")).toHaveTextContent("voice");
+      await user.click(screen.getByText("Consume"));
+      expect(screen.getByTestId("pending")).toHaveTextContent("none");
+    });
+  });
 });

@@ -61,7 +61,7 @@ function PttShortcutSelector({
       </div>
 
       {selectedPreset === "custom" && (
-        <div className="ptt-custom-input" style={{ marginTop: 8 }}>
+        <div className="ptt-custom-input ptt-custom-row">
           <HotkeyInput
             value={value}
             onChange={onChange}
@@ -137,7 +137,7 @@ function VoiceSettings() {
         </select>
       </div>
       {audioConfig.tts_provider === "system" && (
-        <div className="settings-hint" style={{ marginTop: -8, marginBottom: 12 }}>
+        <div className="settings-hint voice-hint-tight">
           <strong>System TTS:</strong> Plays directly through your OS, bypassing the app's internal volume and waveform animations. No setup required on Windows/macOS. Linux requires <code>speech-dispatcher</code>.
         </div>
       )}

@@ -10,6 +10,8 @@ import { Icon } from "./components/Icon";
 import { useConfig } from "./hooks/useConfig";
 import { AppProvider, useAppContext } from "./context/AppContext";
 import type { Tab } from "./context/AppContext";
+import { useTranslation } from "react-i18next";
+import { applyTheme } from "./utils/theme";
 import "./styles/theme.css";
 import "./components/OnboardingWizard.css";
 
@@ -73,20 +75,9 @@ function Toast({
   );
 }
 
-// ── Theme helpers ──────────────────────────────────────────────────────────────
-function getEffectiveTheme(theme: string): string {
-  if (theme === "system") {
-    return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
-  }
-  return theme;
-}
+// ── Theme sync is variant-aware (see utils/theme) ─────────────────────────────
 
-const TABS: { id: Tab; label: string }[] = [
-  { id: "home",        label: "Home" },
-  { id: "agents",      label: "Agents" },
-
-  { id: "settings",   label: "Settings" },
-];
+const TAB_IDS: Tab[] = ["home", "agents", "settings"];
 
 // ── F-031: Splash Screen ───────────────────────────────────────────────────────
 function SplashScreen() {
@@ -104,7 +95,8 @@ function SplashScreen() {
 
 // ── Inner app — has access to AppContext ───────────────────────────────────────
 function AppInner() {
-  const { activeTab, tabTransition, setActiveTab, toasts, dismissToast, showToast } =
+  const { t } = useTranslation();
+  const { activeTab, tabTransition, setActiveTab, toasts, dismissToast, showToast, requestSection } =
     useAppContext();
   const { config, updateConfig, isLoading: configLoading } = useConfig();
   const [animState, setAnimState] = useState<"enter" | "exit" | "">("");
@@ -145,17 +137,16 @@ function AppInner() {
     return () => { if (unlisten) unlisten(); };
   }, []);
 
-  // theme sync
+  // theme sync (variant-aware: stored color variant wins)
   useEffect(() => {
     if (!config) return;
-    document.documentElement.setAttribute("data-theme", getEffectiveTheme(config.theme));
+    applyTheme(config.theme);
   }, [config]);
 
   useEffect(() => {
     if (!config || config.theme !== "system") return;
     const mq = window.matchMedia("(prefers-color-scheme: dark)");
-    const handler = () =>
-      document.documentElement.setAttribute("data-theme", mq.matches ? "dark" : "light");
+    const handler = () => applyTheme("system");
     mq.addEventListener("change", handler);
     return () => mq.removeEventListener("change", handler);
   }, [config]);
@@ -219,13 +210,13 @@ function AppInner() {
       } else if (parts[0] === "settings") {
         setActiveTab("settings");
         if (parts[1]) {
-          // Signal SettingsTab to open a sub-section
-          window.__paletteSection = parts[1];
+          // Signal SettingsTab to open a sub-section (via AppContext, not window globals)
+          requestSection(parts[1]);
         }
       } else if (parts[0] === "connections") {
         // P3/IA: connections live under Settings now.
         setActiveTab("settings");
-        window.__paletteSection = "connections";
+        requestSection("connections");
       } else if (parts[0] === "home") {
         setActiveTab("home");
       }
@@ -338,18 +329,18 @@ function AppInner() {
 
         <nav className="tab-bar" role="tablist" aria-label="Main navigation">
           <div className="tab-bar-tabs">
-            {TABS.map((tab) => (
+            {TAB_IDS.map((id) => (
               <button
-                key={tab.id}
+                key={id}
                 role="tab"
-                aria-selected={activeTab === tab.id}
-                aria-current={activeTab === tab.id ? "page" : undefined}
-                aria-controls={`tabpanel-${tab.id}`}
-                id={`tab-${tab.id}`}
-                className={`tab-button ${activeTab === tab.id ? "active" : ""}`}
-                onClick={() => setActiveTab(tab.id)}
+                aria-selected={activeTab === id}
+                aria-current={activeTab === id ? "page" : undefined}
+                aria-controls={`tabpanel-${id}`}
+                id={`tab-${id}`}
+                className={`tab-button ${activeTab === id ? "active" : ""}`}
+                onClick={() => setActiveTab(id)}
               >
-                {tab.label}
+                {t(`nav.${id}`)}
               </button>
             ))}
           </div>
