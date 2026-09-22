@@ -161,10 +161,6 @@ impl RingBuffer {
         self.data.fill(0.0);
         self.write_pos = 0;
     }
-
-    pub fn len(&self) -> usize {
-        self.capacity.min(self.write_pos)
-    }
 }
 
 pub struct AudioCapture {
@@ -275,35 +271,5 @@ impl AudioCapture {
 
         log::info!("Audio capture stopped, {} samples captured", data.len());
         Ok(data)
-    }
-
-    pub fn audio_level(&self) -> super::pipeline::AudioLevel {
-        if let Ok(buf) = self.buffer.lock() {
-            let rms = buf.rms();
-            let peak = buf.peak();
-            super::pipeline::AudioLevel {
-                rms: rms.min(1.0),
-                peak: peak.min(1.0),
-                clipping: peak > 0.99,
-            }
-        } else {
-            super::pipeline::AudioLevel {
-                rms: 0.0,
-                peak: 0.0,
-                clipping: false,
-            }
-        }
-    }
-
-    pub fn is_recording(&self) -> bool {
-        self.recording.load(Ordering::SeqCst)
-    }
-
-    pub fn get_buffer_samples(&self) -> Vec<f32> {
-        if let Ok(buf) = self.buffer.lock() {
-            buf.get_all()
-        } else {
-            vec![]
-        }
     }
 }

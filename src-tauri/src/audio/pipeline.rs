@@ -312,12 +312,6 @@ impl VoicePipeline {
             }
         }
     }
-
-    /// Query current ducking state.
-    pub fn get_ducking_state(&self) -> bool {
-        self.audio_ducking_active.load(Ordering::SeqCst)
-    }
-
     /// Attach a Tauri app handle so the pipeline can emit events.
     pub fn set_app_handle(&mut self, handle: tauri::AppHandle) {
         self.app_handle = Some(Arc::new(Mutex::new(handle)));
@@ -384,6 +378,7 @@ impl VoicePipeline {
         Ok(())
     }
 
+    #[allow(dead_code)]
     pub fn check_wake_word(&self) -> Result<bool, String> {
         let state = *self
             .state
@@ -424,11 +419,6 @@ impl VoicePipeline {
 
         Ok(false)
     }
-
-    pub fn wake_word_detected(&self) -> bool {
-        self.wake_word_detected.load(Ordering::SeqCst)
-    }
-
     pub fn consume_wake_word_detected(&self) -> bool {
         self.wake_word_detected.swap(false, Ordering::SeqCst)
     }
@@ -721,16 +711,6 @@ impl VoicePipeline {
             .map(|c| c.clone())
             .map_err(|e| format!("AlwaysOn config lock error: {e}"))
     }
-
-    pub fn set_wake_word_config(&self, config: WakeWordConfig) -> Result<(), String> {
-        let mut detector = self
-            .wake_word_detector
-            .lock()
-            .map_err(|e| format!("Detector lock error: {e}"))?;
-        detector.config = config;
-        Ok(())
-    }
-
     pub fn update_api_keys(&self, api_keys: &[crate::config::ApiKey]) -> Result<(), String> {
         let mut stt_cfg = self
             .stt_config
@@ -792,29 +772,6 @@ impl VoicePipeline {
 
         Ok(())
     }
-
-    pub fn set_stt_api_key(&self, key: String) -> Result<(), String> {
-        let mut cfg = self
-            .stt_config
-            .lock()
-            .map_err(|e| format!("STT config lock error: {e}"))?;
-        cfg.api_key = key;
-        Ok(())
-    }
-
-    pub fn set_tts_api_key(&self, key: String) -> Result<(), String> {
-        let mut cfg = self
-            .tts_config
-            .lock()
-            .map_err(|e| format!("TTS config lock error: {e}"))?;
-        cfg.api_key = key;
-        Ok(())
-    }
-
-    pub fn capture_handle(&self) -> CaptureThreadHandle {
-        self.capture.clone()
-    }
-
     pub fn stt_config(&self) -> Result<SttConfig, String> {
         self.stt_config
             .lock()

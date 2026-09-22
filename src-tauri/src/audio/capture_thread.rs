@@ -12,6 +12,7 @@ enum CaptureCommand {
     StopRecording {
         response: mpsc::Sender<Result<Vec<f32>, String>>,
     },
+    #[allow(dead_code)]
     Shutdown,
 }
 
@@ -95,7 +96,7 @@ impl CaptureThreadHandle {
             AudioLevel::zero()
         }
     }
-
+    #[allow(dead_code)]
     pub fn get_buffer_samples(&self) -> Vec<f32> {
         if let Ok(buf) = self.buffer.lock() {
             buf.get_all()

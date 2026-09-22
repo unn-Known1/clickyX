@@ -4,7 +4,6 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::agent::session::AgentStore;
 use crate::ai;
 use crate::screen::auto_capture::{AutoCaptureConfig, CapturedFrame};
 

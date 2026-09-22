@@ -80,6 +80,7 @@ impl Default for ScreenManager {
     }
 }
 
+#[derive(Debug, Clone)]
 pub struct CoordinateNormalizer {
     screen_mgr: ScreenManager,
 }

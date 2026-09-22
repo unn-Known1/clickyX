@@ -1,4 +1,4 @@
-use enigo::{Coordinate, Direction, Enigo, Key, Keyboard, Mouse, Settings};
+use enigo::{Coordinate, Direction, Enigo, Mouse, Settings};
 use serde::{Deserialize, Serialize};
 
 #[cfg(target_os = "linux")]
@@ -454,6 +454,7 @@ fn ydotool_click(x: f64, y: f64) -> Result<(), String> {
     Ok(())
 }
 
+#[cfg(test)]
 mod tests {
     use super::*;
 

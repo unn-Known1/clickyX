@@ -2,9 +2,9 @@ use serde::Serialize;
 use std::collections::HashMap;
 use tauri::{AppHandle, Emitter, Runtime, WebviewWindow, WebviewWindowBuilder};
 
-use super::screen_router::{CoordinateNormalizer, MonitorInfo, ScreenManager};
+use super::screen_router::{CoordinateNormalizer, ScreenManager};
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone)]
 
 /// Per-screen overlay window manager.
 ///
@@ -69,22 +69,11 @@ impl<R: Runtime> OverlayWindowManager<R> {
         Ok(())
     }
 
+    #[allow(dead_code)]
     pub fn get_window(&self, screen_idx: usize) -> Option<&WebviewWindow<R>> {
         self.windows.get(&format!("overlay-{}", screen_idx))
     }
-
-    pub fn show_all(&self) {
-        for window in self.windows.values() {
-            let _ = window.show();
-        }
-    }
-
-    pub fn hide_all(&self) {
-        for window in self.windows.values() {
-            let _ = window.hide();
-        }
-    }
-
+    #[allow(dead_code)]
     pub fn emit_on_screen(
         &self,
         screen_idx: usize,
@@ -100,6 +89,7 @@ impl<R: Runtime> OverlayWindowManager<R> {
         }
     }
 
+    #[allow(dead_code)]
     pub fn emit_all_screens(&self, event: &str, payload: impl Serialize + Clone) {
         for (label, window) in &self.windows {
             if let Err(e) = window.emit(event, payload.clone()) {
@@ -158,10 +148,12 @@ impl<R: Runtime> OverlayWindowManager<R> {
         Ok(())
     }
 
+    #[allow(dead_code)]
     pub fn window_count(&self) -> usize {
         self.windows.len()
     }
 
+    #[allow(dead_code)]
     pub fn is_multi_monitor(&self) -> bool {
         self.windows.len() > 1
     }

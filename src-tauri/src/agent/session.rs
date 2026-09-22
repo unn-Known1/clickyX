@@ -43,7 +43,6 @@ impl AgentSession {
             transcript: vec![],
         }
     }
-
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

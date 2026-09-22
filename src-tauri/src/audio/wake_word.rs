@@ -12,6 +12,7 @@ pub struct WakeWordDetector {
     pub listening: bool,
     triggered: bool,
     cooldown: u32,
+    #[allow(dead_code)]
     hysteresis_samples: u32,
 }
 
@@ -26,6 +27,7 @@ impl WakeWordDetector {
         }
     }
 
+    #[allow(dead_code)]
     pub fn detect(&mut self, audio_chunk: &[f32]) -> bool {
         if !self.listening {
             return false;
@@ -36,7 +38,11 @@ impl WakeWordDetector {
             return false;
         }
 
-        let energy: f32 = audio_chunk.iter().map(|s| s * s).sum::<f32>() / audio_chunk.len() as f32;
+        let energy: f32 = if audio_chunk.is_empty() {
+            0.0
+        } else {
+            audio_chunk.iter().map(|s| s * s).sum::<f32>() / audio_chunk.len() as f32
+        };
         let threshold = 0.01 + (self.config.sensitivity * 0.19);
         let detected = energy > threshold;
 
@@ -76,9 +82,5 @@ impl WakeWordDetector {
         self.listening = false;
         self.reset();
         log::info!("Wake word detector: stopped listening");
-    }
-
-    pub fn is_triggered(&self) -> bool {
-        self.triggered
     }
 }

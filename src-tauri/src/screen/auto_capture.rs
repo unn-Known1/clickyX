@@ -211,17 +211,6 @@ impl AutoCaptureEngine {
         }
     }
 
-    pub fn get_history(&self, n: usize) -> Vec<CapturedFrame> {
-        let caps = self.captures.lock().ok();
-        match caps {
-            Some(c) => {
-                let len = c.len();
-                c.iter().skip(len.saturating_sub(n)).cloned().collect()
-            }
-            None => Vec::new(),
-        }
-    }
-
     pub fn set_config(&self, config: AutoCaptureConfig) {
         if let Ok(mut c) = self.config.lock() {
             if config.max_cache != c.max_cache {

@@ -7,7 +7,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Mutex;
 
 use serde::Serialize;
-use tauri::{AppHandle, Emitter, Manager, Runtime, WebviewWindow};
+use tauri::{AppHandle, Emitter, Manager, Runtime};
 
 use crate::agent::dock::AgentDockState;
 use lifecycle::AnnotationState;
@@ -92,8 +92,6 @@ pub struct CaptionPayload {
     pub state: AnnotationState,
 }
 
-#[derive(Debug, Clone, Serialize)]
-
 pub fn init_manager() -> Mutex<AnnotationManager> {
     #[cfg(target_os = "linux")]
     warn_compositor_quirks();
@@ -126,7 +124,6 @@ pub fn start_lifecycle_sweep<R: Runtime>(
         }
     });
 }
-
 
 pub fn show_overlay<R: Runtime>(app: &AppHandle<R>) -> Result<(), String> {
     // Show all per-screen overlay windows
@@ -764,10 +761,3 @@ pub fn start_hotplug_poll<R: Runtime>(app: AppHandle<R>, url: &str) {
         }
     });
 }
-
-        }
-    }
-    0
-}
-
-/// Get the screen index for a point using cached ScreenManager.

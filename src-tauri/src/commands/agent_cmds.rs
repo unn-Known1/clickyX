@@ -13,7 +13,6 @@ use crate::audio::VoicePipeline;
 use crate::config::{self, AgentConfig};
 
 use super::automation_cmds::update_automation_run_status;
-use super::types::*;
 
 #[tauri::command]
 pub fn list_agents(

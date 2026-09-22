@@ -74,12 +74,14 @@ impl SecretStore for KeychainStore {
 }
 
 /// In-memory backend for unit tests (never touches the OS store).
+#[allow(dead_code)]
 pub struct MemoryStore {
     inner: Mutex<HashMap<String, String>>,
     pub available_flag: bool,
 }
 
 impl MemoryStore {
+    #[allow(dead_code)]
     pub fn new_available() -> Self {
         Self {
             inner: Mutex::new(HashMap::new()),
@@ -87,6 +89,7 @@ impl MemoryStore {
         }
     }
 
+    #[allow(dead_code)]
     pub fn new_unavailable() -> Self {
         Self {
             inner: Mutex::new(HashMap::new()),
@@ -110,7 +113,7 @@ impl SecretStore for MemoryStore {
         }
         self.inner
             .lock()
-            .map_err(|e| format!("lock: {e}"))?
+            .map_err(|e| format!("store lock poisoned: {e}"))?
             .insert(key.to_string(), value.to_string());
         Ok(())
     }
@@ -118,12 +121,11 @@ impl SecretStore for MemoryStore {
     fn delete(&self, key: &str) -> Result<(), String> {
         self.inner
             .lock()
-            .map_err(|e| format!("lock: {e}"))?
+            .map_err(|e| format!("store lock poisoned: {e}"))?
             .remove(key);
         Ok(())
     }
 }
-
 /// Move every secret found in `config` file fields into `store`, clearing the
 /// file values as each write succeeds. Returns true when at least one secret
 /// moved (caller persists the stripped config + sets the migrated flag).

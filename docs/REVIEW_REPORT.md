@@ -1138,6 +1138,24 @@ First transcript <60s without hotkey docs · bridge enable ⇒ token required + 
 
 *P0, P1, and P2 from §9 were implemented in one pass (68 files, plus 5 new files). No application behavior was redesigned beyond the plan; P3 (excise-rebuild) remains. Final verification: `cargo check` EXIT 0 · `cargo test` 176/176 · `cargo clippy -D warnings` clean · `cargo fmt --check` clean · `npm run build` ✓ · `npm test` 13 files / 95 tests ✓ · ESLint 0 errors (29 warnings) · `npm audit` 0 vulnerabilities.*
 
+## 10.0 P3 foundational pass (2026-09-22, in-progress)
+
+P3 workstream scope per §9: keyring-backed secret store, full `commands.rs` split, MCP session lifecycle, IA re-cut, palette registry, theme system, i18n wire-up, overlay render isolation, residuals. **P3 is mid-flight**: the foundational pieces below are landed and the workspace is clean; the remaining workstreams (MCP sessions, IA, palette, theme, i18n, overlay render, residuals) are next.
+
+**What landed in the foundational pass:**
+- `src-tauri/src/secret_store.rs` (new) — `SecretStore` trait, `KeychainStore` (Keychain / Credential Manager / Secret Service via `keyring` v1), `MemoryStore` for tests; helpers `migrate_secrets_to_store` / `hydrate_secrets_from_store` / `persist_secret` / `strip_verified_secrets`; `keys::*` namespace; `SERVICE_NAME = "clickyx"`. 11 unit tests cover migrate/hydrate/persist round-trips, keychain-unavailable fall-through, and file-value preservation semantics.
+- `src-tauri/src/config.rs` — `CONFIG_CACHE` (RwLock) + `secrets_in_keychain` flag + keychain sync in `load_config` and `save_config`; new deps `keyring`, `semver`, `minisign-verify`; dev dep `actix-http`.
+- `src-tauri/src/commands/` (split) — `commands.rs` deleted; replaced by `commands/{types,config_cmds,panel_cmds,chat_cmds,ai_cmds,screen_cmds,overlay_cmds,audio_cmds,agent_cmds,automation_cmds,mcp_cmds,system_cmds,cua_cmds,error,mod}.rs`; `mod.rs` re-exports so `commands::foo` paths keep working.
+- Removed crate-wide `#![allow(dead_code)]` and pruned dead methods/fields/variants across `ai/guidance`, `audio/{capture,capture_thread,handoff,pipeline,wake_word}`, `bridge_auth`, `overlay/{manager,window_manager}`, `screen/{auto_capture,coordinate}`, `cua`, `type_mode`, `automation`, `secret_store`. Targeted `#[allow(dead_code)]` retained on items still referenced by tests (transparent audit trail, not blanket).
+- Deleted P1-bagged cuts that landed as planned: `agent/codex.rs` + `CodexState` + `codex_path`/`codex_home` (Codex sidecar dropped; §7 inventory). `ai/app_contexts.rs` deleted (already retired, code path was inert; removed for hygiene).
+- `secret_store.rs` gated on `#[cfg(test)]` for `MemoryStore::new_available`/`new_unavailable` constructors.
+
+**Verification after the foundational pass:**
+- `cargo check --all-features --tests` — **EXIT 0, zero warnings** (was 22 lib + 10 test dead-code warnings).
+- `cargo clippy --all-features --tests -- -D warnings` — **clean**.
+- `cargo fmt --check` — **clean**.
+- `cargo test --all-features --lib` — **162 passed, 0 failed** (was 176; +11 new secret_store, −25 tests from deleted `codex` module; net stable).
+
 ## 10.1 What shipped, by phase
 
 **Phase 0 (quick wins)** — CI clippy fixed (`working-directory: src-tauri`, `-D warnings`, `cargo fmt --check` added); Cargo cache keyed on `Cargo.lock`; Edge-TTS temp path via `std::env::temp_dir()` (`audio/tts.rs`); `.gitignore` += playwright/coverage outputs; `sign-macos.sh` fails hard; `X-Bridge-Token` accepted as auth alias (kills the 401→disable-auth trap); theme duplicate `--accent`/`--accent-hover` block deleted (zero visual change, `--border` preserved); language switcher hidden pending U6 (`SystemSettings`); e2e selectors fixed to live markup (`.palette-box`, `tabpanel-agents`, chat CTA gate, non-vacuous status-bar assertion, strict settings selectors).

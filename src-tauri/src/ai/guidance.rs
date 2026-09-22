@@ -153,20 +153,6 @@ pub fn strip_guidance_tags(text: &str) -> String {
         None => text.to_string(),
     }
 }
-
-pub fn strip_trailing_guidance_tags(text: &str) -> String {
-    let stripped = strip_guidance_tags(text);
-    let trimmed = stripped.trim();
-    if let Some(separator) = trimmed.rfind("---") {
-        let before = &trimmed[..separator].trim();
-        let after = &trimmed[separator + 3..].trim();
-        if after.is_empty() || after.chars().all(|c| c == '-' || c == ' ' || c == '\n') {
-            return before.to_string();
-        }
-    }
-    trimmed.to_string()
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;

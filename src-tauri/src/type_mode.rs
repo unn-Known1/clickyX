@@ -1,4 +1,4 @@
-use enigo::{Direction, Enigo, Key, Keyboard, Settings};
+use enigo::{Enigo, Keyboard, Settings};
 use serde::{Deserialize, Serialize};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Mutex;

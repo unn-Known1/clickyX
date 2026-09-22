@@ -163,7 +163,7 @@ impl AnnotationManager {
         }
         expired
     }
-
+    #[allow(dead_code)]
     pub fn clear_all(&mut self) {
         for id in self.kind_order.clone() {
             self.miss(&id);
@@ -190,7 +190,7 @@ impl AnnotationManager {
         }
         completed
     }
-
+    #[allow(dead_code)]
     pub fn has_active(&self) -> bool {
         !self.cursors.is_empty()
             || !self.rectangles.is_empty()

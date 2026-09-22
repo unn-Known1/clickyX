@@ -42,7 +42,7 @@ impl SharedAuthSettings {
             auth_disabled,
         ))))
     }
-
+    #[allow(dead_code)]
     pub fn snapshot(&self) -> AuthSettings {
         self.0
             .read()
