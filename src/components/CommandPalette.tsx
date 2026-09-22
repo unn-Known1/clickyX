@@ -40,7 +40,7 @@ export default function CommandPalette({ onClose, onNavigate }: Props) {
   const items: PaletteItem[] = [
     { id: "nav-home",        label: "Go to Home",        description: "Open the Home tab",        icon: "home",        action: () => onNavigate("home"),        category: "Navigation" },
     { id: "nav-agents",      label: "Go to Agents",      description: "Open the Agents tab",      icon: "agents",      action: () => onNavigate("agents"),      category: "Navigation" },
-    { id: "nav-connections", label: "Go to Connections", description: "Open the Connections tab", icon: "connections", action: () => onNavigate("connections"), category: "Navigation" },
+    { id: "nav-connections", label: "Go to Connections", description: "Open Connections (under Settings)", icon: "connections", action: () => { window.__paletteSection = "connections"; onNavigate("settings"); }, category: "Navigation" },
     { id: "nav-settings",    label: "Go to Settings",    description: "Open the Settings tab",    icon: "settings",    action: () => onNavigate("settings"),    category: "Navigation" },
     { id: "nav-settings-voice",    label: "Voice Settings",    description: "Settings › Voice",          icon: "microphone", action: () => { window.__paletteSection = "voice"; onNavigate("settings"); },        category: "Settings" },
     { id: "nav-settings-ai",       label: "AI Providers",      description: "Settings › AI Providers",   icon: "ai",         action: () => { window.__paletteSection = "providers"; onNavigate("settings"); },    category: "Settings" },

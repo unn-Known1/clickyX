@@ -1,15 +1,10 @@
 import { useState, useCallback, useRef } from "react";
-import { commands } from "../bindings";
-import type { TodayStats } from "../bindings";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useAppContext } from "../context/AppContext";
-import { SkeletonList } from "./SkeletonLoader";
-import ActiveAgentsWidget from "./ActiveAgentsWidget";
-import TodayStatsWidget from "./TodayStatsWidget";
-import NeedsAttentionWidget from "./NeedsAttentionWidget";
-import { Icon } from "./Icon";
-import ConfirmDialog from "./ConfirmDialog";
-import { useAgents } from "../hooks/useAgents";
+import { commands } from "../../bindings";
+import { useAppContext } from "../../context/AppContext";
+import { SkeletonList } from "../SkeletonLoader";
+import { Icon } from "../Icon";
+import ConfirmDialog from "../ConfirmDialog";
 
 interface McpServer {
   id?: string;
@@ -39,134 +34,10 @@ interface AutomationRun {
   error?: string;
 }
 
-interface ActiveAgent {
-  id: string;
-  title: string;
-  status: "running" | "idle" | "error";
-}
-
-interface NeedsAttentionItem {
-  type: "warning" | "error" | "info";
-  message: string;
-}
-
-// P-007: App Usage Logging component
-interface AppUsageEntry {
-  app: string;
-  duration_secs: number;
-  last_seen: string;
-  interaction_count: number;
-}
-
-function AppUsageLog({ showToast }: { showToast: (msg: string, type?: import("../context/AppContext").ToastType) => void }) {
-  const [expanded, setExpanded] = useState(false);
-  const [clearing, setClearing] = useState(false);
-  const [confirmClear, setConfirmClear] = useState(false);
-
-  const { data: usageLog = [], refetch } = useQuery<AppUsageEntry[]>({
-    queryKey: ["app-usage-log"],
-    queryFn: () => commands.getAppUsageLog().catch(() => []),
-    enabled: expanded,
-    staleTime: 10_000,
-  });
-
-  const clearLog = async () => {
-    setClearing(true);
-    try {
-      await commands.clearAppUsageLog();
-      refetch();
-      showToast("Usage log cleared", "success");
-    } catch {
-      showToast("Failed to clear log", "error");
-    } finally {
-      setClearing(false);
-    }
-  };
-
-  return (
-    <section className="connections-section">
-      <div
-        className="section-header"
-        onClick={() => setExpanded((v) => !v)}
-        role="button"
-        aria-expanded={expanded}
-        title={expanded ? "Collapse section" : "Expand section"}
-      >
-        <Icon name={expanded ? "chevron-down" : "chevron-right"} size={12} />
-        <h3>App Usage Log</h3>
-        {usageLog.length > 0 && (
-          <span className="agent-skill-badge usage-count">
-            {usageLog.length} apps
-          </span>
-        )}
-      </div>
-
-      {expanded && (
-        <div style={{ marginTop: 8 }}>
-          {usageLog.length === 0 ? (
-            <p className="empty-state-text">No app usage data collected yet. Usage is tracked when ClickyX detects active applications.</p>
-          ) : (
-            <>
-              <div className="usage-toolbar">
-                <button
-                  className="btn btn-secondary btn-sm"
-                  onClick={() => setConfirmClear(true)}
-                  disabled={clearing}
-                >
-                  {clearing ? "Clearing…" : "Clear Log"}
-                </button>
-              </div>
-              <table className="usage-table">
-                <thead>
-                  <tr>
-                    <th>App</th>
-                    <th>Time</th>
-                    <th>Interactions</th>
-                    <th>Last seen</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {usageLog.map((entry) => (
-                    <tr key={entry.app}>
-                      <td className="usage-app">{entry.app}</td>
-                      <td>
-                        {entry.duration_secs >= 3600
-                          ? `${(entry.duration_secs / 3600).toFixed(1)}h`
-                          : entry.duration_secs >= 60
-                          ? `${Math.round(entry.duration_secs / 60)}m`
-                          : `${entry.duration_secs}s`}
-                      </td>
-                      <td>{entry.interaction_count}</td>
-                      <td className="usage-last-seen">
-                        {new Date(entry.last_seen).toLocaleString()}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </>
-          )}
-        </div>
-      )}
-
-      {confirmClear && (
-        <ConfirmDialog
-          title="Clear usage log?"
-          message="All collected app usage data will be permanently deleted."
-          confirmLabel="Clear Log"
-          onConfirm={() => { setConfirmClear(false); void clearLog(); }}
-          onCancel={() => setConfirmClear(false)}
-        />
-      )}
-    </section>
-  );
-}
-
-function ConnectionsTab() {
+function ConnectionsSettings() {
   const { showToast } = useAppContext();
   const queryClient = useQueryClient();
 
-  // F-030: use react-query for server-fetched state — no useState+useEffect raw fetchers
   const { data: mcpServers = [], isLoading: mcpLoading } = useQuery<McpServer[]>({
     queryKey: ["mcp-servers"],
     queryFn: () => commands.getMcpServers(),
@@ -183,35 +54,24 @@ function ConnectionsTab() {
 
   const [mcpSearch, setMcpSearch] = useState("");
   const [automationSearch, setAutomationSearch] = useState("");
-  const { agents } = useAgents();
 
-  // New MCP state
   const [newMcp, setNewMcp] = useState<McpServer>({
     name: "", command: "", args: [], env: {}, enabled: true,
   });
   const [newEnvKey, setNewEnvKey] = useState("");
   const [newEnvVal, setNewEnvVal] = useState("");
-
-  // F-024: Args array editor state
   const [editingArg, setEditingArg] = useState("");
-
-  // Destructive-action confirmations
   const [confirmRemoveMcp, setConfirmRemoveMcp] = useState<string | null>(null);
   const [confirmDeleteAuto, setConfirmDeleteAuto] = useState<string | null>(null);
-
-  // New automation state
   const [newAutomation, setNewAutomation] = useState<Automation>({
     id: "", name: "", prompt: "",
     schedule: { type: "interval", seconds: 3600 },
     agent_slug: "", enabled: true,
   });
   const [scheduleType, setScheduleType] = useState<"interval" | "cron">("interval");
-
-  // F-023: Run history state
   const [expandedHistory, setExpandedHistory] = useState<string | null>(null);
   const [runHistory, setRunHistory] = useState<Record<string, AutomationRun[]>>({});
 
-  /* ── MCP ─────────────────────────────────────────────────────────────────── */
   const addMcpServer = async () => {
     if (!newMcp.name || !newMcp.command) return;
     try {
@@ -235,7 +95,6 @@ function ConnectionsTab() {
     }
   };
 
-  // F-011: MCP test button
   const testMcpServer = async (server: McpServer) => {
     try {
       await commands.testMcpServer(server.id ?? server.name);
@@ -259,7 +118,6 @@ function ConnectionsTab() {
     });
   };
 
-  // F-024: Args array management
   const addArg = () => {
     const trimmed = editingArg.trim();
     if (!trimmed) return;
@@ -271,7 +129,6 @@ function ConnectionsTab() {
     setNewMcp((prev) => ({ ...prev, args: prev.args.filter((_, i) => i !== index) }));
   };
 
-  /* ── Automations ─────────────────────────────────────────────────────────── */
   const createAutomation = async () => {
     if (!newAutomation.name || !newAutomation.prompt) return;
     const schedule = scheduleType === "cron"
@@ -309,7 +166,6 @@ function ConnectionsTab() {
   const runHistoryRef = useRef(runHistory);
   runHistoryRef.current = runHistory;
 
-  // F-023: Toggle and fetch run history
   const toggleRunHistory = useCallback(async (automationId: string) => {
     if (expandedHistory === automationId) {
       setExpandedHistory(null);
@@ -326,31 +182,6 @@ function ConnectionsTab() {
     }
   }, [expandedHistory]);
 
-  /* ── Widget data ─────────────────────────────────────────────────────────── */
-  // P1 (H-6/H-11): real today-stats from the backend (shared ["today-stats"]
-  // cache entry with StatusBar) — the old code fed fabricated props
-  // (runningCount as "agents run", voiceCommands hardcoded 0).
-  const { data: todayStats } = useQuery<TodayStats>({
-    queryKey: ["today-stats"],
-    queryFn: () => commands.getTodayStats(),
-    staleTime: 25_000,
-  });
-  const activeAgents: ActiveAgent[] = agents.map((a) => ({
-    id: a.id,
-    title: a.name,
-    status: (["running", "idle", "error"].includes(a.state.toLowerCase())
-      ? a.state.toLowerCase() : "idle") as "running" | "idle" | "error",
-  }));
-
-  const needsAttention: NeedsAttentionItem[] = [];
-  if (agents.some((a) => ["error", "failed"].includes(a.state.toLowerCase())))
-    needsAttention.push({
-      type: "error",
-      message: `${agents.filter((a) => ["error", "failed"].includes(a.state.toLowerCase())).length} agent(s) in error state`,
-    });
-  if (mcpServers.length === 0)
-    needsAttention.push({ type: "info", message: "No MCP servers configured" });
-
   const filteredMcp = mcpServers.filter(
     (s) => !mcpSearch || s.name.toLowerCase().includes(mcpSearch.toLowerCase()) || s.command.toLowerCase().includes(mcpSearch.toLowerCase()),
   );
@@ -359,25 +190,15 @@ function ConnectionsTab() {
   );
 
   return (
-    <div className="connections-tab">
+    <div className="connections-section-wrapper">
       <h2>Connections &amp; Integrations</h2>
+      <p className="section-hint">External services and scheduled automations ClickyX can call on your behalf.</p>
 
       {initialLoading && (
         <div style={{ padding: 12 }}>
           <SkeletonList count={2} />
         </div>
       )}
-
-      {/* Widgets */}
-      <section className="widgets-dashboard">
-        <ActiveAgentsWidget agents={activeAgents} />
-        <TodayStatsWidget
-          agentsRun={todayStats?.agents_run ?? 0}
-          voiceCommands={todayStats?.voice_commands ?? 0}
-          itemsForReview={todayStats?.items_for_review ?? needsAttention.length}
-        />
-        <NeedsAttentionWidget items={needsAttention} />
-      </section>
 
       {/* MCP Servers */}
       <section className="connections-section">
@@ -409,7 +230,6 @@ function ConnectionsTab() {
                     ))}
                   </div>
                 )}
-                {/* F-011: Test button */}
                 <div className="mcp-item-actions">
                   <button
                     className="btn btn-secondary btn-sm"
@@ -433,7 +253,6 @@ function ConnectionsTab() {
           <input placeholder="Command (e.g. npx)" value={newMcp.command}
             onChange={(e) => setNewMcp({ ...newMcp, command: e.target.value })} />
 
-          {/* F-024: Args array editor */}
           <div className="mcp-args-editor">
             <label className="mcp-env-label">Arguments</label>
             <div className="mcp-args-tags">
@@ -463,7 +282,6 @@ function ConnectionsTab() {
             </div>
           </div>
 
-          {/* Env vars editor */}
           <div className="mcp-env-editor">
             <label className="mcp-env-label">Environment Variables</label>
             {Object.entries(newMcp.env).map(([k, v]) => (
@@ -528,7 +346,6 @@ function ConnectionsTab() {
                         onChange={(e) => toggleAutomation(a.id, e.target.checked)} />
                       Enabled
                     </label>
-                    {/* F-023: Run history toggle */}
                     <button
                       className="btn-small automation-history-btn"
                       onClick={() => toggleRunHistory(a.id)}
@@ -538,7 +355,6 @@ function ConnectionsTab() {
                     <button className="btn btn-small btn-danger" onClick={() => setConfirmDeleteAuto(a.id)}>Delete</button>
                   </div>
 
-                  {/* F-023: Collapsible run history */}
                   {isHistoryExpanded && (
                     <div className="automation-run-history">
                       {historyRuns.length === 0 ? (
@@ -571,14 +387,12 @@ function ConnectionsTab() {
           </div>
         )}
 
-        {/* Add Automation form */}
         <div className="add-form">
           <input placeholder="Automation name" value={newAutomation.name}
             onChange={(e) => setNewAutomation({ ...newAutomation, name: e.target.value })} />
           <input placeholder="Prompt for the agent" value={newAutomation.prompt}
             onChange={(e) => setNewAutomation({ ...newAutomation, prompt: e.target.value })} />
 
-          {/* Schedule type toggle */}
           <div className="form-row">
             <label>Schedule type:</label>
             <select className="setting-select" value={scheduleType}
@@ -614,9 +428,6 @@ function ConnectionsTab() {
         </div>
       </section>
 
-      {/* P-007: App Usage Logging surface */}
-      <AppUsageLog showToast={showToast} />
-
       {confirmRemoveMcp && (
         <ConfirmDialog
           title="Remove MCP server?"
@@ -640,4 +451,4 @@ function ConnectionsTab() {
   );
 }
 
-export default ConnectionsTab;
+export default ConnectionsSettings;

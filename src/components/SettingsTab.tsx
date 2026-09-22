@@ -5,6 +5,7 @@ import AiProviderSettings from "./SettingsSections/AiProviderSettings";
 import ComputerUseSettings from "./SettingsSections/ComputerUseSettings";
 import PermissionsSettings from "./SettingsSections/PermissionsSettings";
 import SystemSettings from "./SettingsSections/SystemSettings";
+import ConnectionsSettings from "./SettingsSections/ConnectionsSettings";
 import { Icon } from "./Icon";
 import type { IconName } from "./Icon";
 
@@ -12,7 +13,7 @@ const ModelGeneratorTab = lazy(() => import("./ModelGeneratorTab"));
 
 type SettingsTabId =
   | "general" | "voice" | "providers" | "computer_use"
-  | "permissions" | "system" | "3d_models";
+  | "permissions" | "system" | "3d_models" | "connections";
 
 interface NavItem {
   id: SettingsTabId;
@@ -25,6 +26,7 @@ const SETTINGS_TABS: NavItem[] = [
   { id: "providers",    label: "AI Providers",  icon: "ai" },
   { id: "voice",        label: "Voice & Audio", icon: "microphone" },
   { id: "computer_use", label: "Computer Use",  icon: "cursor" },
+  { id: "connections",  label: "Connections",   icon: "link" },
   { id: "permissions",  label: "Permissions",   icon: "shield" },
   { id: "system",       label: "System",        icon: "info" },
   { id: "3d_models",    label: "3D Models",     icon: "cube" },
@@ -38,7 +40,7 @@ interface NavGroup {
 const NAV_GROUPS: NavGroup[] = [
   { label: "Appearance",  items: ["general"] },
   { label: "AI & Voice",  items: ["providers", "voice"] },
-  { label: "Automation",  items: ["computer_use"] },
+  { label: "Automation",  items: ["computer_use", "connections"] },
   { label: "System",      items: ["permissions", "system", "3d_models"] },
 ];
 

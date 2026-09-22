@@ -16,7 +16,7 @@ import "./components/OnboardingWizard.css";
 // ── F-009: Lazy-load tabs ──────────────────────────────────────────────────────
 const HomeTab = lazy(() => import("./components/HomeTab"));
 const AgentsTab = lazy(() => import("./components/AgentsTab"));
-const ConnectionsTab = lazy(() => import("./components/ConnectionsTab"));
+
 const SettingsTab = lazy(() => import("./components/SettingsTab"));
 
 // ── Error Boundary ─────────────────────────────────────────────────────────────
@@ -84,7 +84,7 @@ function getEffectiveTheme(theme: string): string {
 const TABS: { id: Tab; label: string }[] = [
   { id: "home",        label: "Home" },
   { id: "agents",      label: "Agents" },
-  { id: "connections", label: "Connections" },
+
   { id: "settings",   label: "Settings" },
 ];
 
@@ -223,7 +223,9 @@ function AppInner() {
           window.__paletteSection = parts[1];
         }
       } else if (parts[0] === "connections") {
-        setActiveTab("connections");
+        // P3/IA: connections live under Settings now.
+        setActiveTab("settings");
+        window.__paletteSection = "connections";
       } else if (parts[0] === "home") {
         setActiveTab("home");
       }
@@ -277,12 +279,6 @@ function AppInner() {
           return (
             <Suspense fallback={tabFallback}>
               <AgentsTab />
-            </Suspense>
-          );
-        case "connections":
-          return (
-            <Suspense fallback={tabFallback}>
-              <ConnectionsTab />
             </Suspense>
           );
         case "settings":
