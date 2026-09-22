@@ -83,7 +83,7 @@ export default function CommandPalette({ onClose, onNavigate }: Props) {
   const categories = Array.from(new Set(filtered.map((i) => i.category)));
 
   return (
-    <div className="palette-backdrop" onClick={onClose} role="dialog" aria-modal="true" aria-label="Command palette">
+    <div className="palette-backdrop" onClick={onClose} role="dialog" aria-modal="true" aria-label={t("palette.dialogAria")}>
       <div className="palette-box" onClick={(e) => e.stopPropagation()}>
         <div className="palette-input-wrap">
           <Icon name="search" size={15} className="palette-search-icon" />
@@ -136,9 +136,9 @@ export default function CommandPalette({ onClose, onNavigate }: Props) {
         </div>
 
         <div className="palette-footer">
-          <span><kbd>↑↓</kbd> navigate</span>
-          <span><kbd>↵</kbd> select</span>
-          <span><kbd>Esc</kbd> close</span>
+          <span><kbd>↑↓</kbd> {t("palette.navigate")}</span>
+          <span><kbd>↵</kbd> {t("palette.select")}</span>
+          <span><kbd>Esc</kbd> {t("palette.close")}</span>
         </div>
       </div>
     </div>

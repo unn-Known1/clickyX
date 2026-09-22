@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from "react";
+import { useTranslation } from "react-i18next";
 
 interface KeyCaptureProps {
   value: string;
@@ -10,7 +11,9 @@ interface KeyCaptureProps {
  * Key-capture input — press any key combination to set the hotkey.
  * Displays like a text field but intercepts keydown events.
  */
-export function HotkeyInput({ value, onChange, placeholder = "Click and press keys…" }: KeyCaptureProps) {
+export function HotkeyInput({ value, onChange, placeholder }: KeyCaptureProps) {
+  const { t } = useTranslation();
+  const hint = placeholder ?? t("misc.hotkeyPlaceholder");
   const [capturing, setCapturing] = useState(false);
   const [preview, setPreview] = useState(value);
   const inputRef = useRef<HTMLButtonElement>(null);
@@ -70,9 +73,9 @@ export function HotkeyInput({ value, onChange, placeholder = "Click and press ke
         aria-label={capturing ? "Press your hotkey combination" : `Current hotkey: ${preview || "none"}`}
       >
         {capturing ? (
-          <span className="hotkey-capture-hint">Press keys now…</span>
+          <span className="hotkey-capture-hint">{t("misc.pressKeys")}</span>
         ) : (
-          <span className="hotkey-capture-value">{preview || placeholder}</span>
+          <span className="hotkey-capture-value">{preview || hint}</span>
         )}
       </button>
       <div className="hotkey-presets">

@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import { useTranslation } from "react-i18next";
 import { commands, listen } from "../bindings";
 import type { UpdateInfo } from "../bindings";
 import { message } from "@tauri-apps/plugin-dialog";
@@ -10,6 +11,7 @@ import { message } from "@tauri-apps/plugin-dialog";
  * unsigned artifacts are refused by the backend with an error shown here).
  */
 export default function UpdateBanner() {
+  const { t } = useTranslation();
   const [info, setInfo] = useState<UpdateInfo | null>(null);
   const [installing, setInstalling] = useState(false);
   const [dismissed, setDismissed] = useState(false);
@@ -44,7 +46,7 @@ export default function UpdateBanner() {
     setError(null);
     try {
       await commands.installUpdate(info.download_url, info.signature ?? null);
-      await message("Update installed! Please restart the app.", { title: "ClickyX Update", kind: "info" });
+      await message(t("updater.installedMsg"), { title: t("updater.installedTitle"), kind: "info" });
       setInfo(null);
       setDismissed(true);
     } catch (e) {
@@ -61,11 +63,11 @@ export default function UpdateBanner() {
   return (
     <div className="update-banner" role="status" aria-live="polite">
       <span className="update-banner-text">
-        Update available: <strong>v{info.version ?? "?"}</strong>
+        {t("updater.available")} <strong>v{info.version ?? "?"}</strong>
       </span>
       {error && (
         <span className="update-banner-text" role="alert">
-          Install refused: {error}
+          {t("updater.refused")} {error}
         </span>
       )}
       <button
@@ -73,12 +75,12 @@ export default function UpdateBanner() {
         onClick={install}
         disabled={installing}
       >
-        {installing ? "Installing…" : "Install & Restart"}
+        {installing ? t("updater.installing") : t("updater.installRestart")}
       </button>
       <button
         className="update-banner-dismiss"
         onClick={() => setDismissed(true)}
-        aria-label="Dismiss update notification"
+        aria-label={t("updater.dismiss")}
       >
         ×
       </button>

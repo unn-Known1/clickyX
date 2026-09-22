@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, Suspense, lazy } from "react";
+import { useTranslation } from "react-i18next";
 import { commands, Model3DTask } from "../bindings";
 import { useAppContext } from "../context/AppContext";
 
@@ -9,6 +10,7 @@ const STYLES = ["low_poly_stylized", "clay", "voxel", "game_asset", "realistic"]
 type ModelStyle = typeof STYLES[number];
 
 export default function ModelGeneratorTab() {
+  const { t } = useTranslation();
   const { showToast } = useAppContext();
   const [prompt, setPrompt] = useState("");
   const [style, setStyle] = useState<ModelStyle>("low_poly_stylized");
@@ -41,9 +43,9 @@ export default function ModelGeneratorTab() {
     try {
       const newTask = await commands.generate3dModel(prompt.trim(), style);
       setTask(newTask);
-      showToast("Generation started…", "info");
+      showToast(t("gen3d.started"), "info");
     } catch (err) {
-      showToast(`Failed: ${String(err)}`, "error");
+      showToast(t("gen3d.failedToast", { err: String(err) }), "error");
     } finally {
       setLoading(false);
     }
@@ -51,22 +53,22 @@ export default function ModelGeneratorTab() {
 
   return (
     <div className="model-gen-tab">
-      <h2>3D Model Generator</h2>
+      <h2>{t("gen3d.title")}</h2>
       <p className="settings-hint">
-        Powered by Tripo3D. Enter a prompt to generate a 3D model (GLB format).
+        {t("gen3d.hint")}
       </p>
 
       <form className="model-gen-form" onSubmit={handleGenerate}>
         <textarea
           className="settings-textarea"
-          placeholder="Describe your 3D model… (e.g. 'a low-poly forest cottage with a red roof')"
+          placeholder={t("gen3d.placeholder")}
           value={prompt}
           onChange={(e) => setPrompt(e.target.value)}
           rows={3}
           disabled={loading}
         />
         <div className="form-row">
-          <label>Style:</label>
+          <label>{t("gen3d.style")}</label>
           <select
             className="setting-select"
             value={style}
@@ -83,23 +85,23 @@ export default function ModelGeneratorTab() {
           className="btn btn-primary"
           disabled={!prompt.trim() || loading}
         >
-          {loading ? "Starting…" : "Generate Model"}
+          {loading ? t("gen3d.starting") : t("gen3d.generate")}
         </button>
       </form>
 
       {task && (
         <div className="model-gen-status">
           <div className="setting-row">
-            <label>Status</label>
+            <label>{t("gen3d.status")}</label>
             <span className={`status-badge ${task.status === "success" ? "available" : task.status === "failed" ? "unavailable" : "unauthenticated"}`}>
-              {task.status === "pending" && "Queued…"}
-              {task.status === "processing" && "Processing…"}
-              {task.status === "success" && "Ready!"}
-              {task.status === "failed" && "Failed"}
+              {task.status === "pending" && t("gen3d.queued")}
+              {task.status === "processing" && t("gen3d.processing")}
+              {task.status === "success" && t("gen3d.ready")}
+              {task.status === "failed" && t("gen3d.failed")}
             </span>
           </div>
           <div className="setting-row">
-            <label>Prompt</label>
+            <label>{t("gen3d.prompt")}</label>
             <span className="setting-value model-value-ellipsis">
               {task.prompt}
             </span>
@@ -123,7 +125,7 @@ export default function ModelGeneratorTab() {
               ) : (
                 <div className="model-empty">
                   <p className="model-empty-title">
-                    Model saved locally — click Download to save the GLB file.
+                    {t("gen3d.savedLocal")}
                   </p>
                   <p className="model-empty-sub">
                     {task.model_url}

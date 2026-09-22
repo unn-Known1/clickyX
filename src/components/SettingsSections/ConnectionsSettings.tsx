@@ -80,9 +80,9 @@ function ConnectionsSettings() {
       queryClient.invalidateQueries({ queryKey: ["mcp-servers"] });
       setNewMcp({ name: "", command: "", args: [], env: {}, enabled: true });
       setNewEnvKey(""); setNewEnvVal(""); setEditingArg("");
-      showToast("MCP server added", "success");
+      showToast(t("connections.added"), "success");
     } catch (e) {
-      console.error(e); showToast("Failed to add MCP server", "error");
+      console.error(e); showToast(t("connections.addFailed"), "error");
     }
   };
 
@@ -90,9 +90,9 @@ function ConnectionsSettings() {
     try {
       await commands.removeMcpServer(name);
       queryClient.invalidateQueries({ queryKey: ["mcp-servers"] });
-      showToast("MCP server removed", "success");
+      showToast(t("connections.removed"), "success");
     } catch (e) {
-      console.error(e); showToast("Failed to remove MCP server", "error");
+      console.error(e); showToast(t("connections.removeFailed"), "error");
     }
   };
 
@@ -139,9 +139,9 @@ function ConnectionsSettings() {
       await commands.createAutomation({ ...newAutomation, schedule, id: "" });
       queryClient.invalidateQueries({ queryKey: ["automations"] });
       setNewAutomation({ id: "", name: "", prompt: "", schedule: { type: "interval", seconds: 3600 }, agent_slug: "", enabled: true });
-      showToast("Automation created", "success");
+      showToast(t("connections.created"), "success");
     } catch (e) {
-      console.error(e); showToast("Failed to create automation", "error");
+      console.error(e); showToast(t("connections.createFailed"), "error");
     }
   };
 
@@ -150,7 +150,7 @@ function ConnectionsSettings() {
       await commands.toggleAutomation(id, enabled);
       queryClient.invalidateQueries({ queryKey: ["automations"] });
     } catch (e) {
-      console.error(e); showToast("Failed to toggle automation", "error");
+      console.error(e); showToast(t("connections.toggleFailed"), "error");
     }
   };
 
@@ -158,9 +158,9 @@ function ConnectionsSettings() {
     try {
       await commands.deleteAutomation(id);
       queryClient.invalidateQueries({ queryKey: ["automations"] });
-      showToast("Automation deleted", "success");
+      showToast(t("connections.deleted"), "success");
     } catch (e) {
-      console.error(e); showToast("Failed to delete automation", "error");
+      console.error(e); showToast(t("connections.deleteFailed"), "error");
     }
   };
 
@@ -210,7 +210,7 @@ function ConnectionsSettings() {
             placeholder={t("connections.searchServers")}
             value={mcpSearch}
             onChange={(e) => setMcpSearch(e.target.value)}
-            aria-label="Search MCP servers"
+            aria-label={t("connections.searchServers")}
           />
         )}
         {filteredMcp.length === 0 ? (
@@ -297,12 +297,12 @@ function ConnectionsSettings() {
               <input placeholder={t("connections.envKey")} value={newEnvKey}
                 onChange={(e) => setNewEnvKey(e.target.value)}
                 className="mcp-env-input-key"
-                aria-label="Env key" />
+                aria-label={t("connections.envKey")} />
               <span className="mcp-env-eq">=</span>
               <input placeholder={t("connections.envValue")} value={newEnvVal}
                 onChange={(e) => setNewEnvVal(e.target.value)}
                 className="mcp-env-input-val"
-                aria-label="Env value" />
+                aria-label={t("connections.envValue")} />
               <button className="btn btn-small btn-primary" onClick={addEnvPair} type="button">+</button>
             </div>
           </div>
@@ -320,7 +320,7 @@ function ConnectionsSettings() {
             placeholder={t("connections.searchAutomations")}
             value={automationSearch}
             onChange={(e) => setAutomationSearch(e.target.value)}
-            aria-label="Search automations"
+            aria-label={t("connections.searchAutomations")}
           />
         )}
         {filteredAuto.length === 0 ? (

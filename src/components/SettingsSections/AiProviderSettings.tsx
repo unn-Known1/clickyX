@@ -1,9 +1,11 @@
 import { useState, useEffect, useCallback } from "react";
+import { useTranslation } from "react-i18next";
 import { useAppContext } from "../../context/AppContext";
 import { useAiConfig } from "../../hooks/useAiConfig";
 import { useConfig } from "../../hooks/useConfig";
 
 function AiProviderSettings() {
+  const { t } = useTranslation();
   const { showToast } = useAppContext();
   const { config: aiConfig, updateConfig: updateAiConfig, loading: aiLoading, error: aiError } = useAiConfig();
   const { config: appConfig, updateConfig: updateAppConfig, loading: appLoading, error: appError } = useConfig();
@@ -89,11 +91,11 @@ function AiProviderSettings() {
       await updateAppConfig({ api_keys: newApiKeys });
 
       setSaved(true);
-      showToast("Settings saved", "success");
+      showToast(t("providers.settingsSaved"), "success");
       setTimeout(() => setSaved(false), 2000);
     } catch (e) {
       console.error("Failed to save AI config:", e);
-      showToast("Failed to save settings", "error");
+      showToast(t("providers.settingsSaveFailed"), "error");
     } finally {
       setSaving(false);
     }
@@ -109,7 +111,7 @@ function AiProviderSettings() {
   if (error && !aiConfig) {
     return (
       <section className="settings-section elevated-card">
-        <h3>AI Providers</h3>
+        <h3>{t("providers.title")}</h3>
         <div className="settings-error">{error}</div>
       </section>
     );
@@ -118,7 +120,7 @@ function AiProviderSettings() {
   if (loading) {
     return (
       <section className="settings-section elevated-card">
-        <h3>AI Providers</h3>
+        <h3>{t("providers.title")}</h3>
         <div className="skeleton-loader" />
       </section>
     );
@@ -126,63 +128,62 @@ function AiProviderSettings() {
 
   return (
     <section className="settings-section elevated-card">
-      <h3>AI Providers</h3>
+      <h3>{t("providers.title")}</h3>
       <div className="ai-settings">
         <div className="ai-provider-group">
-          <h4>Anthropic (Claude)</h4>
+          <h4>{t("providers.anthropic")}</h4>
           <input
             type="password"
             className="settings-input"
-            placeholder={hasAnthropicKey ? "API Key saved — enter new key to update" : "API Key (sk-ant-...)"}
+            placeholder={hasAnthropicKey ? t("providers.keySavedUpdate") : t("providers.keyAntPlaceholder")}
             value={anthropicKey}
             onChange={(e) => setAnthropicKey(e.target.value)}
             autoComplete="new-password"
           />
           {hasAnthropicKey && !anthropicKey && (
             <span className="settings-hint settings-hint-success">
-              ✓ API key is saved
+              {t("providers.keySaved")}
             </span>
           )}
           <input
             type="text"
             className="settings-input"
-            placeholder="Model (e.g., claude-sonnet-4-20250514)"
+            placeholder={t("providers.modelAntPlaceholder")}
             value={anthropicModel}
             onChange={(e) => setAnthropicModel(e.target.value)}
           />
         </div>
         <div className="ai-provider-group">
-          <h4>OpenAI / Compatible</h4>
+          <h4>{t("providers.openaiCompat")}</h4>
           <input
             type="password"
             className="settings-input"
-            placeholder={hasOpenaiKey ? "API Key saved — enter new key to update" : "API Key (sk-proj-... or nvapi-...)"}
+            placeholder={hasOpenaiKey ? t("providers.keySavedUpdate") : t("providers.keyOpenaiPlaceholder")}
             value={openaiKey}
             onChange={(e) => setOpenaiKey(e.target.value)}
             autoComplete="new-password"
           />
           {hasOpenaiKey && !openaiKey && (
             <span className="settings-hint settings-hint-success">
-              ✓ API key is saved
+              {t("providers.keySaved")}
             </span>
           )}
           <input
             type="text"
             className="settings-input"
-            placeholder="Model (e.g., gpt-4o)"
+            placeholder={t("providers.modelOpenaiPlaceholder")}
             value={openaiModel}
             onChange={(e) => setOpenaiModel(e.target.value)}
           />
           <input
             type="text"
             className="settings-input"
-            placeholder="Base URL (e.g., https://integrate.api.nvidia.com/v1)"
+            placeholder={t("providers.baseUrlPlaceholder")}
             value={openaiBaseUrl}
             onChange={(e) => setOpenaiBaseUrl(e.target.value)}
           />
           <span className="settings-hint">
-            For NVIDIA: use your NVIDIA API key (nvapi-...) with base URL
-            https://integrate.api.nvidia.com/v1
+            {t("providers.nvidiaHint")}
           </span>
         </div>
         <div className="ai-provider-group">
@@ -190,7 +191,7 @@ function AiProviderSettings() {
           <input
             type="password"
             className="settings-input"
-            placeholder="API Key"
+            placeholder={t("providers.apiKey")}
             value={elevenlabsKey}
             onChange={(e) => setElevenlabsKey(e.target.value)}
           />
@@ -200,7 +201,7 @@ function AiProviderSettings() {
           <input
             type="password"
             className="settings-input"
-            placeholder="API Key"
+            placeholder={t("providers.apiKey")}
             value={cartesiaKey}
             onChange={(e) => setCartesiaKey(e.target.value)}
           />
@@ -210,7 +211,7 @@ function AiProviderSettings() {
           <input
             type="password"
             className="settings-input"
-            placeholder="API Key"
+            placeholder={t("providers.apiKey")}
             value={deepgramKey}
             onChange={(e) => setDeepgramKey(e.target.value)}
           />
@@ -220,24 +221,24 @@ function AiProviderSettings() {
           <input
             type="password"
             className="settings-input"
-            placeholder="API Key"
+            placeholder={t("providers.apiKey")}
             value={assemblyaiKey}
             onChange={(e) => setAssemblyaiKey(e.target.value)}
           />
         </div>
         <div className="ai-provider-group">
-          <h4>Default Provider</h4>
+          <h4>{t("providers.defaultProvider")}</h4>
           <select
             className="settings-select"
             value={defaultProvider}
             onChange={(e) => setDefaultProvider(e.target.value)}
           >
             <option value="anthropic">Anthropic</option>
-            <option value="openai">OpenAI / Compatible</option>
+            <option value="openai">{t("providers.openaiCompat")}</option>
           </select>
         </div>
         <div className="ai-provider-group">
-          <h4>System Prompt</h4>
+          <h4>{t("providers.systemPrompt")}</h4>
           <textarea
             className="settings-textarea"
             rows={3}
@@ -250,7 +251,7 @@ function AiProviderSettings() {
           onClick={saveAiConfig}
           disabled={saving}
         >
-          {saving ? "Saving..." : saved ? "Saved ✓" : "Save AI Settings"}
+          {saving ? t("providers.saving") : saved ? t("providers.saved") : t("providers.saveSettings")}
         </button>
         {error && <div className="settings-error">{error}</div>}
       </div>

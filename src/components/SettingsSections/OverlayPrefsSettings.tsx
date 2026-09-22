@@ -1,4 +1,5 @@
 import { useCallback } from "react";
+import { useTranslation } from "react-i18next";
 import { commands } from "../../bindings";
 import type { AppConfig } from "../../bindings";
 
@@ -10,6 +11,7 @@ interface Props {
 }
 
 export function OverlayPrefsSettings({ config, onConfigUpdate }: Props) {
+  const { t } = useTranslation();
   const updateOverlay = useCallback(async (key: string, value: string | number | boolean) => {
     try {
       const overlay = { ...config.overlay, [key]: value } as AppConfig["overlay"];
@@ -32,10 +34,10 @@ export function OverlayPrefsSettings({ config, onConfigUpdate }: Props) {
 
   return (
     <section className="settings-section elevated-card">
-      <h3>Overlay Preferences</h3>
+      <h3>{t("overlay.title")}</h3>
 
       <div className="setting-row">
-        <label>Show Cursor Overlay</label>
+        <label>{t("overlay.showCursor")}</label>
         <input
           type="checkbox"
           checked={config.overlay.show_cursor}
@@ -44,7 +46,7 @@ export function OverlayPrefsSettings({ config, onConfigUpdate }: Props) {
       </div>
 
       <div className="setting-row">
-        <label>Tutor Mode</label>
+        <label>{t("overlay.tutorMode")}</label>
         <input
           type="checkbox"
           checked={config.overlay.tutor_mode}
@@ -53,7 +55,7 @@ export function OverlayPrefsSettings({ config, onConfigUpdate }: Props) {
       </div>
 
       <div className="setting-row">
-        <label>Cursor Size</label>
+        <label>{t("overlay.cursorSize")}</label>
         <input
           type="range"
           min={16}
@@ -65,16 +67,16 @@ export function OverlayPrefsSettings({ config, onConfigUpdate }: Props) {
       </div>
 
       <div className="setting-row">
-        <label>Agent Dock Position</label>
+        <label>{t("overlay.dockPosition")}</label>
         <select
           className="setting-select"
           value={config.overlay.agent_dock_position}
           onChange={(e) => updateOverlay("agent_dock_position", e.target.value)}
         >
-          <option value="top">Top</option>
-          <option value="bottom">Bottom</option>
-          <option value="left">Left</option>
-          <option value="right">Right</option>
+          <option value="top">{t("overlay.top")}</option>
+          <option value="bottom">{t("overlay.bottom")}</option>
+          <option value="left">{t("overlay.left")}</option>
+          <option value="right">{t("overlay.right")}</option>
         </select>
       </div>
     </section>

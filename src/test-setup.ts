@@ -38,7 +38,15 @@ vi.mock("react-i18next", async () => {
   };
   return {
     useTranslation: () => ({
-      t: (key: string) => lookup(key),
+      t: (key: string, vars?: Record<string, string | number>) => {
+        let out = lookup(key);
+        if (vars) {
+          for (const [k, v] of Object.entries(vars)) {
+            out = out.replaceAll(`{{${k}}}`, String(v));
+          }
+        }
+        return out;
+      },
       i18n: { language: "en", changeLanguage: vi.fn() },
     }),
     initReactI18next: { type: "3rdParty", init: vi.fn() },

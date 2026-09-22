@@ -1,6 +1,7 @@
 import { useState, useCallback } from "react";
 import { commands } from "../../bindings";
 import type { AppConfig } from "../../bindings";
+import { useTranslation } from "react-i18next";
 import { THEME_VARIANTS, getStoredVariant, setStoredVariant, applyTheme } from "../../utils/theme";
 
 interface Props {
@@ -14,6 +15,7 @@ export function AppearanceSettings({ config, onConfigUpdate }: Props) {
   // Color variant persists in localStorage (presentation-only; the backend
   // `theme` owns light/dark/system). Initialized from storage so the select
   // survives remounts; App.tsx's sync effect respects the stored variant.
+  const { t } = useTranslation();
   const [themeVariant, setThemeVariant] = useState<string>(() => getStoredVariant());
 
   const updateTheme = useCallback(async (theme: string) => {
@@ -47,36 +49,36 @@ export function AppearanceSettings({ config, onConfigUpdate }: Props) {
 
   return (
     <section className="settings-section elevated-card">
-      <h3>Appearance</h3>
+      <h3>{t("appearance.title")}</h3>
 
       <div className="setting-row">
-        <label>Base Theme</label>
+        <label>{t("appearance.baseTheme")}</label>
         <select
           className="setting-select"
           value={config.theme}
           onChange={(e) => updateTheme(e.target.value)}
         >
-          <option value="system">System</option>
-          <option value="light">Light</option>
-          <option value="dark">Dark</option>
+          <option value="system">{t("appearance.system")}</option>
+          <option value="light">{t("appearance.light")}</option>
+          <option value="dark">{t("appearance.dark")}</option>
         </select>
       </div>
 
       <div className="setting-row">
-        <label>Color Variant</label>
+        <label>{t("appearance.colorVariant")}</label>
         <select
           className="setting-select"
           value={themeVariant}
           onChange={(e) => applyThemeVariant(e.target.value)}
         >
           {THEME_VARIANTS.map((v) => (
-            <option key={v.value} value={v.value}>{v.label}</option>
+            <option key={v.value} value={v.value}>{t(`appearance.variants.${v.value || "default"}`)}</option>
           ))}
         </select>
       </div>
 
       <div className="setting-row">
-        <label>Accent Color</label>
+        <label>{t("appearance.accentColor")}</label>
         <div className="accent-presets">
           {presets.map((c) => (
             <button
@@ -86,7 +88,7 @@ export function AppearanceSettings({ config, onConfigUpdate }: Props) {
               style={{ backgroundColor: c }}
               onClick={() => setAccent(c)}
               title={c}
-              aria-label={`Accent ${c}`}
+              aria-label={t("appearance.accent", { color: c })}
             />
           ))}
           <input
@@ -94,7 +96,7 @@ export function AppearanceSettings({ config, onConfigUpdate }: Props) {
             className="color-picker"
             value={config.overlay.cursor_accent}
             onChange={(e) => setAccent(e.target.value)}
-            title="Custom accent"
+            title={t("appearance.customAccent")}
           />
         </div>
       </div>

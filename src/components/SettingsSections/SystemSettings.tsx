@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import { useTranslation } from "react-i18next";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { commands } from "../../bindings";
 import type { BridgeStatus } from "../../bindings";
@@ -19,6 +20,7 @@ interface Props {
 }
 
 function SystemSettings({ onOpenAbout }: Props) {
+  const { t } = useTranslation();
   const { showToast } = useAppContext();
   const queryClient = useQueryClient();
   const [logs, setLogs] = useState<LogEntry[]>([]);
@@ -41,31 +43,29 @@ function SystemSettings({ onOpenAbout }: Props) {
   }, [queryClient]);
 
   const rotateToken = useCallback(async () => {
-    if (!confirm("Generate a new bridge token? The old token stops working immediately.")) return;
+    if (!confirm(t("sys.rotateConfirm"))) return;
     try {
       // Returned ONCE — the backend never reveals it again. Copy it now.
       const token = await commands.rotateBridgeToken();
       setRotatedToken(token);
       refreshBridgeStatus();
-      showToast("Bridge token rotated — copy it now", "success");
+      showToast(t("sys.rotatedToast"), "success");
     } catch (e) {
       console.error("Failed to rotate bridge token:", e);
-      showToast("Token rotation failed", "error");
+      showToast(t("sys.rotateFailed"), "error");
     }
   }, [showToast, refreshBridgeStatus]);
 
   const toggleBridgeAuth = useCallback(async () => {
     const disabling = !bridgeStatus?.auth_disabled;
-    if (disabling && !confirm(
-      "Disable bridge authentication for read-only endpoints? Any local process will be able to read screenshots-state, models and overlay endpoints. Computer-use, AI spend and process-spawn endpoints STAY token-gated."
-    )) return;
+    if (disabling && !confirm(t("sys.disableConfirm"))) return;
     try {
       await commands.updateConfig({ bridge_auth_disabled: disabling });
       refreshBridgeStatus();
-      showToast(disabling ? "Bridge auth disabled (dangerous tier still gated)" : "Bridge auth enabled", disabling ? "error" : "success");
+      showToast(disabling ? t("sys.authDisabledToast") : t("sys.authEnabledToast"), disabling ? "error" : "success");
     } catch (e) {
       console.error("Failed to toggle bridge auth:", e);
-      showToast("Failed to update bridge auth", "error");
+      showToast(t("sys.authUpdateFailed"), "error");
     }
   }, [bridgeStatus, showToast, refreshBridgeStatus]);
 
@@ -80,7 +80,7 @@ function SystemSettings({ onOpenAbout }: Props) {
       setLogs(entries);
     } catch (e) {
       console.error("Failed to load logs:", e);
-      showToast("Failed to load logs", "error");
+      showToast(t("sys.logsFailed"), "error");
     } finally {
       setLoading(false);
     }
@@ -90,7 +90,7 @@ function SystemSettings({ onOpenAbout }: Props) {
     try {
       await commands.clearLogs();
       setLogs([]);
-      showToast("Logs cleared", "success");
+      showToast(t("sys.logsCleared"), "success");
     } catch (e) {
       console.error("Failed to clear logs:", e);
     }
@@ -98,7 +98,7 @@ function SystemSettings({ onOpenAbout }: Props) {
 
   const copyLogs = useCallback(() => {
     const text = logs.map((e) => `[${e.timestamp}] [${e.level}] ${e.target}: ${e.message}`).join("\n");
-    navigator.clipboard.writeText(text).then(() => showToast("Logs copied", "success")).catch(() => {});
+    navigator.clipboard.writeText(text).then(() => showToast(t("sys.logsCopied"), "success")).catch(() => {});
   }, [logs, showToast]);
 
   const exportConfig = useCallback(async () => {
@@ -112,10 +112,10 @@ function SystemSettings({ onOpenAbout }: Props) {
       a.download = `clickyx-config-${new Date().toISOString().split("T")[0]}${includeSecrets ? "-WITH-SECRETS" : ""}.json`;
       a.click();
       URL.revokeObjectURL(url);
-      showToast(includeSecrets ? "Config exported WITH secrets — store it safely" : "Config exported (secrets redacted)", includeSecrets ? "error" : "success");
+      showToast(includeSecrets ? t("sys.exportSecrets") : t("sys.exported"), includeSecrets ? "error" : "success");
     } catch (e) {
       console.error("Failed to export config:", e);
-      showToast("Export failed", "error");
+      showToast(t("sys.exportFailed"), "error");
     }
   }, [showToast, includeSecrets]);
 
@@ -129,23 +129,23 @@ function SystemSettings({ onOpenAbout }: Props) {
       try {
         const text = await file.text();
         await commands.importConfig(text);
-        showToast("Config imported — restart to apply", "success");
+        showToast(t("sys.imported"), "success");
       } catch (e) {
         console.error("Failed to import config:", e);
-        showToast("Import failed", "error");
+        showToast(t("sys.importFailed"), "error");
       }
     };
     input.click();
   }, [showToast]);
 
   const resetConfig = useCallback(async () => {
-    if (!confirm("Reset all settings to defaults? This cannot be undone.")) return;
+    if (!confirm(t("sys.resetConfirm"))) return;
     try {
       await commands.resetConfig();
-      showToast("Config reset — restart to apply", "info");
+      showToast(t("sys.resetToast"), "info");
     } catch (e) {
       console.error("Failed to reset config:", e);
-      showToast("Reset failed", "error");
+      showToast(t("sys.resetFailed"), "error");
     }
   }, [showToast]);
 
@@ -157,39 +157,38 @@ function SystemSettings({ onOpenAbout }: Props) {
 
   return (
     <section className="settings-section elevated-card">
-      <h3>System & Logs</h3>
+      <h3>{t("sys.title")}</h3>
 
       <div className="setting-row">
-        <label>App Version</label>
-        <span className="setting-value">{appVersion || "loading…"}</span>
+        <label>{t("sys.appVersion")}</label>
+        <span className="setting-value">{appVersion || t("sys.loading")}</span>
       </div>
 
       <div className="setting-row">
-        <label>Local HTTP Bridge <span className="setting-value">127.0.0.1:32123</span></label>
+        <label>{t("sys.bridge")} <span className="setting-value">127.0.0.1:32123</span></label>
         <div className="bridge-status-block">
           <span className="setting-value">
-            Auth: {bridgeStatus ? (bridgeStatus.auth_disabled ? "DISABLED (read-only open)" : bridgeStatus.token_set ? "on (token set)" : "on (no token yet)") : "loading…"}
+            {t("sys.auth")}: {bridgeStatus ? (bridgeStatus.auth_disabled ? t("sys.authDisabled") : bridgeStatus.token_set ? t("sys.authOnToken") : t("sys.authOnNoToken")) : t("sys.loading")}
           </span>
           <div className="system-actions">
-            <button className="settings-save-btn" onClick={rotateToken}>Rotate token</button>
+            <button className="settings-save-btn" onClick={rotateToken}>{t("sys.rotateToken")}</button>
             <button className="settings-save-btn danger" onClick={toggleBridgeAuth}>
-              {bridgeStatus?.auth_disabled ? "Enable auth" : "Disable auth"}
+              {bridgeStatus?.auth_disabled ? t("sys.enableAuth") : t("sys.disableAuth")}
             </button>
           </div>
           {bridgeStatus?.auth_disabled && (
             <p className="settings-hint danger-text">
-              Warning: read-only bridge endpoints are open to any local process.
-              Click, screenshots, AI spend and MCP execution stay token-gated.
+              {t("sys.authDisabledWarn")}
             </p>
           )}
           {rotatedToken && (
             <p className="settings-hint">
-              New token (shown once — copy now): <code className="setting-value">{rotatedToken}</code>
-              <button className="settings-save-btn" onClick={() => { navigator.clipboard.writeText(rotatedToken).then(() => showToast("Token copied", "success")).catch(() => {}); }}>Copy</button>
+              {t("sys.newTokenOnce")} <code className="setting-value">{rotatedToken}</code>
+              <button className="settings-save-btn" onClick={() => { navigator.clipboard.writeText(rotatedToken).then(() => showToast(t("sys.tokenCopied"), "success")).catch(() => {}); }}>{t("sys.copy")}</button>
             </p>
           )}
           <p className="settings-hint">
-            Clients authenticate with <code>Authorization: Bearer &lt;token&gt;</code>, <code>x-openclicky-token</code> or <code>X-Bridge-Token</code>.
+            {t("sys.authHint")} <code>Authorization: Bearer &lt;token&gt;</code>, <code>x-openclicky-token</code> {t("sys.or")} <code>X-Bridge-Token</code>.
           </p>
         </div>
       </div>
@@ -197,27 +196,27 @@ function SystemSettings({ onOpenAbout }: Props) {
       <div className="system-actions">
         <label className="setting-checkbox">
           <input type="checkbox" checked={includeSecrets} onChange={(e) => setIncludeSecrets(e.target.checked)} />
-          Include secrets in export
+          {t("sys.includeSecrets")}
         </label>
-        <button className="settings-save-btn" onClick={exportConfig}>Export Config</button>
-        <button className="settings-save-btn" onClick={importConfig}>Import Config</button>
-        <button className="settings-save-btn danger" onClick={resetConfig}>Reset to Defaults</button>
+        <button className="settings-save-btn" onClick={exportConfig}>{t("sys.exportConfig")}</button>
+        <button className="settings-save-btn" onClick={importConfig}>{t("sys.importConfig")}</button>
+        <button className="settings-save-btn danger" onClick={resetConfig}>{t("sys.resetDefaults")}</button>
         {onOpenAbout && (
-          <button className="settings-save-btn" onClick={onOpenAbout}>About ClickyX</button>
+          <button className="settings-save-btn" onClick={onOpenAbout}>{t("sys.about")}</button>
         )}
       </div>
 
       <div className="log-section">
         <div className="log-header">
-          <h4>Application Logs</h4>
+          <h4>{t("sys.appLogs")}</h4>
           <div className="log-actions">
             <button className="settings-save-btn" onClick={loadLogs} disabled={loading}>
-              {loading ? "Loading…" : "Refresh"}
+              {loading ? t("sys.loading") : t("sys.refresh")}
             </button>
-            <button className="settings-save-btn" onClick={copyLogs} disabled={logs.length === 0} title="Copy all logs to clipboard">
-              Copy
+            <button className="settings-save-btn" onClick={copyLogs} disabled={logs.length === 0} title={t("sys.copyLogs")}>
+              {t("sys.copy")}
             </button>
-            <button className="settings-save-btn danger" onClick={clearLogs}>Clear</button>
+            <button className="settings-save-btn danger" onClick={clearLogs}>{t("sys.clear")}</button>
           </div>
         </div>
 
@@ -227,9 +226,9 @@ function SystemSettings({ onOpenAbout }: Props) {
             className="setting-select"
             value={logFilter}
             onChange={(e) => setLogFilter(e.target.value)}
-            aria-label="Filter log level"
+            aria-label={t("sys.filterLevel")}
           >
-            <option value="all">All levels</option>
+            <option value="all">{t("sys.allLevels")}</option>
             <option value="error">Error</option>
             <option value="warn">Warn</option>
             <option value="info">Info</option>
@@ -237,10 +236,10 @@ function SystemSettings({ onOpenAbout }: Props) {
           </select>
           <input
             className="log-search-input"
-            placeholder="Search logs…"
+            placeholder={t("sys.searchLogs")}
             value={logSearch}
             onChange={(e) => setLogSearch(e.target.value)}
-            aria-label="Search log messages"
+            aria-label={t("sys.searchMessages")}
           />
           {(logFilter !== "all" || logSearch) && (
             <span className="log-count">{filteredLogs.length} / {logs.length}</span>
@@ -249,9 +248,9 @@ function SystemSettings({ onOpenAbout }: Props) {
 
         <div className="log-viewer" role="log" aria-live="off">
           {logs.length === 0 ? (
-            <div className="log-empty">No log entries loaded. Click Refresh.</div>
+            <div className="log-empty">{t("sys.noLogs")}</div>
           ) : filteredLogs.length === 0 ? (
-            <div className="log-empty">No entries match the current filter.</div>
+            <div className="log-empty">{t("sys.noMatch")}</div>
           ) : (
             filteredLogs.map((entry, i) => (
               <div key={i} className={`log-entry log-level-${entry.level.toLowerCase()}`}>

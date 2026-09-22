@@ -1,4 +1,5 @@
 import { useState, useCallback } from "react";
+import { useTranslation } from "react-i18next";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { commands } from "../../bindings";
 import type { PermissionStatus } from "../../bindings";
@@ -6,6 +7,7 @@ import type { PermissionStatus } from "../../bindings";
 const PERMISSION_LIST = ["microphone", "screen_recording", "notifications", "camera", "accessibility"];
 
 function PermissionsSettings() {
+  const { t } = useTranslation();
   const queryClient = useQueryClient();
   const [requesting, setRequesting] = useState<string | null>(null);
 
@@ -35,7 +37,7 @@ function PermissionsSettings() {
         [permission]: {
           ...(prev?.[permission] ?? { permission, description: "" }),
           granted,
-          description: granted ? "Granted" : "Denied",
+          description: granted ? t("perms.granted") : t("perms.denied"),
         },
       }));
     } catch (e) {
@@ -46,16 +48,16 @@ function PermissionsSettings() {
   }, [queryClient]);
 
   const labelMap: Record<string, string> = {
-    microphone: "Microphone",
-    screen_recording: "Screen Recording",
-    notifications: "Notifications",
-    camera: "Camera",
-    accessibility: "Accessibility",
+    microphone: t("perms.microphone"),
+    screen_recording: t("perms.screen_recording"),
+    notifications: t("perms.notifications"),
+    camera: t("perms.camera"),
+    accessibility: t("perms.accessibility"),
   };
 
   return (
     <section className="settings-section elevated-card">
-      <h3>Permissions</h3>
+      <h3>{t("perms.title")}</h3>
       {PERMISSION_LIST.map((perm) => {
         const status = statuses[perm];
         return (
@@ -64,7 +66,7 @@ function PermissionsSettings() {
               <span className="permission-label">{labelMap[perm] || perm}</span>
               {status && (
                 <span className={`permission-badge ${status.granted ? "granted" : "denied"}`}>
-                  {status.granted ? "Granted" : "Denied"}
+                  {status.granted ? t("perms.granted") : t("perms.denied")}
                 </span>
               )}
             </div>
@@ -73,7 +75,7 @@ function PermissionsSettings() {
               onClick={() => requestPerm(perm)}
               disabled={requesting === perm || status?.granted}
             >
-              {requesting === perm ? "Requesting..." : status?.granted ? "OK" : "Request"}
+              {requesting === perm ? t("perms.requesting") : status?.granted ? t("perms.ok") : t("perms.request")}
             </button>
           </div>
         );

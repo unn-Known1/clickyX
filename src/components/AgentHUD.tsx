@@ -4,6 +4,7 @@
  * Reads agent slug from URL ?agent=<slug> param.
  */
 import { useState, useEffect, useCallback, useRef } from "react";
+import { useTranslation } from "react-i18next";
 import { useQuery } from "@tanstack/react-query";
 import { commands } from "../bindings";
 import { agentStatusColor, agentStatusLabel } from "../utils/agentStatus";
@@ -20,10 +21,11 @@ interface TimelineItem {
 
 // ── Activity Timeline ─────────────────────────────────────────────────────────
 function Timeline({ items }: { items: TimelineItem[] }) {
+  const { t } = useTranslation();
   return (
     <div className="hud-timeline">
       {items.length === 0 ? (
-        <p className="hud-empty">No activity yet.</p>
+        <p className="hud-empty">{t("hud.noActivity")}</p>
       ) : (
         items.map((item, i) => (
           <div key={i} className={`hud-timeline-item hud-tl-${item.type}`}>
@@ -38,6 +40,7 @@ function Timeline({ items }: { items: TimelineItem[] }) {
 
 // ── Main HUD component ────────────────────────────────────────────────────────
 export default function AgentHUD() {
+  const { t } = useTranslation();
   // Read slug from global var set by Tauri initialization script
   const slug = window.__AGENT_SLUG || new URLSearchParams(window.location.search).get("agent") || "";
   const [activeSection, setActiveSection] = useState<"transcript" | "diff" | "timeline">("transcript");
@@ -104,7 +107,7 @@ export default function AgentHUD() {
   if (!slug) {
     return (
       <div className="hud-error">
-        <p>No agent slug provided. Open via the Agents tab.</p>
+        <p>{t("hud.noSlug")}</p>
       </div>
     );
   }
@@ -129,16 +132,16 @@ export default function AgentHUD() {
           <button
             className="hud-btn"
             onClick={() => setMinimized((v) => !v)}
-            title={minimized ? "Restore" : "Minimize"}
-            aria-label={minimized ? "Restore HUD" : "Minimize HUD"}
+            title={minimized ? t("hud.restore") : t("hud.minimize")}
+            aria-label={minimized ? t("hud.restoreHud") : t("hud.minimizeHud")}
           >
             <Icon name={minimized ? "chevron-up" : "chevron-down"} size={12} />
           </button>
           <button
             className="hud-btn hud-btn-close"
             onClick={closeWindow}
-            title="Close HUD"
-            aria-label="Close Agent HUD"
+            title={t("hud.close")}
+            aria-label={t("hud.close")}
           >
             <Icon name="close" size={12} />
           </button>
@@ -157,7 +160,7 @@ export default function AgentHUD() {
           )}
 
           {isLoading && !agent && (
-            <div className="hud-loading">Loading agent data…</div>
+            <div className="hud-loading">{t("hud.loading")}</div>
           )}
           {!isLoading && !agent && (
             <div className="hud-error">Agent "{slug}" not found.</div>
@@ -190,7 +193,7 @@ export default function AgentHUD() {
                 {activeSection === "transcript" && (
                   <div className="hud-transcript" role="log" aria-live="polite">
                     {agent.transcript.length === 0 ? (
-                      <p className="hud-empty">No messages yet.</p>
+                      <p className="hud-empty">{t("hud.noMessages")}</p>
                     ) : (
                       agent.transcript.map((msg, i) => (
                         <div key={i} className={`hud-msg hud-msg-${msg.role}`}>

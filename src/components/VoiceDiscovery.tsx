@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from "react";
+import { useTranslation } from "react-i18next";
 import { useQuery } from "@tanstack/react-query";
 import { commands } from "../bindings";
 import type { VoiceInfo, VoiceProvider } from "../bindings";
@@ -70,6 +71,7 @@ function VoiceOrbitNode({
 }
 
 export default function VoiceDiscovery({ audioConfig, onSelected }: VoiceDiscoveryProps) {
+  const { t } = useTranslation();
   const [selectedProvider, setSelectedProvider] = useState<string>(audioConfig.tts_provider);
   const [hovered, setHovered] = useState<VoiceInfo | null>(null);
   const [selected, setSelected] = useState<string>(audioConfig.selected_voice_id);
@@ -164,16 +166,16 @@ export default function VoiceDiscovery({ audioConfig, onSelected }: VoiceDiscove
           className="setting-select"
           value={selectedProvider}
           onChange={(e) => setSelectedProvider(e.target.value)}
-          aria-label="TTS provider"
+          aria-label={t("vd.ttsProvider")}
         >
           {providers.map((p) => (
             <option key={p.id} value={p.id}>
-              {p.name} {p.tier === "free" ? "(free)" : ""}
+              {p.name} {p.tier === "free" ? `(${t("vd.free")})` : ""}
             </option>
           ))}
         </select>
         <span className="voice-discovery-hint">
-          {voices.length} voice{voices.length === 1 ? "" : "s"} — drag the orbit to discover
+          {t("vd.hint", { n: voices.length, plural: voices.length === 1 ? "" : t("vd.plural") })}
         </span>
       </div>
 
@@ -185,7 +187,7 @@ export default function VoiceDiscovery({ audioConfig, onSelected }: VoiceDiscove
         onPointerCancel={onPointerUp}
         style={{ cursor: dragging ? "grabbing" : "grab", userSelect: "none" }}
         role="group"
-        aria-label="Voice orbit selector"
+        aria-label={t("vd.orbit")}
       >
         <div className="orbit-center">
           <div className="orbit-center-inner">
@@ -202,7 +204,7 @@ export default function VoiceDiscovery({ audioConfig, onSelected }: VoiceDiscove
                 </div>
               </>
             ) : (
-              <div className="orbit-preview-name">Select a voice</div>
+              <div className="orbit-preview-name">{t("vd.selectVoice")}</div>
             )}
           </div>
         </div>
@@ -226,7 +228,7 @@ export default function VoiceDiscovery({ audioConfig, onSelected }: VoiceDiscove
         })}
       </div>
 
-      <div className="voice-list" role="listbox" aria-label="Voice list">
+      <div className="voice-list" role="listbox" aria-label={t("vd.list")}>
         {voices.map((v) => (
           <button
             key={v.id}

@@ -1,4 +1,5 @@
 import { useState, useCallback } from "react";
+import { useTranslation } from "react-i18next";
 
 interface ScreenPreviewProps {
   data: string;
@@ -13,6 +14,7 @@ function toDataUrl(data: string): string {
 }
 
 function ScreenPreview({ data, width, height, label }: ScreenPreviewProps) {
+  const { t } = useTranslation();
   const [expanded, setExpanded] = useState(false);
   const [broken, setBroken] = useState(false);
 
@@ -23,7 +25,7 @@ function ScreenPreview({ data, width, height, label }: ScreenPreviewProps) {
       <div className={`screen-preview ${expanded ? "expanded" : ""}`}>
         {label && <div className="screen-preview-label">{label}</div>}
         <div className="screen-preview-placeholder">
-          <span>Image unavailable</span>
+          <span>{t("misc.imageUnavailable")}</span>
         </div>
         <div className="screen-preview-meta">{width}×{height}</div>
       </div>

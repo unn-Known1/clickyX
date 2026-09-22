@@ -10,7 +10,7 @@ import { Icon } from "./components/Icon";
 import { useConfig } from "./hooks/useConfig";
 import { AppProvider, useAppContext } from "./context/AppContext";
 import type { Tab } from "./context/AppContext";
-import { useTranslation } from "react-i18next";
+import { useTranslation, Translation } from "react-i18next";
 import { applyTheme } from "./utils/theme";
 import "./styles/theme.css";
 import "./components/OnboardingWizard.css";
@@ -32,11 +32,15 @@ class ErrorBoundary extends Component<{ children: ReactNode }, { hasError: boole
   render() {
     if (this.state.hasError) {
       return (
-        <div className="error-boundary">
-          <h2>Something went wrong</h2>
-          <p>An unexpected error occurred. Please restart the app.</p>
-          <button onClick={() => this.setState({ hasError: false })}>Try again</button>
-        </div>
+        <Translation>
+          {(t) => (
+            <div className="error-boundary">
+              <h2>{t("app.crashTitle")}</h2>
+              <p>{t("app.crashBody")}</p>
+              <button onClick={() => this.setState({ hasError: false })}>{t("app.tryAgain")}</button>
+            </div>
+          )}
+        </Translation>
       );
     }
     return this.props.children;
@@ -56,6 +60,7 @@ function Toast({
     return () => clearTimeout(t);
   }, [message.id, onDismiss]);
 
+  const { t: tr } = useTranslation();
   const toastIcon = message.type === "success" ? "check" : message.type === "error" ? "error" : "info";
 
   return (
@@ -67,7 +72,7 @@ function Toast({
       <button
         className="toast-close"
         onClick={() => onDismiss(message.id)}
-        aria-label="Dismiss notification"
+        aria-label={tr("app.dismiss")}
       >
         <Icon name="close" size={12} />
       </button>
@@ -81,13 +86,14 @@ const TAB_IDS: Tab[] = ["home", "agents", "settings"];
 
 // ── F-031: Splash Screen ───────────────────────────────────────────────────────
 function SplashScreen() {
+  const { t } = useTranslation();
   return (
-    <div className="splash-screen" aria-label="Loading ClickyX">
+    <div className="splash-screen" aria-label={t("app.loadingApp")}>
       <div className="splash-logo" aria-hidden="true">
         <Icon name="sparkle" size={40} />
       </div>
       <div className="splash-name">ClickyX</div>
-      <div className="splash-tagline">Your AI companion</div>
+      <div className="splash-tagline">{t("app.tagline")}</div>
       <div className="splash-spinner" role="progressbar" aria-busy="true" />
     </div>
   );
@@ -187,7 +193,7 @@ function AppInner() {
     const state = e.payload;
     setTypeModeActive(state === "active");
     if (state === "active") {
-      showToast("Type mode activated — typing will be simulated", "info");
+      showToast(t("app.typeModeOn"), "info");
     }
   });
 
@@ -246,7 +252,7 @@ function AppInner() {
       await updateConfig({ window: { ...config.window, pin: !config.window.pin } });
     } catch (e) {
       console.error("Failed to toggle pin:", e);
-      showToast("Failed to toggle pin", "error");
+      showToast(t("app.pinFailed"), "error");
     }
   }, [config, updateConfig, showToast]);
 
@@ -311,23 +317,23 @@ function AppInner() {
             <button
               className="window-btn"
               onClick={() => getCurrentWindow().minimize()}
-              aria-label="Minimize window"
-              title="Minimize"
+              aria-label={t("app.minimize")}
+              title={t("app.minimize")}
             >
               <Icon name="minus" size={12} />
             </button>
             <button
               className="window-btn window-btn-close"
               onClick={() => getCurrentWindow().close()}
-              aria-label="Close window"
-              title="Close"
+              aria-label={t("app.closeWindow")}
+              title={t("app.close")}
             >
               <Icon name="close" size={12} />
             </button>
           </div>
         </div>
 
-        <nav className="tab-bar" role="tablist" aria-label="Main navigation">
+        <nav className="tab-bar" role="tablist" aria-label={t("app.mainNav")}>
           <div className="tab-bar-tabs">
             {TAB_IDS.map((id) => (
               <button
@@ -348,16 +354,16 @@ function AppInner() {
             <button
               className="pin-toggle-btn"
               onClick={() => setPaletteOpen(true)}
-              title="Command palette (Ctrl+K)"
-              aria-label="Open command palette"
+              title={t("app.paletteHint")}
+              aria-label={t("app.openPalette")}
             >
               <Icon name="search" size={13} />
             </button>
             <button
               className="pin-toggle-btn"
               onClick={togglePin}
-              title={config?.window?.pin ? "Unpin panel" : "Pin panel"}
-              aria-label={config?.window?.pin ? "Unpin panel" : "Pin panel"}
+              title={config?.window?.pin ? t("app.unpin") : t("app.pin")}
+              aria-label={config?.window?.pin ? t("app.unpin") : t("app.pin")}
             >
               <Icon name={config?.window?.pin ? "unpin" : "pin"} size={14} />
             </button>

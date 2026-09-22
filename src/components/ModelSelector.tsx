@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { useQuery } from "@tanstack/react-query";
 import { commands } from "../bindings";
 import type { ModelInfo, AiConfig } from "../bindings";
@@ -9,6 +10,7 @@ interface ModelSelectorProps {
 }
 
 function ModelSelector({ selectedModel, onModelChange }: ModelSelectorProps) {
+  const { t } = useTranslation();
   const { setActiveTab } = useAppContext();
 
   // Load current AI config to know which providers have keys configured.
@@ -52,14 +54,14 @@ function ModelSelector({ selectedModel, onModelChange }: ModelSelectorProps) {
   // No providers configured at all — show a setup prompt
   if (!isLoading && !hasAnyProvider) {
     return (
-      <div className="model-selector-empty" title="No AI providers configured">
+      <div className="model-selector-empty" title={t("misc.noProviders")}>
         <span className="model-note">
-          No AI provider configured —{" "}
+          {t("misc.noProviders")} —{" "}
           <span
             className="model-link"
             onClick={() => setActiveTab("settings")}
           >
-            set up in Settings
+            {t("misc.setupInSettings")}
           </span>
         </span>
       </div>
@@ -67,7 +69,7 @@ function ModelSelector({ selectedModel, onModelChange }: ModelSelectorProps) {
   }
 
   if (isError) {
-    return <div className="model-selector-error" title="Failed to load models">Models unavailable</div>;
+    return <div className="model-selector-error" title={t("misc.modelsFailed")}>{t("misc.modelsUnavailable")}</div>;
   }
 
   const providerLabel = (provider: string) => {
@@ -84,9 +86,9 @@ function ModelSelector({ selectedModel, onModelChange }: ModelSelectorProps) {
       value={selectedModel}
       onChange={(e) => onModelChange(e.target.value)}
       disabled={isLoading}
-      aria-label="Select AI model"
+      aria-label={t("misc.selectModel")}
     >
-      {isLoading && <option value="">Loading models…</option>}
+      {isLoading && <option value="">{t("misc.loadingModels")}</option>}
       {Object.entries(grouped).map(([provider, providerModels]) => (
         <optgroup key={provider} label={providerLabel(provider)}>
           {providerModels.map((m) => (

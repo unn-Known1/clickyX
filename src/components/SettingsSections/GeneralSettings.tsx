@@ -23,7 +23,7 @@ function GeneralSettings() {
   if (error) {
     return (
       <section className="settings-section elevated-card">
-        <h3>General</h3>
+        <h3>{t("settings.general")}</h3>
         <div className="settings-error">{error}</div>
       </section>
     );
@@ -32,7 +32,7 @@ function GeneralSettings() {
   if (loading || !config) {
     return (
       <section className="settings-section elevated-card">
-        <h3>General</h3>
+        <h3>{t("settings.general")}</h3>
         <div className="skeleton-loader" />
       </section>
     );
@@ -41,24 +41,24 @@ function GeneralSettings() {
   return (
     <>
       <section className="settings-section elevated-card">
-        <h3>Startup</h3>
+        <h3>{t("settings.startup")}</h3>
         <div className="setting-row">
-          <label>Check for updates on startup</label>
+          <label>{t("settings.checkUpdates")}</label>
           <input
             type="checkbox"
             checked={config.check_updates_on_startup ?? true}
             onChange={(e) => updateConfig({ check_updates_on_startup: e.target.checked })}
-            aria-label="Check for updates on startup"
+            aria-label={t("settings.checkUpdates")}
           />
         </div>
         <p className="settings-hint">
-          Version-check traffic only (no identifiers). Disable for a fully offline launch.
+          {t("settings.startupHint")}
         </p>
       </section>
       <section className="settings-section elevated-card">
-        <h3>{t("settings.languageTitle", "Language")}</h3>
+        <h3>{t("settings.languageTitle")}</h3>
         <div className="setting-row">
-          <label>{t("settings.languageLabel", "Interface language")}</label>
+          <label>{t("settings.languageLabel")}</label>
           <select
             className="setting-select"
             value={i18n.language}
@@ -70,7 +70,7 @@ function GeneralSettings() {
           </select>
         </div>
         <p className="settings-hint">
-          {t("settings.languageHint", "Navigation, palette, and settings chrome are translated. Deeper screens still fall back to English.")}
+          {t("settings.languageHint")}
         </p>
       </section>
       <AppearanceSettings config={config} onConfigUpdate={syncConfigCache} />

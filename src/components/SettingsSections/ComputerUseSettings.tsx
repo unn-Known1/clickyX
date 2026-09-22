@@ -1,8 +1,10 @@
 import { useCallback, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useAppContext } from "../../context/AppContext";
 import { useConfig } from "../../hooks/useConfig";
 
 function ComputerUseSettings() {
+  const { t } = useTranslation();
   const { showToast } = useAppContext();
   const { config, updateConfig, loading, error } = useConfig();
   const [saving, setSaving] = useState(false);
@@ -15,7 +17,7 @@ function ComputerUseSettings() {
       await updateConfig({ computer_use: updated });
     } catch (e) {
       console.error(e);
-      showToast("Failed to save computer use settings", "error");
+      showToast(t("cua.saveFailed"), "error");
     } finally {
       setSaving(false);
     }
@@ -24,7 +26,7 @@ function ComputerUseSettings() {
   if (error && !config) {
     return (
       <section className="settings-section elevated-card">
-        <h3>Computer Use</h3>
+        <h3>{t("cua.title")}</h3>
         <div className="settings-error">{error}</div>
       </section>
     );
@@ -33,7 +35,7 @@ function ComputerUseSettings() {
   if (loading) {
     return (
       <section className="settings-section elevated-card">
-        <h3>Computer Use</h3>
+        <h3>{t("cua.title")}</h3>
         <div className="skeleton-loader" />
       </section>
     );
@@ -44,11 +46,11 @@ function ComputerUseSettings() {
   return (
     <section className="settings-section elevated-card">
       <h3>
-        Computer Use{" "}
-        {saving && <span className="saving-indicator">saving…</span>}
+        {t("cua.title")}{" "}
+        {saving && <span className="saving-indicator">{t("cua.saving")}</span>}
       </h3>
       <div className="setting-row">
-        <label>Screen Pointing Model</label>
+        <label>{t("cua.pointingModel")}</label>
         <select className="setting-select"
           value={cuConfig?.pointing_model || "claude-sonnet-4-20250514"}
           onChange={(e) => updateField("pointing_model", e.target.value)}>
@@ -58,7 +60,7 @@ function ComputerUseSettings() {
         </select>
       </div>
       <div className="setting-row">
-        <label>CUA Backend</label>
+        <label>{t("cua.backend")}</label>
         <select className="setting-select"
           value={cuConfig?.cua_backend || "anthropic"}
           onChange={(e) => updateField("cua_backend", e.target.value)}>
@@ -67,7 +69,7 @@ function ComputerUseSettings() {
         </select>
       </div>
       <div className="setting-row">
-        <label>Native CUA</label>
+        <label>{t("cua.native")}</label>
         <input type="checkbox"
           checked={cuConfig?.native_cua ?? false}
           onChange={(e) => updateField("native_cua", e.target.checked)} />

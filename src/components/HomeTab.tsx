@@ -5,67 +5,45 @@ import { Icon } from "./Icon";
 import type { IconName } from "./Icon";
 import { useAgents } from "../hooks/useAgents";
 import { agentStatusColor, agentStatusLabel } from "../utils/agentStatus";
+import { useTranslation } from "react-i18next";
 import { useAppContext } from "../context/AppContext";
 import { useTauriEvent } from "../hooks/useTauriEvent";
 
-function timeGreeting(): string {
+function timeGreeting(t: (k: string) => string): string {
   const h = new Date().getHours();
-  if (h < 5) return "Hi";
-  if (h < 12) return "Good morning";
-  if (h < 18) return "Good afternoon";
-  return "Good evening";
+  if (h < 5) return t("home.greetHi");
+  if (h < 12) return t("home.greetMorning");
+  if (h < 18) return t("home.greetAfternoon");
+  return t("home.greetEvening");
 }
 
 // ── Suggestion catalog: known prompts get a matching icon + description ──────
-interface SuggestionMeta {
+// Prompts are keyed by stable id and resolved through i18n so the starter
+// chips follow the interface language. User-typed recents stay as typed.
+interface SuggestionDef {
+  id: "screen" | "doc" | "debug" | "email";
   icon: IconName;
-  description: string;
+  promptKey: string;
+  descKey: string;
 }
 
-const SUGGESTION_CATALOG: Record<string, SuggestionMeta> = {
-  "What's on my screen?": {
-    icon: "screen",
-    description: "Ask about what's visible right now",
-  },
-  "Summarize this document": {
-    icon: "file",
-    description: "Get a concise overview",
-  },
-  "Help me debug this code": {
-    icon: "code",
-    description: "Find and fix the error",
-  },
-  "Write a professional email": {
-    icon: "mail",
-    description: "Draft a polished message",
-  },
-};
-
-const FALLBACK_SUGGESTION: SuggestionMeta = {
-  icon: "sparkle",
-  description: "Continue the conversation",
-};
-
-function suggestionMeta(prompt: string): SuggestionMeta {
-  return SUGGESTION_CATALOG[prompt] ?? FALLBACK_SUGGESTION;
-}
-
-const DEFAULT_SUGGESTIONS = [
-  "What's on my screen?",
-  "Summarize this document",
-  "Help me debug this code",
-  "Write a professional email",
+const SUGGESTION_DEFS: SuggestionDef[] = [
+  { id: "screen", icon: "screen", promptKey: "home.sugScreen", descKey: "home.sugScreenDesc" },
+  { id: "doc",    icon: "file",   promptKey: "home.sugDoc",    descKey: "home.sugDocDesc" },
+  { id: "debug",  icon: "code",   promptKey: "home.sugDebug",   descKey: "home.sugDebugDesc" },
+  { id: "email",  icon: "mail",   promptKey: "home.sugEmail",   descKey: "home.sugEmailDesc" },
 ];
 
 function AgentDockStrip() {
+  const { t } = useTranslation();
   const { agents, loading } = useAgents();
   const { setActiveTab } = useAppContext();
 
   if (loading || agents.length === 0) return null;
 
   return (
-    <div className="agent-dock-strip" role="list" aria-label="Active agents">
-      <span className="agent-dock-label">Agents</span>
+    <div className="agent-dock-strip" role="list" aria-label={t("home.dockAria")}>
+      <span className="agent-dock-label">{t("home.dockLabel")}</span>
       <div className="agent-dock-items">
         {agents.slice(0, 6).map((agent) => {
           const label = agentStatusLabel(agent.state);
@@ -90,23 +68,26 @@ function AgentDockStrip() {
 
 // F-027: Empty-state CTA when no agents exist
 function EmptyAgentsCTA({ onCreateAgent }: { onCreateAgent: () => void }) {
+  const { t } = useTranslation();
   return (
     <div className="empty-agents-cta">
       <div className="empty-icon">✦</div>
-      <h3>Create your first agent</h3>
-      <p>Agents can automate tasks, answer questions, and control your computer.</p>
+      <h3>{t("home.emptyTitle")}</h3>
+      <p>{t("home.emptyBody")}</p>
       <button className="btn btn-primary" onClick={onCreateAgent}>
-        Create Agent
+        {t("agents.createAgent")}
       </button>
     </div>
   );
 }
 
 function HomeTab() {
+  const { t } = useTranslation();
   const [showChat, setShowChat] = useState(false);
   const [initialSuggestion, setInitialSuggestion] = useState<string | null>(null);
   const { agents, loading: agentsLoading } = useAgents();
   const { setActiveTab } = useAppContext();
+  const { i18n } = useTranslation();
   const queryClient = useQueryClient();
 
   // F-003: invalidate today-stats cache when any agent completes/errors so the
@@ -116,20 +97,32 @@ function HomeTab() {
     void queryClient.invalidateQueries({ queryKey: ["today-stats"] });
   });
 
+  // Translated starter prompts (recomputed when the language changes).
+  const defaultSuggestions = [
+    t("home.sugScreen"),
+    t("home.sugDoc"),
+    t("home.sugDebug"),
+    t("home.sugEmail"),
+  ];
+  // prompt text -> { icon, description } for the starters above.
+  const metaByPrompt = new Map(
+    SUGGESTION_DEFS.map((d) => [t(d.promptKey), { icon: d.icon, description: t(d.descKey) }]),
+  );
+
   // F-026: Dynamic suggestions from recent prompts
-  const { data: suggestions = DEFAULT_SUGGESTIONS } = useQuery({
-    queryKey: ["home-suggestions"],
+  const { data: suggestions = defaultSuggestions } = useQuery({
+    queryKey: ["home-suggestions", i18n.language],
     queryFn: async (): Promise<string[]> => {
       try {
         const raw = sessionStorage.getItem("recent_prompts");
-        if (!raw) return DEFAULT_SUGGESTIONS;
+        if (!raw) return defaultSuggestions;
         const recent = JSON.parse(raw);
-        if (!Array.isArray(recent) || recent.length === 0) return DEFAULT_SUGGESTIONS;
+        if (!Array.isArray(recent) || recent.length === 0) return defaultSuggestions;
         return recent
           .filter((s: unknown): s is string => typeof s === "string" && s.length > 0)
           .slice(0, 4);
       } catch {
-        return DEFAULT_SUGGESTIONS;
+        return defaultSuggestions;
       }
     },
     staleTime: 60_000,
@@ -152,9 +145,9 @@ function HomeTab() {
   if (showChat) {
     return (
       <div className="home-tab home-chat-mode">
-        <button className="home-back-btn" onClick={() => setShowChat(false)} aria-label="Back to home">
+        <button className="home-back-btn" onClick={() => setShowChat(false)} aria-label={t("home.backAria")}>
           <Icon name="chevron-left" size={14} />
-          Back
+          {t("home.back")}
         </button>
         <ChatTab initialText={initialSuggestion ?? undefined} />
       </div>
@@ -172,18 +165,18 @@ function HomeTab() {
 
       <div className="hero-card">
         <h1>
-          {timeGreeting()}, I'm <span className="hero-brand">ClickyX</span>
+          {timeGreeting(t)}, I'm <span className="hero-brand">ClickyX</span>
         </h1>
-        <p>Your AI companion — ask me anything about your screen.</p>
+        <p>{t("home.subtitle")}</p>
       </div>
       <button className="start-chat-btn" onClick={() => setShowChat(true)}>
-        Start a conversation
+        {t("home.startChat")}
       </button>
 
       {/* F-026: Dynamic suggestion chips with icons + descriptions */}
       <div className="suggestions-grid">
         {suggestions.map((s) => {
-          const meta = suggestionMeta(s);
+          const meta = metaByPrompt.get(s) ?? { icon: "sparkle" as IconName, description: t("home.sugFallbackDesc") };
           return (
             <button
               key={s}

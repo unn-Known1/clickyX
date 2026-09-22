@@ -1,48 +1,23 @@
 import { useState, useEffect } from "react";
+import { useTranslation } from "react-i18next";
 import { commands } from "../bindings";
 import { OnboardingIntro } from "./OnboardingMedia";
 import { Icon } from "./Icon";
 import type { IconName } from "./Icon";
 
 interface PermissionStep {
-  id: string;
-  title: string;
-  description: string;
+  id: "microphone" | "screen_recording" | "accessibility" | "notifications";
   icon: IconName;
-  osHint: string;
 }
 
+// NOTE (P1 CUT): no camera step — ClickyX uses screen capture (xcap), not a
+// camera. A camera permission step trained users to distrust the product.
+// Titles/descriptions/hints resolve through i18n (onboard.steps.<id>).
 const STEPS: PermissionStep[] = [
-  {
-    id: "microphone",
-    title: "Microphone Access",
-    description: "Allow ClickyX to hear your voice commands for push-to-talk and always-on voice mode.",
-    icon: "mic",
-    osHint: "Windows: Settings > Privacy & Security > Microphone\nmacOS: System Settings > Privacy & Security > Microphone\nLinux: Ensure PulseAudio/ALSA is configured",
-  },
-  {
-    id: "screen_recording",
-    title: "Screen Recording",
-    description: "Enable screen capture so ClickyX can see your screen and provide contextual assistance.",
-    icon: "screen",
-    osHint: "Windows: Settings > Privacy & Security > Screen Capture\nmacOS: System Settings > Privacy & Security > Screen Recording\nLinux: Ensure PipeWire or X11 sharing is enabled",
-  },
-  {
-    id: "accessibility",
-    title: "Accessibility Access",
-    description: "Grant accessibility permissions for global keyboard shortcuts and automation features.",
-    icon: "keyboard",
-    osHint: "Windows: Settings > Accessibility > Keyboard\nmacOS: System Settings > Privacy & Security > Accessibility\nLinux: Install at-spi2-core for accessibility bridge",
-  },
-  // NOTE (P1 CUT): no camera step — ClickyX uses screen capture (xcap), not a
-  // camera. A camera permission step trained users to distrust the product.
-  {
-    id: "notifications",
-    title: "Notifications",
-    description: "Receive desktop notifications for agent task completion, reminders, and updates.",
-    icon: "bell",
-    osHint: "Windows: Settings > System > Notifications\nmacOS: System Settings > Notifications\nLinux: Ensure D-Bus notification service is running",
-  },
+  { id: "microphone", icon: "mic" },
+  { id: "screen_recording", icon: "screen" },
+  { id: "accessibility", icon: "keyboard" },
+  { id: "notifications", icon: "bell" },
 ];
 
 interface OnboardingWizardProps {
@@ -51,6 +26,7 @@ interface OnboardingWizardProps {
 }
 
 export default function OnboardingWizard({ onComplete, onSkip }: OnboardingWizardProps) {
+  const { t } = useTranslation();
   const [currentStep, setCurrentStep] = useState(0);
   const [permissions, setPermissions] = useState<Record<string, boolean>>({});
   const [completing, setCompleting] = useState(false);
@@ -109,9 +85,9 @@ export default function OnboardingWizard({ onComplete, onSkip }: OnboardingWizar
     <div className="onboarding-overlay">
       <div className="onboarding-modal">
         <div className="onboarding-header">
-          <h1>Welcome to ClickyX</h1>
+          <h1>{t("onboard.welcome")}</h1>
           <p className="onboarding-subtitle">
-            Your cross-platform AI companion. Let's get you set up.
+            {t("onboard.subtitle")}
           </p>
         </div>
 
@@ -124,7 +100,7 @@ export default function OnboardingWizard({ onComplete, onSkip }: OnboardingWizar
             />
           ))}
           <span className="onboarding-step-count">
-            Step {currentStep + 1} of {STEPS.length}
+            {t("onboard.stepOf", { n: currentStep + 1, total: STEPS.length })}
           </span>
         </div>
 
@@ -133,15 +109,15 @@ export default function OnboardingWizard({ onComplete, onSkip }: OnboardingWizar
           <div className="onboarding-step-icon">
             <Icon name={step.icon} size={40} />
           </div>
-          <h2>{step.title}</h2>
-          <p>{step.description}</p>
+          <h2>{t(`onboard.steps.${step.id}.title`)}</h2>
+          <p>{t(`onboard.steps.${step.id}.desc`)}</p>
           <div className="onboarding-permission-status">
             {granted === true ? (
-              <span className="permission-granted">✅ Granted</span>
+              <span className="permission-granted">✅ {t("onboard.granted")}</span>
             ) : granted === false ? (
-              <span className="permission-denied">❌ Not granted</span>
+              <span className="permission-denied">❌ {t("onboard.notGranted")}</span>
             ) : (
-              <span className="permission-unknown">⏳ Checking...</span>
+              <span className="permission-unknown">⏳ {t("onboard.checking")}</span>
             )}
           </div>
           <button
@@ -149,17 +125,17 @@ export default function OnboardingWizard({ onComplete, onSkip }: OnboardingWizar
             onClick={requestCurrentPermission}
             disabled={granted === true}
           >
-            {granted === true ? "Granted" : "Grant Permission"}
+            {granted === true ? t("onboard.granted") : t("onboard.grantPermission")}
           </button>
           <details className="onboarding-os-hint">
-            <summary>OS-specific instructions</summary>
-            <pre>{step.osHint}</pre>
+            <summary>{t("onboard.osInstructions")}</summary>
+            <pre>{t(`onboard.steps.${step.id}.hint`)}</pre>
           </details>
         </div>
 
         <div className="onboarding-footer">
           <button className="onboarding-skip-btn" onClick={onSkip}>
-            Skip
+            {t("onboard.skip")}
           </button>
           <div className="onboarding-nav-btns">
             <button
@@ -167,7 +143,7 @@ export default function OnboardingWizard({ onComplete, onSkip }: OnboardingWizar
               onClick={() => setCurrentStep(Math.max(0, currentStep - 1))}
               disabled={currentStep === 0}
             >
-              Previous
+              {t("onboard.previous")}
             </button>
             {currentStep < STEPS.length - 1 ? (
               <button
@@ -175,7 +151,7 @@ export default function OnboardingWizard({ onComplete, onSkip }: OnboardingWizar
                 onClick={() => setCurrentStep(Math.min(STEPS.length - 1, currentStep + 1))}
                 disabled={!isStepAccessible(currentStep + 1)}
               >
-                Next
+                {t("onboard.next")}
               </button>
             ) : (
               <button
@@ -183,7 +159,7 @@ export default function OnboardingWizard({ onComplete, onSkip }: OnboardingWizar
                 onClick={handleFinish}
                 disabled={completing}
               >
-                {completing ? "Saving..." : "Get Started!"}
+                {completing ? t("onboard.saving") : t("onboard.getStarted")}
               </button>
             )}
           </div>

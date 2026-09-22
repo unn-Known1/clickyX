@@ -1,4 +1,5 @@
 import { useState, useCallback } from "react";
+import { useTranslation } from "react-i18next";
 import { useAgents, AgentInfo, SkillInfo } from "../hooks/useAgents";
 import { agentStatusColor, agentStatusLabel } from "../utils/agentStatus";
 import { useAppContext } from "../context/AppContext";
@@ -21,6 +22,7 @@ function AgentCard({
   onDragLeave: () => void;
   onDrop: (e: React.DragEvent) => void;
 }) {
+  const { t } = useTranslation();
   const label = agentStatusLabel(agent.state);
   return (
     <div
@@ -45,20 +47,20 @@ function AgentCard({
       </div>
       <div className="agent-card-actions">
         {label === "running" ? (
-          <button className="agent-btn agent-btn-stop" onClick={(e) => { e.stopPropagation(); onStop(); }}>Stop</button>
+          <button className="agent-btn agent-btn-stop" onClick={(e) => { e.stopPropagation(); onStop(); }}>{t("agents.stop")}</button>
         ) : ["idle", "paused", "done", "error"].includes(label) ? (
-          <button className="agent-btn agent-btn-run" onClick={(e) => { e.stopPropagation(); onRun(); }}>Run</button>
+          <button className="agent-btn agent-btn-run" onClick={(e) => { e.stopPropagation(); onRun(); }}>{t("agents.run")}</button>
         ) : null}
         {label !== "archived" && (
-          <button className="agent-btn agent-btn-archive" onClick={(e) => { e.stopPropagation(); onArchive(); }}>Archive</button>
+          <button className="agent-btn agent-btn-archive" onClick={(e) => { e.stopPropagation(); onArchive(); }}>{t("agents.archive")}</button>
         )}
-        <button className="agent-btn agent-btn-delete" onClick={(e) => { e.stopPropagation(); onDelete(); }} title="Delete agent permanently">Delete</button>
+        <button className="agent-btn agent-btn-delete" onClick={(e) => { e.stopPropagation(); onDelete(); }} title={t("agents.deletePermanently")}>{t("agents.delete")}</button>
         {label === "running" && (
           <button
             className="agent-btn agent-btn-popout"
             onClick={(e) => { e.stopPropagation(); onPopOut(); }}
-            title="Pop out HUD"
-            aria-label="Open agent HUD in floating window"
+            title={t("agents.popoutHud")}
+            aria-label={t("agents.popoutAria")}
           >
             <Icon name="external" size={11} />
             HUD
@@ -73,6 +75,7 @@ function CreateAgentForm({ skills, onCreate }: {
   skills: SkillInfo[];
   onCreate: (name: string, slug: string, selectedSkills: string[]) => void;
 }) {
+  const { t } = useTranslation();
   const [name, setName] = useState("");
   const [slug, setSlug] = useState("");
   const [selectedSkills, setSelectedSkills] = useState<string[]>([]);
@@ -102,16 +105,16 @@ function CreateAgentForm({ skills, onCreate }: {
 
   return (
     <form className="create-agent-form" onSubmit={handleSubmit}>
-      <h3>Create Agent</h3>
-      <input className="settings-input" placeholder="Agent name" value={name}
+      <h3>{t("agents.createAgent")}</h3>
+      <input className="settings-input" placeholder={t("agents.namePlaceholder")} value={name}
         onChange={(e) => handleNameChange(e.target.value)} />
-      <input className="settings-input" placeholder="Slug (auto-derived)" value={slug}
+      <input className="settings-input" placeholder={t("agents.slugPlaceholder")} value={slug}
         onChange={(e) => setSlug(e.target.value)} />
       {skills.length > 0 && (
         <div className="skill-selector">
-          <label>Skills:</label>
+          <label>{t("agents.skills")}</label>
           {skills.length > 5 && (
-            <input className="settings-input skill-search-input" placeholder="Search skills…" value={skillSearch}
+            <input className="settings-input skill-search-input" placeholder={t("agents.searchSkills")} value={skillSearch}
               onChange={(e) => setSkillSearch(e.target.value)} />
           )}
           <div className="skill-checkboxes">
@@ -126,7 +129,7 @@ function CreateAgentForm({ skills, onCreate }: {
           </div>
         </div>
       )}
-      <button type="submit" className="settings-save-btn">Create Agent</button>
+      <button type="submit" className="settings-save-btn">{t("agents.createAgent")}</button>
     </form>
   );
 }
@@ -138,12 +141,13 @@ function AgentDetail({
   onRun: () => void; onStop: () => void; onArchive: () => void; onDelete: () => void;
   onEnableSkill: (s: string) => void; onDisableSkill: (s: string) => void;
 }) {
+  const { t } = useTranslation();
   const { showToast } = useAppContext();
   const label = agentStatusLabel(agent.state);
 
   const copyTranscript = useCallback(() => {
     const text = agent.transcript.map((m) => `${m.role}: ${m.content}`).join("\n\n");
-    navigator.clipboard.writeText(text).then(() => showToast("Transcript copied", "success")).catch(() => {});
+    navigator.clipboard.writeText(text).then(() => showToast(t("agents.transcriptCopied"), "success")).catch(() => {});
   }, [agent.transcript, showToast]);
 
   return (
@@ -161,18 +165,18 @@ function AgentDetail({
       </div>
       <div className="agent-detail-actions">
         {label === "running"
-          ? <button className="agent-btn agent-btn-stop" onClick={onStop}>Stop</button>
-          : <button className="agent-btn agent-btn-run" onClick={onRun}>Run</button>}
-        <button className="agent-btn agent-btn-archive" onClick={onArchive}>Archive</button>
-        <button className="agent-btn agent-btn-delete" onClick={onDelete} title="Delete agent permanently">Delete</button>
+          ? <button className="agent-btn agent-btn-stop" onClick={onStop}>{t("agents.stop")}</button>
+          : <button className="agent-btn agent-btn-run" onClick={onRun}>{t("agents.run")}</button>}
+        <button className="agent-btn agent-btn-archive" onClick={onArchive}>{t("agents.archive")}</button>
+        <button className="agent-btn agent-btn-delete" onClick={onDelete} title={t("agents.deletePermanently")}>{t("agents.delete")}</button>
       </div>
       <div className="agent-detail-skills">
-        <h4>Skills</h4>
+        <h4>{t("agents.skillsTitle")}</h4>
         <div className="agent-detail-skills-list">
           {agent.skills.map((s) => (
             <span key={s} className="agent-skill-badge">
               {s}
-              <button className="skill-remove" onClick={() => onDisableSkill(s)} aria-label={`Remove ${s}`}>&times;</button>
+              <button className="skill-remove" onClick={() => onDisableSkill(s)} aria-label={t("agents.removeSkill", { name: s })}>&times;</button>
             </span>
           ))}
         </div>
@@ -186,13 +190,13 @@ function AgentDetail({
       </div>
       <div className="agent-detail-transcript">
         <div className="transcript-header">
-          <h4>Transcript</h4>
+          <h4>{t("agents.transcript")}</h4>
           {agent.transcript.length > 0 && (
-            <button className="btn-small" onClick={copyTranscript} title="Copy transcript">Copy</button>
+            <button className="btn-small" onClick={copyTranscript} title={t("agents.copyTranscript")}>{t("agents.copy")}</button>
           )}
         </div>
         {agent.transcript.length === 0 ? (
-          <p className="transcript-empty">No messages yet.</p>
+          <p className="transcript-empty">{t("agents.noMessages")}</p>
         ) : (
           agent.transcript.map((msg, i) => (
             <div key={i} className={`transcript-message transcript-${msg.role}`}>
@@ -207,6 +211,7 @@ function AgentDetail({
 }
 
 function AgentsTab() {
+  const { t } = useTranslation();
   const {
     agents, skills, loading, error,
     createAgent, runAgent, stopAgent, archiveAgent, deleteAgent, enableSkill, disableSkill, attachFiles,
@@ -245,7 +250,7 @@ function AgentsTab() {
     try {
       await runAgent(slug, prompt);
       void Sounds.agentLaunch();
-      showToast("Agent started", "success");
+      showToast(t("agents.started"), "success");
     } catch (e) {
       showToast(String(e), "error");
     }
@@ -282,9 +287,9 @@ function AgentsTab() {
   return (
     <div className="agents-tab">
       <div className="agents-toolbar">
-        <h2>Agents</h2>
+        <h2>{t("agents.title")}</h2>
         <button className="settings-save-btn" onClick={() => setShowCreate(!showCreate)}>
-          {showCreate ? "Cancel" : "New Agent"}
+          {showCreate ? t("agents.cancel") : t("agents.newAgent")}
         </button>
       </div>
 
@@ -293,10 +298,10 @@ function AgentsTab() {
       {agents.length > 3 && (
         <input
           className="search-input"
-          placeholder="Search agents…"
+          placeholder={t("agents.search")}
           value={agentSearch}
           onChange={(e) => setAgentSearch(e.target.value)}
-          aria-label="Search agents"
+          aria-label={t("agents.search")}
         />
       )}
 
@@ -304,7 +309,7 @@ function AgentsTab() {
         <div className="agents-list">
           {filteredAgents.length === 0 ? (
             <p className="agents-empty">
-              {agentSearch ? "No agents match." : "No agents yet. Create one to get started."}
+              {agentSearch ? t("agents.noMatch") : t("agents.noAgents")}
             </p>
           ) : (
             filteredAgents.map((agent) => (
@@ -349,12 +354,12 @@ function AgentsTab() {
             <div className="agent-prompt-area">
               <input
                 className="prompt-input"
-                placeholder="Override prompt for this agent…"
+                placeholder={t("agents.promptOverride")}
                 value={promptInput[selectedAgent.slug] || ""}
                 onChange={(e) =>
                   setPromptInput((prev) => ({ ...prev, [selectedAgent.slug]: e.target.value }))
                 }
-                aria-label="Agent prompt override"
+                aria-label={t("agents.promptOverrideAria")}
               />
             </div>
           </div>
@@ -363,9 +368,9 @@ function AgentsTab() {
 
       {confirmDelete && (
         <ConfirmDialog
-          title={`Delete ${confirmDelete.name}?`}
-          message={`"${confirmDelete.name}" will be permanently removed, including its transcript. This cannot be undone.`}
-          confirmLabel="Delete Agent"
+          title={t("agents.deleteTitle", { name: confirmDelete.name })}
+          message={t("agents.deleteMessage", { name: confirmDelete.name })}
+          confirmLabel={t("agents.deleteAgent")}
           onConfirm={() => {
             safeCall(() => deleteAgent(confirmDelete.slug));
             if (selectedSlug === confirmDelete.slug) setSelectedSlug(null);

@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { commands } from "../bindings";
 
 interface Props {
@@ -6,11 +7,12 @@ interface Props {
 }
 
 export default function AboutDialog({ onClose }: Props) {
+  const { t } = useTranslation();
   const [version, setVersion] = useState("…");
 
   useEffect(() => {
     let cancelled = false;
-    commands.getAppVersion().then((v) => { if (!cancelled) setVersion(v); }).catch(() => { if (!cancelled) setVersion("unknown"); });
+    commands.getAppVersion().then((v) => { if (!cancelled) setVersion(v); }).catch(() => { if (!cancelled) setVersion(t("about.unknown")); });
     return () => { cancelled = true; };
   }, []);
 
@@ -22,9 +24,9 @@ export default function AboutDialog({ onClose }: Props) {
   }, [onClose]);
 
   return (
-    <div className="dialog-backdrop" role="dialog" aria-modal="true" aria-label="About ClickyX" onClick={onClose}>
+    <div className="dialog-backdrop" role="dialog" aria-modal="true" aria-label={t("about.label")} onClick={onClose}>
       <div className="dialog-box about-dialog" onClick={(e) => e.stopPropagation()}>
-        <button className="dialog-close" onClick={onClose} aria-label="Close">×</button>
+        <button className="dialog-close" onClick={onClose} aria-label={t("about.close")}>×</button>
         <div className="about-logo">
           <svg width="48" height="48" viewBox="0 0 48 48" fill="none">
             <rect width="48" height="48" rx="12" fill="#0f3460" />
@@ -33,10 +35,9 @@ export default function AboutDialog({ onClose }: Props) {
           </svg>
         </div>
         <h2 className="about-name">ClickyX</h2>
-        <p className="about-version">Version {version}</p>
+        <p className="about-version">{t("about.version", { v: version })}</p>
         <p className="about-desc">
-          Cross-platform AI companion with voice, screen context, agent mode,
-          cursor overlay, and integrations.
+          {t("about.desc")}
         </p>
         <div className="about-links">
           <a
@@ -50,7 +51,7 @@ export default function AboutDialog({ onClose }: Props) {
           <span className="about-sep">·</span>
           <span className="about-copy">© 2026 ClickyX Contributors</span>
         </div>
-        <p className="about-build-info">Built with Tauri · React · Rust</p>
+        <p className="about-build-info">{t("about.builtWith")}</p>
       </div>
     </div>
   );

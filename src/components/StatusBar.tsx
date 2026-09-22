@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { useTauriEvent } from "../hooks/useTauriEvent";
 import { useStore } from "../store/appStore";
+import { useTranslation } from "react-i18next";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { commands } from "../bindings";
 import { useAppContext } from "../context/AppContext";
@@ -9,6 +10,7 @@ import { Icon } from "./Icon";
 import type { AutoCaptureStatus, AudioLevelResponse, TodayStats } from "../bindings";
 
 export default function StatusBar({ typeModeActive }: { typeModeActive?: boolean }) {
+  const { t } = useTranslation();
   const queryClient = useQueryClient();
   const { showToast } = useAppContext();
   // P1 (H-8): selectors, not whole-store subscription — audio-level ticks
@@ -33,7 +35,7 @@ export default function StatusBar({ typeModeActive }: { typeModeActive?: boolean
       setPttHeld(true);
     } catch (e) {
       console.error("Failed to start recording:", e);
-      showToast("Could not start microphone", "error");
+      showToast(t("status.micFailed"), "error");
     }
   }, [pttHeld, transcribing, showToast]);
 
@@ -49,7 +51,7 @@ export default function StatusBar({ typeModeActive }: { typeModeActive?: boolean
       }
     } catch (e) {
       console.error("Failed to stop/transcribe:", e);
-      showToast("Transcription failed", "error");
+      showToast(t("status.transcribeFailed"), "error");
     } finally {
       setTranscribing(false);
     }
@@ -122,12 +124,12 @@ export default function StatusBar({ typeModeActive }: { typeModeActive?: boolean
   const warnCount  = attentionItems.filter(i => i.type === "warning").length;
 
   return (
-    <div className="status-bar" role="status" aria-label="Application status">
+    <div className="status-bar" role="status" aria-label={t("status.appStatus")}>
       {/* Listening / audio level + hold-to-talk mic button */}
       <button
         className={`status-bar-item status-bar-mic ${pttHeld ? "status-bar-mic-active" : ""}`}
-        title={transcribing ? "Transcribing…" : "Hold to talk (or use your push-to-talk hotkey)"}
-        aria-label={transcribing ? "Transcribing" : "Hold to talk"}
+        title={transcribing ? t("status.transcribing") : t("status.holdToTalkTitle")}
+        aria-label={transcribing ? t("status.transcribing") : t("status.holdToTalk")}
         aria-pressed={pttHeld}
         disabled={transcribing}
         onPointerDown={(e) => { e.preventDefault(); void startHold(); }}
@@ -138,18 +140,18 @@ export default function StatusBar({ typeModeActive }: { typeModeActive?: boolean
         <span className={`status-bar-dot ${isListening || pttHeld ? "status-bar-dot-active" : ""}`} />
         <AudioMeter level={audioLevel} active={isListening || pttHeld} />
         <span className="status-bar-label">
-          {transcribing ? "Transcribing…" : pttHeld ? "Listening…" : isListening ? "Listening" : "Hold to talk"}
+          {transcribing ? t("status.transcribing") : pttHeld ? t("status.listening") : isListening ? t("status.listeningIdle") : t("status.holdToTalk")}
         </span>
       </button>
 
       <div className="status-bar-divider" />
 
       {/* Auto-capture state */}
-      <div className="status-bar-item" title={captureActive ? `Auto-capture active${lastCapture ? ` · last capture ${lastCapture}` : ""}` : "Auto-capture off"}>
+      <div className="status-bar-item" title={captureActive ? (lastCapture ? `${t("status.captureActive")} · ${t("status.captureLabel", { time: lastCapture })}` : t("status.capturing")) : t("status.captureOff")}>
         <span className={`status-bar-dot ${captureActive ? "status-bar-dot-capture" : ""}`} />
         <Icon name="screen" size={11} />
         <span className="status-bar-label">
-          {captureActive ? (lastCapture ? `Capture · ${lastCapture}` : "Capturing…") : "Capture off"}
+          {captureActive ? (lastCapture ? t("status.captureLabel", { time: lastCapture }) : t("status.capturing")) : t("status.captureOff")}
         </span>
       </div>
 
@@ -157,10 +159,10 @@ export default function StatusBar({ typeModeActive }: { typeModeActive?: boolean
       {todayStats && (
         <>
           <div className="status-bar-divider" />
-          <div className="status-bar-item" title={`Today: ${todayStats.agents_run} agents, ${todayStats.voice_commands} voice`}>
+          <div className="status-bar-item" title={t("status.todayTitle", { runs: todayStats.agents_run, cmds: todayStats.voice_commands })}>
             <Icon name="clock" size={11} />
             <span className="status-bar-label">
-              {todayStats.agents_run} agent{todayStats.agents_run === 1 ? "" : "s"} · {todayStats.voice_commands} voice
+              {t("status.todayLabel", { runs: todayStats.agents_run, runPlural: todayStats.agents_run === 1 ? "" : t("status.pluralS"), cmds: todayStats.voice_commands })}
             </span>
           </div>
         </>
@@ -170,9 +172,9 @@ export default function StatusBar({ typeModeActive }: { typeModeActive?: boolean
       {typeModeActive && (
         <>
           <div className="status-bar-divider" />
-          <div className="status-bar-item" title="Type mode active — keyboard input will be simulated">
+          <div className="status-bar-item" title={t("status.typeModeTitle")}>
             <Icon name="keyboard" size={11} />
-            <span className="status-bar-label type-mode-label">Type mode</span>
+            <span className="status-bar-label type-mode-label">{t("status.typeMode")}</span>
           </div>
         </>
       )}
@@ -187,7 +189,7 @@ export default function StatusBar({ typeModeActive }: { typeModeActive?: boolean
           >
             <Icon name="warning" size={11} />
             <span className="status-bar-label">
-              {errorCount > 0 ? `${errorCount} error${errorCount > 1 ? "s" : ""}` : `${warnCount} warning${warnCount > 1 ? "s" : ""}`}
+              {errorCount > 0 ? t("status.errorLabel", { count: errorCount, plural: errorCount > 1 ? t("status.errorPlural") : "" }) : t("status.warningLabel", { count: warnCount, plural: warnCount > 1 ? t("status.pluralS") : "" })}
             </span>
           </div>
         </>

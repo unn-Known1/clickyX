@@ -1,17 +1,11 @@
 import { useState, useEffect, useCallback } from "react";
+import { useTranslation } from "react-i18next";
 
 import VoiceDiscovery from "../VoiceDiscovery";
 import { HotkeyInput } from "../HotkeyInput";
 import { useAudioConfig } from "../../hooks/useAudioConfig";
 
-// F-013: PTT preset shortcuts
-const PTT_PRESETS = [
-  { label: "Shift + Fn", value: "shift+fn" },
-  { label: "Ctrl + Space", value: "ctrl+space" },
-  { label: "Ctrl + Alt", value: "ctrl+alt" },
-  { label: "Shift + Ctrl", value: "shift+ctrl" },
-  { label: "Custom", value: "custom" },
-];
+// F-013: PTT preset shortcuts (key labels are layout names; only "Custom" is localized at render)
 
 function PttShortcutSelector({
   value,
@@ -20,19 +14,27 @@ function PttShortcutSelector({
   value: string;
   onChange: (hotkey: string) => void;
 }) {
+  const { t } = useTranslation();
+  const presets = [
+    { label: "Shift + Fn", value: "shift+fn" },
+    { label: "Ctrl + Space", value: "ctrl+space" },
+    { label: "Ctrl + Alt", value: "ctrl+alt" },
+    { label: "Shift + Ctrl", value: "shift+ctrl" },
+    { label: t("voice.custom"), value: "custom" },
+  ];
   // Determine if the current value matches a preset
-  const matchedPreset = PTT_PRESETS.find((p) => p.value !== "custom" && p.value === value);
+  const matchedPreset = presets.find((p) => p.value !== "custom" && p.value === value);
   const [selectedPreset, setSelectedPreset] = useState<string>(
     matchedPreset ? matchedPreset.value : "custom",
   );
 
   // Sync when external value changes
   useEffect(() => {
-    const matched = PTT_PRESETS.find((p) => p.value !== "custom" && p.value === value);
+    const matched = presets.find((p) => p.value !== "custom" && p.value === value);
     setSelectedPreset(matched ? matched.value : "custom");
   }, [value]);
 
-  const handlePresetClick = (preset: typeof PTT_PRESETS[number]) => {
+  const handlePresetClick = (preset: { label: string; value: string }) => {
     setSelectedPreset(preset.value);
     if (preset.value !== "custom") {
       onChange(preset.value);
@@ -42,8 +44,8 @@ function PttShortcutSelector({
 
   return (
     <div className="ptt-shortcut-selector">
-      <div className="ptt-preset-chips" role="radiogroup" aria-label="PTT shortcut presets">
-        {PTT_PRESETS.map((preset) => (
+      <div className="ptt-preset-chips" role="radiogroup" aria-label={t("voice.pttPresets")}>
+        {presets.map((preset) => (
           <button
             key={preset.value}
             role="radio"
@@ -71,7 +73,7 @@ function PttShortcutSelector({
 
       {selectedPreset !== "custom" && (
         <div className="ptt-current-display">
-          Active: <code>{value || "none"}</code>
+          {t("voice.active")}: <code>{value || t("voice.none")}</code>
         </div>
       )}
     </div>
@@ -79,6 +81,7 @@ function PttShortcutSelector({
 }
 
 function VoiceSettings() {
+  const { t } = useTranslation();
   const { config: audioConfig, updateConfig, loading, error } = useAudioConfig();
 
   const updateAudio = useCallback(async (key: string, value: unknown) => {
@@ -93,7 +96,7 @@ function VoiceSettings() {
   if (error) {
     return (
       <section className="settings-section elevated-card">
-        <h3>Voice</h3>
+        <h3>{t("voice.title")}</h3>
         <div className="settings-error">{error}</div>
       </section>
     );
@@ -102,7 +105,7 @@ function VoiceSettings() {
   if (loading || !audioConfig) {
     return (
       <section className="settings-section elevated-card">
-        <h3>Voice</h3>
+        <h3>{t("voice.title")}</h3>
         <div className="skeleton-loader" />
       </section>
     );
@@ -110,9 +113,9 @@ function VoiceSettings() {
 
   return (
     <section className="settings-section elevated-card">
-      <h3>Voice</h3>
+      <h3>{t("voice.title")}</h3>
       <div className="setting-row">
-        <label>STT Provider</label>
+        <label>{t("voice.sttProvider")}</label>
         <select
           className="setting-select"
           value={audioConfig.stt_provider}
@@ -124,7 +127,7 @@ function VoiceSettings() {
         </select>
       </div>
       <div className="setting-row">
-        <label>TTS Provider</label>
+        <label>{t("voice.ttsProvider")}</label>
         <select
           className="setting-select"
           value={audioConfig.tts_provider}
@@ -133,29 +136,29 @@ function VoiceSettings() {
           <option value="elevenlabs">ElevenLabs</option>
           <option value="cartesia">Cartesia</option>
           <option value="aura">Deepgram (Aura)</option>
-          <option value="system">System (Offline)</option>
+          <option value="system">{t("voice.systemOffline")}</option>
         </select>
       </div>
       {audioConfig.tts_provider === "system" && (
         <div className="settings-hint voice-hint-tight">
-          <strong>System TTS:</strong> Plays directly through your OS, bypassing the app's internal volume and waveform animations. No setup required on Windows/macOS. Linux requires <code>speech-dispatcher</code>.
+          <strong>{t("voice.systemTtsTitle")}</strong> {t("voice.systemTtsBefore")}<code>speech-dispatcher</code>{t("voice.systemTtsAfter")}
         </div>
       )}
       <div className="setting-row">
-        <label>Activation Mode</label>
+        <label>{t("voice.activationMode")}</label>
         <select
           className="setting-select"
           value={audioConfig.activation_mode}
           onChange={(e) => updateAudio("activation_mode", e.target.value)}
         >
-          <option value="ptt">Push to Talk</option>
-          <option value="voice">Voice Activation</option>
-          <option value="always_on">Always-On (Hands-Free)</option>
-          <option value="disabled">Disabled</option>
+          <option value="ptt">{t("voice.modePtt")}</option>
+          <option value="voice">{t("voice.modeVoice")}</option>
+          <option value="always_on">{t("voice.modeAlways")}</option>
+          <option value="disabled">{t("voice.modeDisabled")}</option>
         </select>
       </div>
       <div className="setting-row">
-        <label>Volume</label>
+        <label>{t("voice.volume")}</label>
         <input
           type="range"
           min={0}
@@ -169,7 +172,7 @@ function VoiceSettings() {
 
       {/* F-013: Multi-shortcut PTT selector */}
       <div className="setting-row setting-row-col">
-        <label>PTT Shortcut</label>
+        <label>{t("voice.pttShortcut")}</label>
         <PttShortcutSelector
           value={audioConfig.ptt_hotkey}
           onChange={(hotkey) => updateAudio("ptt_hotkey", hotkey)}
@@ -177,7 +180,7 @@ function VoiceSettings() {
       </div>
 
       <div className="setting-row">
-        <label>Auto-submit on silence</label>
+        <label>{t("voice.autoSubmit")}</label>
         <input
           type="checkbox"
           checked={audioConfig.auto_submit}
@@ -185,10 +188,9 @@ function VoiceSettings() {
         />
       </div>
 
-      <h3 className="settings-subhead">Voice Discovery</h3>
+      <h3 className="settings-subhead">{t("voice.discovery")}</h3>
       <p className="settings-hint">
-        Drag the orbit to preview voices. Each voice has a unique accent color that
-        will be applied to the overlay when selected.
+        {t("voice.discoveryHint")}
       </p>
       <VoiceDiscovery
         audioConfig={audioConfig}

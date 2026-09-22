@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from "react";
+import { useTranslation } from "react-i18next";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeHighlight from "rehype-highlight";
@@ -29,6 +30,7 @@ function MessageBubble({
   onRegenerate?: () => void;
   isLast: boolean;
 }) {
+  const { t } = useTranslation();
   const [copied, setCopied] = useState(false);
 
   const handleCopy = () => {
@@ -40,7 +42,7 @@ function MessageBubble({
   return (
     <div className={`message ${message.role}`}>
       <div className="message-role-row">
-        <span className="message-role">{message.role === "user" ? "You" : "ClickyX"}</span>
+        <span className="message-role">{message.role === "user" ? t("chat.you", "You") : "ClickyX"}</span>
         <span className="message-time">
           {new Date(message.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
         </span>
@@ -49,7 +51,7 @@ function MessageBubble({
       {message.images && message.images.length > 0 && (
         <div className="message-images">
           {message.images.map((src, i) => (
-            <img key={i} src={src} alt={`Attachment ${i + 1}`} className="message-image-thumb" />
+            <img key={i} src={src} alt={t("chat.attachment", { n: i + 1 })} className="message-image-thumb" />
           ))}
         </div>
       )}
@@ -89,12 +91,12 @@ function MessageBubble({
       </div>
 
       <div className="message-actions">
-        <button className="msg-action-btn" onClick={handleCopy} title={copied ? "Copied!" : "Copy"}>
+        <button className="msg-action-btn" onClick={handleCopy} title={copied ? t("chat.copied") : t("chat.copy")}>
           <Icon name={copied ? "check" : "copy"} size={12} />
           {copied ? "Copied" : "Copy"}
         </button>
         {message.role === "assistant" && isLast && onRegenerate && (
-          <button className="msg-action-btn" onClick={onRegenerate} title="Regenerate">
+          <button className="msg-action-btn" onClick={onRegenerate} title={t("chat.regenerate")}>
             <Icon name="retry" size={12} />
             Retry
           </button>
@@ -118,17 +120,18 @@ function ConversationSidebar({
   onCreate: () => void;
   onDelete: (id: string) => void;
 }) {
+  const { t } = useTranslation();
   return (
     <div className="chat-sidebar">
       <div className="chat-sidebar-header">
-        <span className="chat-sidebar-title">Conversations</span>
-        <button className="chat-sidebar-new" onClick={onCreate} title="New conversation" aria-label="New conversation">
+        <span className="chat-sidebar-title">{t("chat.conversations")}</span>
+        <button className="chat-sidebar-new" onClick={onCreate} title={t("chat.newConversation")} aria-label={t("chat.newConversation")}>
           <Icon name="plus" size={13} />
         </button>
       </div>
       <div className="chat-sidebar-list">
         {conversations.length === 0 && (
-          <p className="chat-sidebar-empty">No conversations yet.</p>
+          <p className="chat-sidebar-empty">{t("chat.noConversations")}</p>
         )}
         {[...conversations].reverse().map(c => (
           <div
@@ -137,7 +140,7 @@ function ConversationSidebar({
             onClick={() => onSelect(c.id)}
             role="button"
             tabIndex={0}
-            aria-label={`Open conversation: ${c.title}`}
+            aria-label={t("chat.openConversation", { title: c.title })}
             onKeyDown={(e) => e.key === "Enter" && onSelect(c.id)}
           >
             <span className="chat-sidebar-item-title">{c.title}</span>
@@ -147,8 +150,8 @@ function ConversationSidebar({
             <button
               className="chat-sidebar-delete"
               onClick={(e) => { e.stopPropagation(); onDelete(c.id); }}
-              aria-label={`Delete conversation: ${c.title}`}
-              title="Delete"
+              aria-label={t("chat.deleteConversation", { title: c.title })}
+              title={t("chat.delete")}
             >
               ×
             </button>
@@ -161,6 +164,7 @@ function ConversationSidebar({
 
 // ── Chat Tab ───────────────────────────────────────────────────────────────────
 function ChatTab({ initialText }: { initialText?: string }) {
+  const { t } = useTranslation();
   const { showToast } = useAppContext();
   const {
     messages, streaming, currentText, error,
@@ -297,9 +301,9 @@ function ChatTab({ initialText }: { initialText?: string }) {
 
   const handleCopy = useCallback((text: string) => {
     navigator.clipboard.writeText(text)
-      .then(() => showToast("Copied", "success"))
+      .then(() => showToast(t("chat.copied"), "success"))
       .catch(() => {});
-  }, [showToast]);
+  }, [showToast, t]);
 
   const handleRegenerate = useCallback(() => {
     if (streaming) return;
@@ -364,14 +368,14 @@ function ChatTab({ initialText }: { initialText?: string }) {
           <button
             className="chat-sidebar-toggle"
             onClick={() => setSidebarOpen(v => !v)}
-            title="Toggle conversation history"
-            aria-label="Toggle conversation history"
+            title={t("chat.toggleHistory")}
+            aria-label={t("chat.toggleHistory")}
             aria-expanded={sidebarOpen}
           >
             <Icon name="menu" size={14} />
           </button>
-          <span className="chat-title" title={activeConversation?.title ?? "Chat"}>
-            {activeConversation?.title ?? "Chat"}
+          <span className="chat-title" title={activeConversation?.title ?? t("chat.chatTitle")}>
+            {activeConversation?.title ?? t("chat.chatTitle")}
           </span>
         </div>
         <div className="chat-controls">
@@ -379,21 +383,21 @@ function ChatTab({ initialText }: { initialText?: string }) {
           {streaming && (
             <button className="chat-stop-btn" onClick={cancelStream}>
               <Icon name="stop" size={10} />
-              Stop
+              {t("chat.stop")}
             </button>
           )}
           {messages.length > 0 && !streaming && (
-            <button className="chat-clear-btn" onClick={() => setConfirmClear(true)}>Clear</button>
+            <button className="chat-clear-btn" onClick={() => setConfirmClear(true)}>{t("chat.clear")}</button>
           )}
         </div>
       </div>
 
-      <div className="chat-messages" role="log" aria-live="polite" aria-label="Chat messages">
+      <div className="chat-messages" role="log" aria-live="polite" aria-label={t("chat.chatMessages")}>
         {messages.length === 0 && !streaming && (
           <div className="chat-empty">
-            Ask me anything — I can see your screen and help with tasks.
+            {t("chat.empty")}
             <br />
-            <span className="chat-empty-hint">Paste, drag, or use the paperclip to attach images. Enter to send.</span>
+            <span className="chat-empty-hint">{t("chat.emptyHint")}</span>
           </div>
         )}
 
@@ -432,14 +436,14 @@ function ChatTab({ initialText }: { initialText?: string }) {
           {images.map((img, i) => (
             <div key={i} className="image-thumb" role="listitem">
               <img src={img.previewUrl} alt={`Attachment ${i + 1}`} />
-              <button className="image-remove-btn" onClick={() => removeImage(i)} aria-label={`Remove image ${i + 1}`}>×</button>
+              <button className="image-remove-btn" onClick={() => removeImage(i)} aria-label={t("chat.removeImage", { n: i + 1 })}>×</button>
             </div>
           ))}
         </div>
       )}
 
       {isDraggingOver && (
-        <div className="chat-drop-overlay" aria-hidden="true">Drop images here</div>
+        <div className="chat-drop-overlay" aria-hidden="true">{t("chat.dropImages")}</div>
       )}
 
       <form className="chat-input-form" onSubmit={handleSubmit}>
@@ -447,8 +451,8 @@ function ChatTab({ initialText }: { initialText?: string }) {
           type="button"
           className="chat-attach-btn"
           onClick={() => fileInputRef.current?.click()}
-          aria-label="Attach image"
-          title="Attach image"
+          aria-label={t("chat.attachImage")}
+          title={t("chat.attachImage")}
         >
           <Icon name="paperclip" size={16} />
         </button>
@@ -466,21 +470,21 @@ function ChatTab({ initialText }: { initialText?: string }) {
         <textarea
           ref={inputRef}
           className="chat-input"
-          placeholder={images.length > 0 ? "Ask about the image…" : "Ask me anything…"}
+          placeholder={images.length > 0 ? t("chat.placeholderImage") : t("chat.placeholder")}
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onPaste={handlePaste}
           onKeyDown={handleKeyDown}
           disabled={streaming}
           rows={1}
-          aria-label="Chat input"
+          aria-label={t("chat.chatInput")}
         />
         <button
           type="submit"
           className="chat-submit-btn"
           disabled={(!input.trim() && images.length === 0) || streaming}
-          title="Send (Enter)"
-          aria-label="Send message"
+          title={t("chat.sendTitle")}
+          aria-label={t("chat.sendMessage")}
         >
           <Icon name="send" size={14} />
         </button>
@@ -488,9 +492,9 @@ function ChatTab({ initialText }: { initialText?: string }) {
 
       {confirmClear && (
         <ConfirmDialog
-          title="Clear conversation?"
-          message="This removes the current messages from the view. The conversation history entry is kept."
-          confirmLabel="Clear"
+          title={t("chat.clearTitle")}
+          message={t("chat.clearMessage")}
+          confirmLabel={t("chat.clear")}
           onConfirm={handleClear}
           onCancel={() => setConfirmClear(false)}
         />

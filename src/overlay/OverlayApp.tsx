@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, useCallback, memo, Component, ReactNode } from "react";
+import { useTranslation } from "react-i18next";
 import { listen } from "../bindings";
 import "./overlay.css";
 
@@ -291,6 +292,7 @@ function GlowOverlay({ glows, accent }: { glows: GlowState[]; accent: string }) 
 
 /** Calibration box — single pulsing rect that replaces avatar during calibration */
 function CalibrationBox({ cal, accent }: { cal: CalibrationState; accent: string }) {
+  const { t } = useTranslation();
   if (!cal.active) return null;
   return (
     <div
@@ -298,7 +300,7 @@ function CalibrationBox({ cal, accent }: { cal: CalibrationState; accent: string
       style={{ left: cal.x, top: cal.y, width: cal.w, height: cal.h, borderColor: accent }}
       aria-label="Calibration in progress"
     >
-      <span className="calibration-label" style={{ color: accent }}>Calibrating…</span>
+      <span className="calibration-label" style={{ color: accent }}>{t("overlay.calibrating")}</span>
       <div className="calibration-corner tl" style={{ borderColor: accent }} />
       <div className="calibration-corner tr" style={{ borderColor: accent }} />
       <div className="calibration-corner bl" style={{ borderColor: accent }} />

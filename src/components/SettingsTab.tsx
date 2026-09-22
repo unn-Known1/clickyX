@@ -87,7 +87,7 @@ function SettingsTab({ onOpenAbout }: Props) {
     <div className="settings-layout glass-panel">
       <aside className="settings-sidebar">
         <h2 className="settings-header">{t("settings.title")}</h2>
-        <nav className="settings-nav" role="tablist" aria-label="Settings sections">
+        <nav className="settings-nav" role="tablist" aria-label={t("settings.navAria")}>
           {NAV_GROUPS.map((group) => (
             <div key={group.label} className="settings-nav-group">
               <span className="settings-nav-group-label">{t(group.label)}</span>
