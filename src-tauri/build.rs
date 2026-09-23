@@ -117,13 +117,15 @@ fn main() {
                 "1 RT_MANIFEST \"{}\"",
                 manifest.to_string_lossy().replace('\\', "\\\\")
             );
-            if std::fs::write(&rc, rc_src).is_ok()
-                && !matches!(
-                    embed_resource::compile_for_everything(&rc, embed_resource::NONE),
-                    embed_resource::CompilationResult::Ok
-                )
-            {
-                println!("cargo:warning=clickyX: failed to embed manifest into test targets; `cargo test` may fail on Windows with STATUS_ENTRYPOINT_NOT_FOUND");
+            if std::fs::write(&rc, rc_src).is_ok() {
+                let result =
+                    embed_resource::compile_for_everything(&rc, embed_resource::NONE);
+                // Always surface the outcome: invisible failures here cost a CI cycle each.
+                println!(
+                    "cargo:warning=clickyX manifest-resource: rc={} result={:?}",
+                    rc.display(),
+                    result
+                );
             }
         }
     }

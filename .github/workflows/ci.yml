@@ -197,7 +197,8 @@ jobs:
           $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
           $dumpbin = & $vswhere -latest -find 'VC\Tools\MSVC\*\bin\Hostx64\x64\dumpbin.exe' | Select-Object -First 1
           & $dumpbin /HEADERS $exe.FullName | Select-String 'machine|subsystem|DLL characteristics' | Select-Object -First 10
-          Write-Host "--- FULL import table with function names ---"
+          Write-Host "--- dumpbin /SUMMARY (.rsrc section present?) ---"
+          & $dumpbin /SUMMARY $exe.FullName | Select-Object -First 30
           & $dumpbin /IMPORTS $exe.FullName | Select-Object -First 400
           Write-Host "--- Embedded manifest (missing comctl32 v6 => v5 loads => TaskDialogIndirect unresolvable) ---"
           $mt = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin\*\x64\mt.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
