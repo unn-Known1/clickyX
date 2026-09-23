@@ -111,7 +111,8 @@ fn main() {
   </dependency>
 </assembly>
 "#;
-        if std::fs::write(&manifest, manifest_xml).is_ok() {
+        // NOTE: UTF-8 BOM prefix: rc.exe mangles BOM-less manifest files.
+        if std::fs::write(&manifest, format!("\u{FEFF}{manifest_xml}")).is_ok() {
             // .rc string literals treat backslash as escape: double them.
             let rc_src = format!(
                 "1 RT_MANIFEST \"{}\"",

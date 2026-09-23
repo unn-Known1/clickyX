@@ -211,6 +211,8 @@ jobs:
           Add-Content -Path $env:RUNNER_TEMP\rsrc.py -Value '        for g in x.directory.entries:'
           Add-Content -Path $env:RUNNER_TEMP\rsrc.py -Value '            d=g.data.struct'
           Add-Content -Path $env:RUNNER_TEMP\rsrc.py -Value '            print("    lang:", g.id, "size:", d.Size, "off:", d.OffsetToData)'
+          Add-Content -Path $env:RUNNER_TEMP\rsrc.py -Value '            raw=pe.get_data(d.OffsetToData, min(d.Size, 600))'
+          Add-Content -Path $env:RUNNER_TEMP\rsrc.py -Value '            print("    bytes:", raw)'
           python "$env:RUNNER_TEMP\rsrc.py" $exe.FullName
           & $dumpbin /IMPORTS $exe.FullName | Select-Object -First 400
           Write-Host "--- Embedded manifest (missing comctl32 v6 => v5 loads => TaskDialogIndirect unresolvable) ---"
