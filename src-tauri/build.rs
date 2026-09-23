@@ -82,4 +82,24 @@ fn main() {
     }
 
     tauri_build::build();
+
+    // tauri embeds the application manifest (comctl32 v6) into binary targets
+    // only (`rustc-link-arg-bins`). `cargo test` harness executables built from
+    // the lib target therefore load comctl32 v5, and the loader aborts with
+    // STATUS_ENTRYPOINT_NOT_FOUND on v6-only imports (TaskDialogIndirect,
+    // *Subclass via tao) before any test runs. Link the same generated
+    // resource into test targets as well.
+    #[cfg(target_os = "windows")]
+    {
+        let rc = std::path::PathBuf::from(std::env::var("OUT_DIR").unwrap_or_default())
+            .join("resource.rc");
+        if rc.is_file()
+            && !matches!(
+                embed_resource::compile_for_tests(&rc, embed_resource::NONE),
+                embed_resource::CompilationResult::Ok
+            )
+        {
+            println!("cargo:warning=clickyX: failed to embed manifest into test targets; `cargo test` may fail on Windows with STATUS_ENTRYPOINT_NOT_FOUND");
+        }
+    }
 }

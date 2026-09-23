@@ -201,7 +201,7 @@ jobs:
           Write-Host "--- Embedded manifest (missing comctl32 v6 => v5 loads => TaskDialogIndirect unresolvable) ---"
           $mt = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin\*\x64\mt.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
           Write-Host "mt: $mt"
-          if ($mt) { & $mt.FullName "-inputresource:$($exe.FullName);#1" -out:$env:RUNNER_TEMP\exe.manifest; Get-Content $env:RUNNER_TEMP\exe.manifest }
+          if ($mt) { & $mt.FullName "-inputresource:$($exe.FullName);#1" "-out:$env:RUNNER_TEMP\exe.manifest"; if (Test-Path $env:RUNNER_TEMP\exe.manifest) { Get-Content $env:RUNNER_TEMP\exe.manifest } else { Write-Host "NO manifest embedded" } }
 
       - name: Verify Windows dependencies
         if: matrix.os == 'windows-latest'
