@@ -188,13 +188,15 @@ jobs:
           Write-Host "OS: $([System.Environment]::OSVersion.VersionString)"
           $exe = Get-ChildItem target\debug\deps\clickyx_lib-*.exe | Select-Object -First 1
           Write-Host "Test binary: $($exe.FullName)"
-          Write-Host "--- DLLs beside the binary ---"
-          Get-ChildItem target\debug\deps\*.dll -ErrorAction SilentlyContinue | ForEach-Object { Write-Host $_.Name }
-          Write-Host "--- Load-time imports (non-system DLLs are suspects) ---"
+          Write-Host "--- Does test listing work? (no = loader crash, yes = a test crashes) ---"
+          & $exe.FullName --list 2>&1 | Select-Object -First 15
+          Write-Host "list exit: $LASTEXITCODE"
+          Write-Host "--- dumpbin /HEADERS (machine/subsystem) ---"
           $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
           $dumpbin = & $vswhere -latest -find 'VC\Tools\MSVC\*\bin\Hostx64\x64\dumpbin.exe' | Select-Object -First 1
-          Write-Host "dumpbin: $dumpbin"
-          & $dumpbin /IMPORTS $exe.FullName | Select-String '\.dll' | ForEach-Object { $_.Line.Trim() } | Sort-Object -Unique | Select-Object -First 60
+          & $dumpbin /HEADERS $exe.FullName | Select-String 'machine|subsystem|DLL characteristics' | Select-Object -First 10
+          Write-Host "--- FULL import table with function names ---"
+          & $dumpbin /IMPORTS $exe.FullName | Select-Object -First 400
 
       - name: Verify Windows dependencies
         if: matrix.os == 'windows-latest'
