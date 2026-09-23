@@ -9,7 +9,7 @@ jobs:
     name: Build Rust Binary for Flatpak
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
       - name: Install Node.js
         uses: actions/setup-node@v5
@@ -53,7 +53,7 @@ jobs:
       image: bilelmoussaoui/flatpak-github-actions:gnome-47
       options: --privileged
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
       - name: Download release binary
         uses: actions/download-artifact@v7
