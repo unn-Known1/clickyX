@@ -4,6 +4,18 @@ on:
     branches: [master]
   pull_request:
     branches: [master]
+  # Manual fast-path: skip already-green jobs to save runner minutes.
+  # e.g. gh workflow run "CI/CD" --ref master -f skip-check=true -f skip-linux=true
+  workflow_dispatch:
+    inputs:
+      skip-check:
+        description: 'Skip the Check job (frontend + Rust checks already green)'
+        type: boolean
+        default: false
+      skip-linux:
+        description: 'Skip the ubuntu build leg (already green)'
+        type: boolean
+        default: false
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -17,6 +29,7 @@ env:
 jobs:
   check:
     name: Check
+    if: ${{ inputs.skip-check != true }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -92,6 +105,9 @@ jobs:
   build:
     name: Build (${{ matrix.os }})
     needs: check
+    # Tolerate a skipped Check (manual skip-check) but still gate on its success;
+    # optionally drop the already-green ubuntu leg (manual skip-linux).
+    if: ${{ (needs.check.result == 'success' || needs.check.result == 'skipped') && (inputs.skip-linux != true || matrix.os != 'ubuntu-24.04') }}
     strategy:
       fail-fast: false
       matrix:
@@ -145,6 +161,24 @@ jobs:
       - name: Run Rust tests (all platforms)
         working-directory: src-tauri
         run: cargo test --all-features
+
+      # One-shot diagnostic for the Windows test-binary startup crash
+      # (STATUS_ENTRYPOINT_NOT_FOUND). Runs only when tests fail; free otherwise.
+      - name: Diagnose Windows test binary (on failure)
+        if: failure() && matrix.os == 'windows-latest'
+        shell: pwsh
+        working-directory: src-tauri
+        run: |
+          Write-Host "OS: $([System.Environment]::OSVersion.VersionString)"
+          $exe = Get-ChildItem target\debug\deps\clickyx_lib-*.exe | Select-Object -First 1
+          Write-Host "Test binary: $($exe.FullName)"
+          Write-Host "--- DLLs beside the binary ---"
+          Get-ChildItem target\debug\deps\*.dll -ErrorAction SilentlyContinue | ForEach-Object { Write-Host $_.Name }
+          Write-Host "--- Load-time imports (non-system DLLs are suspects) ---"
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          $dumpbin = & $vswhere -latest -find 'VC\Tools\MSVC\*\bin\Hostx64\x64\dumpbin.exe' | Select-Object -First 1
+          Write-Host "dumpbin: $dumpbin"
+          & $dumpbin /IMPORTS $exe.FullName | Select-String '\.dll' | ForEach-Object { $_.Line.Trim() } | Sort-Object -Unique | Select-Object -First 60
 
       - name: Verify Windows dependencies
         if: matrix.os == 'windows-latest'
