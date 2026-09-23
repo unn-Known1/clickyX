@@ -201,7 +201,13 @@ jobs:
           $depzip = "$env:RUNNER_TEMP\deps.zip"
           Invoke-WebRequest -Uri "https://github.com/lucasg/Dependencies/releases/download/v1.11.1/Dependencies_x64_Release.zip" -OutFile $depzip
           Expand-Archive -Path $depzip -DestinationPath "$env:RUNNER_TEMP\deps" -Force
-          & "$env:RUNNER_TEMP\deps\Dependencies.exe" -imports $exe.FullName 2>&1 | Select-Object -First 120
+          & "$env:RUNNER_TEMP\deps\Dependencies.exe" -chain $exe.FullName 2>&1 | Set-Content -Path $env:RUNNER_TEMP\chain.txt
+          Write-Host "--- chain lines mentioning comctl32 (WinSxS=v6 honored, System32=v5 ignored) ---"
+          Select-String -Path $env:RUNNER_TEMP\chain.txt -Pattern 'comctl32' -AllMatches | Select-Object -First 20
+          Write-Host "--- chain lines mentioning missing/unresolved ---"
+          Select-String -Path $env:RUNNER_TEMP\chain.txt -Pattern 'not found|missing|unresolved|cannot|failed| \? ' -AllMatches | Select-Object -First 30
+          Write-Host "--- chain head (root + depth 1) ---"
+          Get-Content -Path $env:RUNNER_TEMP\chain.txt -TotalCount 60
           pip install pefile --quiet 2>&1 | Select-Object -Last 1
           Set-Content -Path $env:RUNNER_TEMP\rsrc.py -Value 'import pefile,sys'
           Add-Content -Path $env:RUNNER_TEMP\rsrc.py -Value 'pe=pefile.PE(sys.argv[1])'
