@@ -102,16 +102,32 @@ jobs:
         working-directory: src-tauri
         run: cargo fmt --check
 
+  # Resolves the build matrix so manual runs can drop the already-green
+  # ubuntu leg (skip-linux). `matrix` can't be read in a job-level `if`,
+  # so the OS list is computed here and consumed via fromJSON below.
+  setup:
+    name: Setup matrix
+    runs-on: ubuntu-latest
+    outputs:
+      os: ${{ steps.set.outputs.os }}
+    steps:
+      - id: set
+        run: |
+          if [ "${{ inputs.skip-linux }}" = "true" ]; then
+            echo 'os=["windows-latest", "macos-latest"]' >> "$GITHUB_OUTPUT"
+          else
+            echo 'os=["ubuntu-24.04", "windows-latest", "macos-latest"]' >> "$GITHUB_OUTPUT"
+          fi
+
   build:
     name: Build (${{ matrix.os }})
-    needs: check
-    # Tolerate a skipped Check (manual skip-check) but still gate on its success;
-    # optionally drop the already-green ubuntu leg (manual skip-linux).
-    if: ${{ (needs.check.result == 'success' || needs.check.result == 'skipped') && (inputs.skip-linux != true || matrix.os != 'ubuntu-24.04') }}
+    needs: [check, setup]
+    # Tolerate a skipped Check (manual skip-check) but still gate on success.
+    if: ${{ needs.check.result == 'success' || needs.check.result == 'skipped' }}
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-24.04, windows-latest, macos-latest]
+        os: ${{ fromJSON(needs.setup.outputs.os) }}
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v7
