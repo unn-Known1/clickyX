@@ -57,7 +57,7 @@ tts = "0.26"
 specta = { version = "2.0.0-rc.22", features = ["export"], optional = true }
 specta-typescript = { version = "0.0.9", optional = true }
 tauri-plugin-single-instance = "2.0.0-rc.0"
-aes-gcm = "0.10.3"
+aes-gcm = "0.11.1"
 rand = "0.8.5"
 hex = "0.4.3"
 semver = "1.0.28"
