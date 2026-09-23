@@ -145,18 +145,19 @@ fn agents_file_path() -> std::path::PathBuf {
 }
 
 use aes_gcm::{
-    aead::{Aead, AeadCore, KeyInit, OsRng},
+    aead::{Aead, KeyInit},
     Aes256Gcm, Key, Nonce,
 };
+use rand::RngCore;
 
 pub fn encrypt_data(data: &str, key_hex: &str) -> Result<Vec<u8>, String> {
     let key_bytes = hex::decode(key_hex).map_err(|e| format!("Invalid hex key: {e}"))?;
-    if key_bytes.len() != 32 {
-        return Err("Key must be 32 bytes".into());
-    }
-    let key = Key::<Aes256Gcm>::from_slice(&key_bytes);
-    let cipher = Aes256Gcm::new(key);
-    let nonce = Aes256Gcm::generate_nonce(&mut OsRng);
+    let key = Key::<Aes256Gcm>::try_from(key_bytes.as_slice())
+        .map_err(|_| "Key must be 32 bytes".to_string())?;
+    let cipher = Aes256Gcm::new(&key);
+    let mut nonce_bytes = [0u8; 12];
+    rand::thread_rng().fill_bytes(&mut nonce_bytes);
+    let nonce = Nonce::from(nonce_bytes);
     let ciphertext = cipher
         .encrypt(&nonce, data.as_bytes())
         .map_err(|e| format!("Encryption error: {:?}", e))?;
@@ -170,14 +171,15 @@ pub fn decrypt_data(data: &[u8], key_hex: &str) -> Result<String, String> {
         return Err("Data too short".into());
     }
     let key_bytes = hex::decode(key_hex).map_err(|e| format!("Invalid hex key: {e}"))?;
-    if key_bytes.len() != 32 {
-        return Err("Key must be 32 bytes".into());
-    }
-    let key = Key::<Aes256Gcm>::from_slice(&key_bytes);
-    let cipher = Aes256Gcm::new(key);
-    let nonce = Nonce::from_slice(&data[..12]);
+    let key = Key::<Aes256Gcm>::try_from(key_bytes.as_slice())
+        .map_err(|_| "Key must be 32 bytes".to_string())?;
+    let cipher = Aes256Gcm::new(&key);
+    let nonce_bytes: [u8; 12] = data[..12]
+        .try_into()
+        .map_err(|_| "Data too short".to_string())?;
+    let nonce = Nonce::from(nonce_bytes);
     let plaintext = cipher
-        .decrypt(nonce, &data[12..])
+        .decrypt(&nonce, &data[12..])
         .map_err(|e| format!("Decryption error: {:?}", e))?;
     String::from_utf8(plaintext).map_err(|e| format!("Invalid UTF-8: {e}"))
 }
