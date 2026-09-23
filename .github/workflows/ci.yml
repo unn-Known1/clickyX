@@ -18,7 +18,9 @@ on:
         default: false
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  # v2: previous group wedged behind an unresponsive runner (sxstrace hang);
+  # bumped to let new runs initialize. Semantics unchanged.
+  group: ci-v2-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 env:
