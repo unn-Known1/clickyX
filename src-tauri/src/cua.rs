@@ -148,6 +148,7 @@ impl InputSimulator {
         }
     }
 
+    #[cfg(target_os = "linux")]
     fn click_via_ydotool(&self, x: f64, y: f64) -> ClickResult {
         match ydotool_click(x, y) {
             Ok(()) => ClickResult {
@@ -162,6 +163,18 @@ impl InputSimulator {
                 success: false,
                 backend: format!("ydotool_error_{e}"),
             },
+        }
+    }
+
+    // ydotool is Linux-only (Wayland fallback); other platforms never route
+    // here (see click_native), but the symbol must still exist to compile.
+    #[cfg(not(target_os = "linux"))]
+    fn click_via_ydotool(&self, x: f64, y: f64) -> ClickResult {
+        ClickResult {
+            x,
+            y,
+            success: false,
+            backend: "ydotool_unsupported".into(),
         }
     }
 

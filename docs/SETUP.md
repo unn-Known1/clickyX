@@ -7,7 +7,7 @@
 - Rust toolchain (stable, 1.77+)
 - npm
 
-### Linux (Ubuntu 22.04+)
+### Linux (Ubuntu 24.04+)
 ```sh
 sudo apt-get update
 sudo apt-get install -y \
@@ -16,13 +16,17 @@ sudo apt-get install -y \
   librsvg2-dev \
   patchelf \
   libxdo-dev \
+  libpipewire-0.3-dev \
+  libdrm-dev \
+  libgbm-dev \
   libasound2-dev \
   libpulse-dev \
   libspeechd-dev
 ```
 
 > [!NOTE]
-> CI runs on `ubuntu-22.04` for glibc 2.35 compatibility. Using Ubuntu 20.04 or older is not supported.
+> CI runs on `ubuntu-24.04` (xcap 0.9 needs PipeWire 1.x headers, unavailable on 22.04).
+> .deb/AppImage targets Ubuntu 24.04+; older distros should use the Flatpak.
 
 ### macOS
 Xcode 15+ with command line tools:
