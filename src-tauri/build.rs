@@ -138,6 +138,10 @@ fn main() {
     #[cfg(target_os = "windows")]
     {
         println!("cargo:rustc-link-arg=/DELAYLOAD:comctl32.dll");
+        // Artifacts that never reference comctl32 (e.g. examples linking only
+        // part of the rlib) would emit LNK4199, which trips the repo's
+        // warnings-as-errors before tests even build: suppress just that one.
+        println!("cargo:rustc-link-arg=/IGNORE:4199");
         // delayimp.lib ships with MSVC; locate it via vswhere (fixed path).
         let vswhere = r"C:\Program Files (x86)\Microsoft Visual Studio\Installer\vswhere.exe";
         let delayimp = std::process::Command::new(vswhere)
