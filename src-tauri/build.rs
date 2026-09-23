@@ -163,7 +163,9 @@ fn main() {
                 println!("cargo:rustc-link-lib=dylib=delayimp");
                 println!("cargo:warning=clickyX: delay-loading comctl32.dll via {p}");
             }
-            None => println!("cargo:warning=clickyX: delayimp.lib not found; `cargo test` may fail on Windows with STATUS_ENTRYPOINT_NOT_FOUND"),
+            None => println!(
+                "cargo:warning=clickyX: delayimp.lib not found; `cargo test` may fail on Windows with STATUS_ENTRYPOINT_NOT_FOUND"
+            ),
         }
     }
 }
