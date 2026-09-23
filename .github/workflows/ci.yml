@@ -122,8 +122,9 @@ jobs:
   build:
     name: Build (${{ matrix.os }})
     needs: [check, setup]
-    # Tolerate a skipped Check (manual skip-check) but still gate on success.
-    if: ${{ needs.check.result == 'success' || needs.check.result == 'skipped' }}
+    # always() opts out of the default status gate so a SKIPPED check
+    # (manual skip-check) doesn't propagate the skip; failed checks still gate.
+    if: ${{ always() && (needs.check.result == 'success' || needs.check.result == 'skipped') }}
     strategy:
       fail-fast: false
       matrix:
