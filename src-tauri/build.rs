@@ -87,19 +87,44 @@ fn main() {
     // only (`rustc-link-arg-bins`). `cargo test` harness executables built from
     // the lib target therefore load comctl32 v5, and the loader aborts with
     // STATUS_ENTRYPOINT_NOT_FOUND on v6-only imports (TaskDialogIndirect,
-    // *Subclass via tao) before any test runs. Link the same generated
-    // resource into test targets as well.
+    // *Subclass via tao) before any test runs. Link a manifest-only resource
+    // into every artifact as well (bins merge the duplicate identical manifest;
+    // `rustc-link-arg-tests` is rejected because this package has no [[test]]
+    // target).
     #[cfg(target_os = "windows")]
     {
-        let rc = std::path::PathBuf::from(std::env::var("OUT_DIR").unwrap_or_default())
-            .join("resource.rc");
-        if rc.is_file()
-            && !matches!(
-                embed_resource::compile_for_tests(&rc, embed_resource::NONE),
-                embed_resource::CompilationResult::Ok
-            )
-        {
-            println!("cargo:warning=clickyX: failed to embed manifest into test targets; `cargo test` may fail on Windows with STATUS_ENTRYPOINT_NOT_FOUND");
+        let out = std::path::PathBuf::from(std::env::var("OUT_DIR").unwrap_or_default());
+        let manifest = out.join("clickyx_test_manifest.xml");
+        let rc = out.join("clickyx_test_manifest.rc");
+        let manifest_xml = r#"<assembly xmlns="urn:schemas-microsoft-com:asm.v1" manifestVersion="1.0">
+  <dependency>
+    <dependentAssembly>
+      <assemblyIdentity
+        type="win32"
+        name="Microsoft.Windows.Common-Controls"
+        version="6.0.0.0"
+        processorArchitecture="*"
+        publicKeyToken="6595b64144ccf1df"
+        language="*"
+      />
+    </dependentAssembly>
+  </dependency>
+</assembly>
+"#;
+        if std::fs::write(&manifest, manifest_xml).is_ok() {
+            // .rc string literals treat backslash as escape: double them.
+            let rc_src = format!(
+                "1 RT_MANIFEST \"{}\"",
+                manifest.to_string_lossy().replace('\\', "\\\\")
+            );
+            if std::fs::write(&rc, rc_src).is_ok()
+                && !matches!(
+                    embed_resource::compile_for_everything(&rc, embed_resource::NONE),
+                    embed_resource::CompilationResult::Ok
+                )
+            {
+                println!("cargo:warning=clickyX: failed to embed manifest into test targets; `cargo test` may fail on Windows with STATUS_ENTRYPOINT_NOT_FOUND");
+            }
         }
     }
 }

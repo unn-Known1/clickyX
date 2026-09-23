@@ -187,7 +187,8 @@ jobs:
         working-directory: src-tauri
         run: |
           Write-Host "OS: $([System.Environment]::OSVersion.VersionString)"
-          $exe = Get-ChildItem target\debug\deps\clickyx_lib-*.exe | Select-Object -First 1
+          $exe = Get-ChildItem target\debug\deps\clickyx_lib-*.exe -ErrorAction SilentlyContinue | Select-Object -First 1
+          if (-not $exe) { Write-Host "NO test binary built"; exit 0 }
           Write-Host "Test binary: $($exe.FullName)"
           Write-Host "--- Does test listing work? (no = loader crash, yes = a test crashes) ---"
           & $exe.FullName --list 2>&1 | Select-Object -First 15
