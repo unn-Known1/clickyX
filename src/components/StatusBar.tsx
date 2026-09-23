@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import { useTauriEvent } from "../hooks/useTauriEvent";
 import { useStore } from "../store/appStore";
 import { useTranslation } from "react-i18next";
@@ -17,11 +17,9 @@ export default function StatusBar({ typeModeActive }: { typeModeActive?: boolean
   // (every 2s) must not re-render unrelated subscribers.
   const audioStatus = useStore((s) => s.audioStatus);
   const audioLevel = useStore((s) => s.audioLevel);
-  const attentionItems = useStore((s) => s.attentionItems);
   const todayStats = useStore((s) => s.todayStats);
   const setAudioStatus = useStore((s) => s.setAudioStatus);
   const setAudioLevel = useStore((s) => s.setAudioLevel);
-  const setAttentionItems = useStore((s) => s.setAttentionItems);
   const setTodayStats = useStore((s) => s.setTodayStats);
   // P1 (H-4): visible hold-to-talk. Recording was hotkey-only — a first-time
   // user could finish onboarding with zero discoverable path to speak.
@@ -109,16 +107,18 @@ export default function StatusBar({ typeModeActive }: { typeModeActive?: boolean
   const isListening = audioStatus?.listening ?? false;
   const captureActive = acStatus?.running ?? false;
 
-  // Derive needs-attention from the live react-query agent list (store agents were never populated)
+  // Derive needs-attention directly from the live react-query agent list.
+  // (Previously synced into Zustand via useEffect, but `agents` gets a fresh
+  // `[]` identity every render while loading, so the effect re-ran and
+  // set a fresh `items` array each time -> "Maximum update depth exceeded".)
   const { agents } = useAgents();
-  useEffect(() => {
-    const items: { type: "warning" | "error" | "info"; message: string }[] = [];
-    const errored = agents.filter(a => ["error", "failed"].includes(a.state.toLowerCase()));
+  const attentionItems = useMemo(() => {
+    const errored = agents.filter((a) => ["error", "failed"].includes(a.state.toLowerCase()));
     if (errored.length > 0) {
-      items.push({ type: "error", message: `${errored.length} agent(s) in error state` });
+      return [{ type: "error" as const, message: `${errored.length} agent(s) in error state` }];
     }
-    setAttentionItems(items);
-  }, [agents, setAttentionItems]);
+    return [] as { type: "warning" | "error" | "info"; message: string }[];
+  }, [agents]);
 
   const errorCount = attentionItems.filter(i => i.type === "error").length;
   const warnCount  = attentionItems.filter(i => i.type === "warning").length;

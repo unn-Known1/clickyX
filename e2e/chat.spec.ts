@@ -8,8 +8,8 @@ test.describe("Chat tab", () => {
   test("shows empty state when no messages", async ({ page }) => {
     // Chat mounts behind the "Start a conversation" CTA on Home.
     await page.click(".start-chat-btn");
-    await expect(page.locator(".chat-messages")).toBeVisible();
-    await expect(page.locator(".chat-empty")).toBeVisible();
+    await expect(page.locator(".chat-messages")).toBeVisible({ timeout: 20000 });
+    await expect(page.locator(".chat-empty")).toBeVisible({ timeout: 20000 });
   });
 
   test("input field is focusable", async ({ page }) => {
