@@ -200,8 +200,10 @@ jobs:
           Write-Host "--- dumpbin /HEADERS .rsrc section flags (expect 40000040 Read Only) ---"
           & $dumpbin /HEADERS $exe.FullName | Select-String -Pattern '\.rsrc' -Context 0,9 | Select-Object -First 12
           Write-Host "--- sxstrace (did SxS honor the manifest? which comctl32?) ---"
-          sxstrace trace -logfile:$env:RUNNER_TEMP\sxs.etl 2>&1 | Select-Object -First 3
+          Start-Process sxstrace -ArgumentList "trace","-logfile:$env:RUNNER_TEMP\sxs.etl" -NoNewWindow
+          Start-Sleep -Seconds 3
           & $exe.FullName --list 2>&1 | Select-Object -First 3
+          sxstrace stoptrace 2>&1 | Select-Object -First 3
           sxstrace parse -logfile:$env:RUNNER_TEMP\sxs.etl -outfile:$env:RUNNER_TEMP\sxs.txt 2>&1 | Select-Object -First 3
           Select-String -Path $env:RUNNER_TEMP\sxs.txt -Pattern 'comctl|Common-Controls|ERROR|error|fail|policy|version="6' -AllMatches | Select-Object -First 40
           Write-Host "--- Dependencies.exe walker (exact missing module/entrypoint) ---"
@@ -215,6 +217,13 @@ jobs:
           Select-String -Path $env:RUNNER_TEMP\chain.txt -Pattern 'not found|missing|unresolved|cannot|failed| \? ' -AllMatches | Select-Object -First 30
           Write-Host "--- chain head (root + depth 1) ---"
           Get-Content -Path $env:RUNNER_TEMP\chain.txt -TotalCount 60
+          Write-Host "--- full API import list anomalies (anything Dependencies flags) ---"
+          & "$env:RUNNER_TEMP\deps\Dependencies.exe" -imports $exe.FullName 2>&1 | Set-Content -Path $env:RUNNER_TEMP\imports.txt
+          Select-String -Path $env:RUNNER_TEMP\imports.txt -Pattern 'NOT_FOUND|Unresolved|unresolved|MISSING|Missing|\?{2,}|ERROR' -AllMatches | Select-Object -First 30
+          Write-Host "import lines total: $((Get-Content -Path $env:RUNNER_TEMP\imports.txt | Measure-Object -Line).Lines)"
+          Write-Host "--- delay-load check (comctl32 must be absent from static imports) ---"
+          Select-String -Path $env:RUNNER_TEMP\imports.txt -Pattern 'comctl32' -AllMatches | Select-Object -First 10
+          Write-Host "--- PE resource tree (pefile) ---"
           pip install pefile --quiet 2>&1 | Select-Object -Last 1
           Set-Content -Path $env:RUNNER_TEMP\rsrc.py -Value 'import pefile,sys'
           Add-Content -Path $env:RUNNER_TEMP\rsrc.py -Value 'pe=pefile.PE(sys.argv[1])'
@@ -231,7 +240,6 @@ jobs:
           Add-Content -Path $env:RUNNER_TEMP\rsrc.py -Value '            raw=pe.get_data(d.OffsetToData, min(d.Size, 600))'
           Add-Content -Path $env:RUNNER_TEMP\rsrc.py -Value '            print("    bytes:", raw)'
           python "$env:RUNNER_TEMP\rsrc.py" $exe.FullName
-          & $dumpbin /IMPORTS $exe.FullName | Select-Object -First 400
           Write-Host "--- Embedded manifest (missing comctl32 v6 => v5 loads => TaskDialogIndirect unresolvable) ---"
           $mt = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin\*\x64\mt.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
           Write-Host "mt: $mt"

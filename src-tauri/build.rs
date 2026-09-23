@@ -85,10 +85,8 @@ fn main() {
 
     // tauri embeds the application manifest (comctl32 v6) into binary targets
     // only (`rustc-link-arg-bins`). `cargo test` harness executables built from
-    // the lib target therefore load comctl32 v5, and the loader aborts with
-    // STATUS_ENTRYPOINT_NOT_FOUND on v6-only imports (TaskDialogIndirect,
-    // *Subclass via tao) before any test runs. Link a manifest-only resource
-    // into every artifact as well (bins merge the duplicate identical manifest;
+    // the lib target get no manifest, so link a manifest-only resource into
+    // every artifact as well (bins merge the duplicate identical manifest;
     // `rustc-link-arg-tests` is rejected because this package has no [[test]]
     // target).
     #[cfg(target_os = "windows")]
@@ -111,7 +109,7 @@ fn main() {
   </dependency>
 </assembly>
 "#;
-        // NOTE: UTF-8 BOM prefix: rc.exe mangles BOM-less manifest files.
+        // NOTE: UTF-8 BOM prefix: manifests must be BOM-marked for SxS/rc.exe.
         if std::fs::write(&manifest, format!("\u{FEFF}{manifest_xml}")).is_ok() {
             // .rc string literals treat backslash as escape: double them.
             let rc_src = format!(
@@ -128,6 +126,40 @@ fn main() {
                     result
                 );
             }
+        }
+    }
+
+    // The lib links tao/rfd, which statically import comctl32 v6-only APIs
+    // (TaskDialogIndirect, Set/RemoveWindowSubclass, DefSubclassProc). Delay-load
+    // comctl32 so the loader never resolves those imports at process startup:
+    // unit-test executables (which never call into GUI code) start cleanly, and
+    // the first real call resolves via the embedded v6 manifest. This works
+    // whether or not SxS honors the manifest, and also covers the app binary.
+    #[cfg(target_os = "windows")]
+    {
+        println!("cargo:rustc-link-arg=/DELAYLOAD:comctl32.dll");
+        // delayimp.lib ships with MSVC; locate it via vswhere (fixed path).
+        let vswhere = r"C:\Program Files (x86)\Microsoft Visual Studio\Installer\vswhere.exe";
+        let delayimp = std::process::Command::new(vswhere)
+            .args(["-latest", "-find", r"VC\Tools\MSVC\*\lib\x64\delayimp.lib"])
+            .output()
+            .ok()
+            .and_then(|o| String::from_utf8(o.stdout).ok())
+            .and_then(|s| {
+                s.lines()
+                    .map(str::trim)
+                    .find(|l| !l.is_empty() && std::path::Path::new(l).is_file())
+                    .map(str::to_owned)
+            });
+        match delayimp {
+            Some(p) => {
+                if let Some(dir) = std::path::Path::new(&p).parent() {
+                    println!("cargo:rustc-link-search=native={}", dir.display());
+                }
+                println!("cargo:rustc-link-lib=dylib=delayimp");
+                println!("cargo:warning=clickyX: delay-loading comctl32.dll via {p}");
+            }
+            None => println!("cargo:warning=clickyX: delayimp.lib not found; `cargo test` may fail on Windows with STATUS_ENTRYPOINT_NOT_FOUND"),
         }
     }
 }
