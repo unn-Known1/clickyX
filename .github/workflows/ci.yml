@@ -198,6 +198,10 @@ jobs:
           & $dumpbin /HEADERS $exe.FullName | Select-String 'machine|subsystem|DLL characteristics' | Select-Object -First 10
           Write-Host "--- FULL import table with function names ---"
           & $dumpbin /IMPORTS $exe.FullName | Select-Object -First 400
+          Write-Host "--- Embedded manifest (missing comctl32 v6 => v5 loads => TaskDialogIndirect unresolvable) ---"
+          $mt = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin\*\x64\mt.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
+          Write-Host "mt: $mt"
+          if ($mt) { & $mt.FullName "-inputresource:$($exe.FullName);#1" -out:$env:RUNNER_TEMP\exe.manifest; Get-Content $env:RUNNER_TEMP\exe.manifest }
 
       - name: Verify Windows dependencies
         if: matrix.os == 'windows-latest'
