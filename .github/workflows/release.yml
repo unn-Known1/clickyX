@@ -44,7 +44,7 @@ jobs:
           key: ${{ matrix.os }}-cargo-${{ hashFiles('src-tauri/Cargo.lock') }}
 
       - name: Install sccache (Rust compile cache)
-        uses: mozilla-actions/sccache-action@v0.0.9
+        uses: mozilla-actions/sccache-action@v0.0.11
 
       - name: Install mold linker (Linux)
         if: matrix.os == 'ubuntu-22.04'

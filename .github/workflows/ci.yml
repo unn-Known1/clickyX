@@ -41,7 +41,7 @@ jobs:
             ubuntu-cargo-
 
       - name: Install sccache
-        uses: mozilla-actions/sccache-action@v0.0.9
+        uses: mozilla-actions/sccache-action@v0.0.11
 
       - name: Install mold linker
         run: |
@@ -121,7 +121,7 @@ jobs:
             ${{ matrix.os }}-cargo-
 
       - name: Install sccache (Rust compile cache)
-        uses: mozilla-actions/sccache-action@v0.0.9
+        uses: mozilla-actions/sccache-action@v0.0.11
 
       - name: Install mold linker (Linux)
         if: matrix.os == 'ubuntu-22.04'
