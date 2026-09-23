@@ -197,8 +197,17 @@ jobs:
           $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
           $dumpbin = & $vswhere -latest -find 'VC\Tools\MSVC\*\bin\Hostx64\x64\dumpbin.exe' | Select-Object -First 1
           & $dumpbin /HEADERS $exe.FullName | Select-String 'machine|subsystem|DLL characteristics' | Select-Object -First 10
-          Write-Host "--- dumpbin /SUMMARY (.rsrc section present?) ---"
-          & $dumpbin /SUMMARY $exe.FullName | Select-Object -First 30
+          Write-Host "--- PE resource tree (pefile) ---"
+          pip install pefile --quiet 2>&1 | Select-Object -Last 1
+          Set-Content -Path $env:RUNNER_TEMP\rsrc.py -Value "import pefile,sys
+pe=pefile.PE(sys.argv[1])
+for e in pe.DIRECTORY_ENTRY_RESOURCE.entries:
+  t=e.name.string.decode() if e.name else e.id
+  for f in e.directory.entries:
+    for g in f.directory.entries:
+      d=g.data
+      print(f'type={t} id={f.id} lang={g.id} size={d.struct.Size} off={d.struct.OffsetToData}')"
+          python "$env:RUNNER_TEMP\rsrc.py" $exe.FullName
           & $dumpbin /IMPORTS $exe.FullName | Select-Object -First 400
           Write-Host "--- Embedded manifest (missing comctl32 v6 => v5 loads => TaskDialogIndirect unresolvable) ---"
           $mt = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin\*\x64\mt.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
