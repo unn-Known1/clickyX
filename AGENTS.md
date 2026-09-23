@@ -18,6 +18,7 @@ Full specification: `docs/PROJECT_SPEC.md` — the single source of truth for fe
 6. **Use typed bindings** — all `invoke()` calls must reference `src/bindings.ts`
 7. **Use react-query** — all server data fetching uses `useQuery`/`useMutation` — no raw `useState+useEffect+invoke` for data
 8. **Tests for new hooks** — any new hook under `src/hooks/` must have a `.test.ts` sibling
+9. **CI is fire-and-forget** — full builds take 20+ minutes: dispatch or push, report the run URL, and move on. Never poll/wait for completion unless explicitly asked. Batch CI-bound changes into single commits; validate workflow YAML locally before pushing
 
 ---
 
@@ -50,6 +51,13 @@ npm run build                 # tsc + vite (frontend)
 npm test                      # Vitest unit tests
 npm run test:e2e              # Playwright E2E
 npm run test:visual           # Playwright visual regression
+```
+
+```sh
+# CI: fire-and-forget (rule 9). Dispatch, report the URL, move on.
+gh workflow run "CI/CD" --ref master -f skip-check=true -f skip-linux=true  # win+mac only
+gh workflow run "CI/CD" --ref master                                        # full matrix
+python3 -c "import yaml; yaml.safe_load(open('.github/workflows/ci.yml'))"  # validate workflow YAML
 ```
 
 ---
@@ -91,6 +99,7 @@ npm run test:visual           # Playwright visual regression
 | `lib.rs` | App setup, plugin registration, deep-link handler |
 | `tray.rs` | System tray setup |
 | `type_mode.rs` | Double-tap Ctrl type mode |
+| `../build.rs` | Windows: comctl32 v6 manifest for test targets + `/DELAYLOAD:comctl32.dll` + `/IGNORE:4199` — `cargo test` crashes at startup without these (see Build Status) |
 
 ### Frontend (`src/`)
 
@@ -167,6 +176,8 @@ npm run test:visual           # Playwright visual regression
 - Release: v0.2.0 tagged; GitHub releases ship as **drafts** until manually published (the updater only sees published releases)
 - Flatpak: Build passing
 - macOS: `--bundles dmg,app` + `macOSPrivateApi: true` for overlay transparency
+- Windows `cargo test`: tauri embeds the comctl32 v6 manifest into bins only, so the lib test harness loads comctl32 v5 and dies at startup with `STATUS_ENTRYPOINT_NOT_FOUND` (tao/rfd import v6-only `TaskDialogIndirect`, `*Subclass`). `src-tauri/build.rs` links a manifest-only resource into every artifact AND delay-loads comctl32. `CARGO_BUILD_WARNINGS=deny` is set: linker warnings fail the build, so benign ones need surgical `/IGNORE:<n>`
+- Concurrency: if a run wedges (e.g. a hanging diagnostic step that ignores cancellation), new runs in the same concurrency group never initialize — bump the group name to escape, revert after the stuck run times out
 
 ---
 
