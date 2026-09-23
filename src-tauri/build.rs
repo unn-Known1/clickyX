@@ -117,8 +117,7 @@ fn main() {
                 manifest.to_string_lossy().replace('\\', "\\\\")
             );
             if std::fs::write(&rc, rc_src).is_ok() {
-                let result =
-                    embed_resource::compile_for_everything(&rc, embed_resource::NONE);
+                let result = embed_resource::compile_for_everything(&rc, embed_resource::NONE);
                 // Always surface the outcome: invisible failures here cost a CI cycle each.
                 println!(
                     "cargo:warning=clickyX manifest-resource: rc={} result={:?}",
