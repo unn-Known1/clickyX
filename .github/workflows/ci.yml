@@ -197,6 +197,13 @@ jobs:
           $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
           $dumpbin = & $vswhere -latest -find 'VC\Tools\MSVC\*\bin\Hostx64\x64\dumpbin.exe' | Select-Object -First 1
           & $dumpbin /HEADERS $exe.FullName | Select-String 'machine|subsystem|DLL characteristics' | Select-Object -First 10
+          Write-Host "--- dumpbin /HEADERS .rsrc section flags (expect 40000040 Read Only) ---"
+          & $dumpbin /HEADERS $exe.FullName | Select-String -Pattern '\.rsrc' -Context 0,9 | Select-Object -First 12
+          Write-Host "--- sxstrace (did SxS honor the manifest? which comctl32?) ---"
+          sxstrace trace -logfile:$env:RUNNER_TEMP\sxs.etl 2>&1 | Select-Object -First 3
+          & $exe.FullName --list 2>&1 | Select-Object -First 3
+          sxstrace parse -logfile:$env:RUNNER_TEMP\sxs.etl -outfile:$env:RUNNER_TEMP\sxs.txt 2>&1 | Select-Object -First 3
+          Select-String -Path $env:RUNNER_TEMP\sxs.txt -Pattern 'comctl|Common-Controls|ERROR|error|fail|policy|version="6' -AllMatches | Select-Object -First 40
           Write-Host "--- Dependencies.exe walker (exact missing module/entrypoint) ---"
           $depzip = "$env:RUNNER_TEMP\deps.zip"
           Invoke-WebRequest -Uri "https://github.com/lucasg/Dependencies/releases/download/v1.11.1/Dependencies_x64_Release.zip" -OutFile $depzip
