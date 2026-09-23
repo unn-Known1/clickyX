@@ -223,7 +223,7 @@ git config user.email "ptelgm.yt@gmail.com"
 
 | Item | Action |
 |------|--------|
-| macOS signing | Set `APPLE_SIGNING_IDENTITY`, `APPLE_CERTIFICATE`, `APPLE_CERTIFICATE_PASSWORD`, `APPLE_NOTARIZATION_USERNAME`, `APPLE_NOTARIZATION_PASSWORD` as GitHub secrets |
+| macOS signing | Set `APPLE_SIGNING_IDENTITY`, `APPLE_TEAM_ID`, `APPLE_NOTARIZATION_USERNAME`, `APPLE_NOTARIZATION_PASSWORD` as GitHub secrets (the only four `release.yml` reads; unsigned builds ship unsigned) |
 | Windows signing | Set `WINDOWS_SIGNING_CERT` (base64 PFX) and `WINDOWS_SIGNING_PASSWORD` as GitHub secrets |
 | Update signing (P0-T3) | Generate once (`minisign -G -p update.pub -s update.key`); set `UPDATE_SIGNING_KEY_B64` (base64 of the secret key file) and `UPDATE_SIGNING_PUBKEY` (pubkey string). Without these, release artifacts ship unsigned and the in-app updater refuses them |
 | Audio assets | Add `.mp3` files to `public/sounds/` (see `public/sounds/README.md`) |
