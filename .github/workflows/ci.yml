@@ -199,14 +199,18 @@ jobs:
           & $dumpbin /HEADERS $exe.FullName | Select-String 'machine|subsystem|DLL characteristics' | Select-Object -First 10
           Write-Host "--- PE resource tree (pefile) ---"
           pip install pefile --quiet 2>&1 | Select-Object -Last 1
-          Set-Content -Path $env:RUNNER_TEMP\rsrc.py -Value "import pefile,sys
-pe=pefile.PE(sys.argv[1])
-for e in pe.DIRECTORY_ENTRY_RESOURCE.entries:
-  t=e.name.string.decode() if e.name else e.id
-  for f in e.directory.entries:
-    for g in f.directory.entries:
-      d=g.data
-      print(f'type={t} id={f.id} lang={g.id} size={d.struct.Size} off={d.struct.OffsetToData}')"
+          Set-Content -Path $env:RUNNER_TEMP\rsrc.py -Value 'import pefile,sys'
+          Add-Content -Path $env:RUNNER_TEMP\rsrc.py -Value 'pe=pefile.PE(sys.argv[1])'
+          Add-Content -Path $env:RUNNER_TEMP\rsrc.py -Value 'for e in pe.DIRECTORY_ENTRY_RESOURCE.entries:'
+          Add-Content -Path $env:RUNNER_TEMP\rsrc.py -Value '    t=e.name.string.decode() if e.name else e.id'
+          Add-Content -Path $env:RUNNER_TEMP\rsrc.py -Value '    print("resource-type:", t)'
+          Add-Content -Path $env:RUNNER_TEMP\rsrc.py -Value '    f=e.directory.entries'
+          Add-Content -Path $env:RUNNER_TEMP\rsrc.py -Value '    print("count:", len(f))'
+          Add-Content -Path $env:RUNNER_TEMP\rsrc.py -Value '    for x in f:'
+          Add-Content -Path $env:RUNNER_TEMP\rsrc.py -Value '        print("  id:", x.id)'
+          Add-Content -Path $env:RUNNER_TEMP\rsrc.py -Value '        for g in x.directory.entries:'
+          Add-Content -Path $env:RUNNER_TEMP\rsrc.py -Value '            d=g.data.struct'
+          Add-Content -Path $env:RUNNER_TEMP\rsrc.py -Value '            print("    lang:", g.id, "size:", d.Size, "off:", d.OffsetToData)'
           python "$env:RUNNER_TEMP\rsrc.py" $exe.FullName
           & $dumpbin /IMPORTS $exe.FullName | Select-Object -First 400
           Write-Host "--- Embedded manifest (missing comctl32 v6 => v5 loads => TaskDialogIndirect unresolvable) ---"
