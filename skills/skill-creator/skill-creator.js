@@ -35,7 +35,7 @@ function findSkillsDir() {
 }
 
 async function main(args) {
-  const { action, name, slug: slugArg, description, category = 'utility', permissions = 'safe', template } = args || {};
+  const { action, name, slug: slugArg, description, category = 'utility', permissions = 'safe' } = args || {};
 
   const skillsDir = findSkillsDir();
 

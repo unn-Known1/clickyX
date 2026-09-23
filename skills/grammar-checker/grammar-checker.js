@@ -61,7 +61,7 @@ function heuristicCheck(text) {
 }
 
 async function main(args) {
-  const { text, level = 'standard', fix = false, action = 'check' } = args || {};
+  const { text, level = 'standard', fix = false } = args || {};
   if (!text) return { error: 'Missing text to check' };
 
   const heuristics = heuristicCheck(text);
@@ -103,7 +103,7 @@ async function main(args) {
       overallScore: parsed.overallScore,
       summary: parsed.summary,
     };
-  } catch (err) {
+  } catch {
     return {
       result: 'Heuristic check only (AI unavailable)',
       text,

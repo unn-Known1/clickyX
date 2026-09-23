@@ -10,7 +10,6 @@
 
 const fs = require("fs");
 const path = require("path");
-const { TextDecoder } = require("util");
 
 const hasOwn = (value, key) => Object.prototype.hasOwnProperty.call(value, key);
 const SUPPORTED_TYPES = new Set(["object", "array", "string", "integer", "number", "boolean", "null"]);
@@ -319,7 +318,7 @@ function collectSchemaErrors(schema, location = "schema") {
       } else {
         try {
           new RegExp(node.pattern);
-        } catch (error) {
+        } catch {
           errors.push(`${p}.pattern: invalid regular expression`);
         }
       }

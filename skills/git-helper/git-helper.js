@@ -4,18 +4,17 @@
 module.exports = { main };
 
 const { execSync } = require('child_process');
-const path = require('path');
 
 function git(cmd, cwd) {
   try {
     return execSync(`git ${cmd}`, { cwd: cwd || process.cwd(), encoding: 'utf-8', timeout: 30000 });
   } catch (e) {
-    throw new Error(e.stderr?.trim() || e.message);
+    throw new Error(e.stderr?.trim() || e.message, { cause: e });
   }
 }
 
 async function main(args) {
-  const { action, cwd, file, commit, branch, from, to, lines = 20, message, targetBranch } = args || {};
+  const { action, cwd, file, commit, from, to, lines = 20, message } = args || {};
   const repoDir = cwd || process.cwd();
 
   try {

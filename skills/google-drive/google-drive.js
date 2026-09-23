@@ -4,7 +4,7 @@
 
 module.exports = { main };
 
-const { createReadStream, writeFileSync } = require('fs');
+const { writeFileSync } = require('fs');
 const path = require('path');
 
 const BASE = 'https://www.googleapis.com/drive/v3';

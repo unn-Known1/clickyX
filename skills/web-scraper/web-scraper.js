@@ -18,7 +18,7 @@ function stripHtmlTags(html) {
 function fetchUrl(url) {
   const mod = url.startsWith('https') ? https : http;
   return new Promise((resolve, reject) => {
-    mod.get(url, { timeout: 15000, headers: { 'User-Agent': 'ClickyX-WebScraper/1.0' } }, (res) => {
+    const req = mod.get(url, { timeout: 15000, headers: { 'User-Agent': 'ClickyX-WebScraper/1.0' } }, (res) => {
       if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
         resolve(fetchUrl(res.headers.location));
         return;

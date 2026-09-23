@@ -7,7 +7,6 @@
 
 const fs = require("node:fs");
 const path = require("node:path");
-const { TextDecoder } = require("node:util");
 
 // Conservative bounds apply before JSON.parse and again to the parsed document.
 const LIMITS = Object.freeze({

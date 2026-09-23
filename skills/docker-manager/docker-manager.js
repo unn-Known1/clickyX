@@ -9,12 +9,12 @@ function docker(cmd, opts = {}) {
   try {
     return execSync(`docker ${cmd}`, { encoding: 'utf-8', timeout: 30000, ...opts });
   } catch (e) {
-    throw new Error(e.stderr || e.message);
+    throw new Error(e.stderr || e.message, { cause: e });
   }
 }
 
 async function main(args) {
-  const { action, container, image, lines = 50, format = 'table', all = false } = args || {};
+  const { action, container, image, lines = 50, all = false } = args || {};
 
   // Check docker availability
   try {

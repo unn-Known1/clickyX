@@ -6,7 +6,6 @@ module.exports = { main };
 const fs = require('fs');
 const path = require('path');
 const { execSync } = require('child_process');
-const os = require('os');
 
 function walkDir(dir, results, opts, depth = 0) {
   if (depth > (opts.maxDepth || 10)) return;

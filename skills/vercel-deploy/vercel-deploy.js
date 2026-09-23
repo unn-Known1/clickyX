@@ -5,7 +5,6 @@
 module.exports = { main };
 
 const { execSync } = require('child_process');
-const path = require('path');
 
 async function vercelFetch(token, path, options = {}) {
   const res = await fetch(`https://api.vercel.com${path}`, {

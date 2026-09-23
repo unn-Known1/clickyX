@@ -49,7 +49,7 @@ function runAssertions(response, assertions) {
     const { type, expected, path } = assertion;
     let actual;
     let pass = false;
-    let message = '';
+    let message;
 
     switch (type) {
       case 'status':

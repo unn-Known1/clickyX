@@ -8,7 +8,7 @@ const { execSync } = require('child_process');
 
 function getByPath(obj, pathExpr) {
   // Simple jq-like path: .key.nested[0].field
-  const parts = pathExpr.replace(/^\./, '').split(/[\.\[\]]/).filter(Boolean);
+  const parts = pathExpr.replace(/^\./, '').split(/[.[\]]/).filter(Boolean);
   let current = obj;
   for (const part of parts) {
     if (current === null || current === undefined) return undefined;
@@ -39,7 +39,7 @@ function deepDiff(a, b, path = '') {
 }
 
 async function main(args) {
-  const { action, json: jsonInput, filePath, path: queryPath, indent = 2, sortKeys = false, transform } = args || {};
+  const { action, json: jsonInput, filePath, path: queryPath, indent = 2, sortKeys = false } = args || {};
 
   // Load JSON from string or file
   let data;

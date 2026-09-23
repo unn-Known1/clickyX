@@ -56,7 +56,7 @@ function walkDir(dir, results, depth = 0) {
 }
 
 async function main(args) {
-  const { action, path: scanPath, filePath, text } = args || {};
+  const { action, path: scanPath, text } = args || {};
 
   try {
     // Try gitleaks or trufflehog first

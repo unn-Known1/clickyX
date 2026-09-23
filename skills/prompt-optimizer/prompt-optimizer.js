@@ -23,7 +23,7 @@ function bridgeRequest(data) {
 }
 
 async function main(args) {
-  const { prompt, goal, style = 'general', action = 'optimize' } = args || {};
+  const { prompt, goal } = args || {};
 
   if (!prompt) return { error: 'Missing prompt to analyze' };
 
@@ -69,7 +69,7 @@ Output in this exact JSON format: { "analysis": "...", "improved": "...", "chang
       improved: parsed.improved,
       changes: parsed.changes,
     };
-  } catch (err) {
+  } catch {
     // Return just heuristic analysis if AI unavailable
     return {
       result: 'Heuristic analysis only (AI unavailable)',

@@ -5,8 +5,6 @@
 module.exports = { main };
 
 const { execSync } = require('child_process');
-const fs = require('fs');
-const path = require('path');
 
 function runSqlite(dbPath, sql) {
   // Try sqlite3 CLI
@@ -16,7 +14,7 @@ function runSqlite(dbPath, sql) {
     });
     try { return JSON.parse(out || '[]'); } catch { return out; }
   } catch (e) {
-    throw new Error(`sqlite3 CLI failed: ${e.message}. Install sqlite3.`);
+    throw new Error(`sqlite3 CLI failed: ${e.message}. Install sqlite3.`, { cause: e });
   }
 }
 
@@ -46,7 +44,7 @@ async function runMysql(connectionString, sql) {
 }
 
 async function main(args) {
-  const { action, dbType = 'sqlite', dbPath, connectionString, sql, outputFormat = 'json' } = args || {};
+  const { action, dbType = 'sqlite', dbPath, connectionString, sql } = args || {};
 
   const conn = connectionString || dbPath;
   if (!conn && dbType === 'sqlite') return { error: 'Missing dbPath for SQLite' };

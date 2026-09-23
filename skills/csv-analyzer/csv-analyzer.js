@@ -4,7 +4,6 @@
 module.exports = { main };
 
 const fs = require('fs');
-const path = require('path');
 
 function parseCSV(content) {
   const lines = content.split('\n').filter(Boolean);

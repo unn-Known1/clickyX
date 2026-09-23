@@ -83,7 +83,7 @@ Output as JSON: { name, slug, skills, systemPrompt, capabilities }`,
           const jsonMatch = content.match(/\{[\s\S]+\}/);
           const design = jsonMatch ? JSON.parse(jsonMatch[0]) : { name: 'Custom Agent', slug: 'custom-agent', skills: [], systemPrompt: content };
           return { result: 'Agent designed', design, availableSkills };
-        } catch (e) {
+        } catch {
           return {
             result: 'Design suggestion (AI unavailable)',
             design: { name: name || 'My Agent', slug: 'my-agent', skills: skillList || [], systemPrompt: `You are an AI agent. Your goal: ${goal}` },

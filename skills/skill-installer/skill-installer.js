@@ -5,7 +5,6 @@ module.exports = { main };
 
 const fs = require('fs');
 const path = require('path');
-const { execSync } = require('child_process');
 
 function findSkillsDir() {
   let dir = process.cwd();

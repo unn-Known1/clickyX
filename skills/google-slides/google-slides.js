@@ -58,12 +58,6 @@ async function main(args) {
 
       case 'addSlide': {
         if (!presentationId) return { error: 'Missing presentationId' };
-        const requests = [{ duplicateObject: undefined }, {
-          createSlide: {
-            insertionIndex: slideIndex !== undefined ? slideIndex : undefined,
-            slideLayoutReference: { predefinedLayout: slideLayout || 'BLANK' },
-          },
-        }].filter((r) => !r.duplicateObject);
         const res = await slidesFetch(token, `/${presentationId}:batchUpdate`, {
           method: 'POST',
           body: JSON.stringify({ requests: [{ createSlide: { slideLayoutReference: { predefinedLayout: slideLayout || 'BLANK' } } }] }),

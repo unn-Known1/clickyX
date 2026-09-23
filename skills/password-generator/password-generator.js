@@ -3,8 +3,6 @@
 
 module.exports = { main };
 
-const crypto = require('crypto');
-
 const LOWER = 'abcdefghijklmnopqrstuvwxyz';
 const UPPER = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
 const DIGITS = '0123456789';
@@ -16,7 +14,16 @@ const ADJECTIVES = ['swift','bright','calm','dark','eager','fair','grand','happy
 const NOUNS = ['atlas','blade','cloud','dawn','echo','flame','grove','haven','iris','jungle','knight','lotus','moon','nova','ocean','pearl','quest','river','storm','tower','umbra','vault','wave','xenon','yield','zenith'];
 
 function secureRandom(max) {
-  return crypto.randomInt(0, max);
+  if (max <= 0) return 0;
+  const range = 0x100000000;
+  const limit = range - (range % max);
+  const arr = new Uint32Array(1);
+  let x;
+  do {
+    globalThis.crypto.getRandomValues(arr);
+    x = arr[0];
+  } while (x >= limit);
+  return x % max;
 }
 
 function generatePassword(opts) {
@@ -106,7 +113,11 @@ async function main(args) {
     }
 
     if (type === 'hex') {
-      const hexKeys = Array.from({ length: count }, () => crypto.randomBytes(Math.ceil(length / 2)).toString('hex').slice(0, length));
+      const hexKeys = Array.from({ length: count }, () => {
+        const bytes = new Uint8Array(Math.ceil(length / 2));
+        globalThis.crypto.getRandomValues(bytes);
+        return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('').slice(0, length);
+      });
       return { result: `${count} hex key(s) generated`, keys: hexKeys };
     }
 

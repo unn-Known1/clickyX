@@ -4,7 +4,6 @@
 module.exports = { main };
 
 const { execSync } = require('child_process');
-const path = require('path');
 
 function run(cmd, cwd) {
   try {

@@ -45,7 +45,7 @@ function parseCronExpression(expr) {
 }
 
 async function main(args) {
-  const { action, expression, command, user } = args || {};
+  const { action, expression, command } = args || {};
 
   if (process.platform === 'win32') {
     return { error: 'Cron is not available on Windows. Use Task Scheduler instead.' };

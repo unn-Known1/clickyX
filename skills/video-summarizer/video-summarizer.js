@@ -34,7 +34,7 @@ function ffprobeInfo(filePath) {
     );
     return JSON.parse(out);
   } catch (e) {
-    throw new Error(`ffprobe failed: ${e.message}. Install ffmpeg/ffprobe first.`);
+    throw new Error(`ffprobe failed: ${e.message}. Install ffmpeg/ffprobe first.`, { cause: e });
   }
 }
 

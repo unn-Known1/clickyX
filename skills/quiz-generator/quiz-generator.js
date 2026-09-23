@@ -87,7 +87,7 @@ Output ONLY valid JSON array with this structure:
     const questions = JSON.parse(jsonMatch[0]);
 
     // If not including answers, strip them
-    const outputQuestions = includeAnswers ? questions : questions.map(({ answer, explanation, ...q }) => q);
+    const outputQuestions = includeAnswers ? questions : questions.map(({ answer: _answer, explanation: _explanation, ...q }) => q);
 
     return {
       result: `${questions.length} questions generated`,

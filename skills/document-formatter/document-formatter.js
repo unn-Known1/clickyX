@@ -114,7 +114,7 @@ async function main(args) {
 
       case 'wordcount': {
         if (!text) return { error: 'Missing text or filePath' };
-        const stripped = text.replace(/```[\s\S]*?```/g, '').replace(/[#*_`~\[\]()]/g, '');
+        const stripped = text.replace(/```[\s\S]*?```/g, '').replace(/[#*_`~[\]()]/g, '');
         const words = stripped.match(/\b\w+\b/g) || [];
         const headings = (text.match(/^#{1,6} .+$/gm) || []).length;
         return { result: 'Word count', words: words.length, characters: text.length, headings, paragraphs: text.split(/\n\n+/).length };
