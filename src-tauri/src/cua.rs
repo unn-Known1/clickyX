@@ -169,6 +169,7 @@ impl InputSimulator {
     // ydotool is Linux-only (Wayland fallback); other platforms never route
     // here (see click_native), but the symbol must still exist to compile.
     #[cfg(not(target_os = "linux"))]
+    #[allow(dead_code)]
     fn click_via_ydotool(&self, x: f64, y: f64) -> ClickResult {
         ClickResult {
             x,
