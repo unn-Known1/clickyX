@@ -164,3 +164,31 @@ jobs:
             artifacts/**/*.deb
             artifacts/**/*.rpm
             artifacts/**/*.sig
+
+  # NOTE: job-level `permissions` REPLACES the workflow-level block, so this
+  # job gets ONLY `issues: write` (least privilege). No checkout step on
+  # purpose — `gh` API calls need no repo read; `gh` CLI is preinstalled.
+  report-failures:
+    name: Report failures
+    needs: [build, release]
+    if: always()
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - name: File or update nightly-failure issue
+        run: |
+          FAILED=""
+          [ "${{ needs.build.result }}" != "success" ] && FAILED="$FAILED build(${{ needs.build.result }})"
+          [ "${{ needs.release.result }}" != "success" ] && FAILED="$FAILED release(${{ needs.release.result }})"
+          if [ -z "$FAILED" ]; then echo "Nightly green — nothing to report."; exit 0; fi
+          gh run view "${{ github.run_id }}" --log-failed > failed.log 2>&1 || echo "(log unavailable)" > failed.log
+          BODY="Nightly run ${{ github.run_id }} failed:$FAILED @ ${{ github.sha }} — see \`gh run view ${{ github.run_id }} --log-failed\`.\n\n\`\`\`\n$(tail -c 3000 failed.log)\n\`\`\`"
+          EXISTING=$(gh issue list --label nightly-failure --state open --json number -q '.[0].number' || true)
+          if [ -n "$EXISTING" ]; then
+            gh issue comment "$EXISTING" --body "$BODY"
+          else
+            gh issue create --title "Nightly ${{ github.run_id }} failures" --label "ci,nightly,nightly-failure" --body "$BODY"
+          fi

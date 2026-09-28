@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+# .githooks/pre-commit — fast local gates only (target: <60s total).
+# Bypass everything with: SKIP_HOOKS=1 git commit ...
+set -uo pipefail
+
+if [ "${SKIP_HOOKS:-}" = "1" ]; then
+  echo "[pre-commit] skipped (SKIP_HOOKS=1)"
+  exit 0
+fi
+
+FAIL=0
+step() { echo "[pre-commit] $1"; }
+
+step "node scripts/check-i18n.mjs"
+if ! node scripts/check-i18n.mjs; then FAIL=1; fi
+
+step "cargo fmt --check (src-tauri)"
+if ! (cd src-tauri && cargo fmt --check); then FAIL=1; fi
+
+# ESLint: staged js/ts files when present, else fast fallback paths.
+STAGED=$(git diff --cached --name-only --diff-filter=ACM | grep -E '\.(js|jsx|ts|tsx|mjs|cjs)$' || true)
+if [ -n "${STAGED:-}" ]; then
+  step "npx eslint (staged files)"
+  # shellcheck disable=SC2086
+  if ! npx --no-install eslint $STAGED; then FAIL=1; fi
+else
+  step "npx eslint src e2e scripts (no staged js/ts)"
+  if ! npx --no-install eslint src e2e scripts; then FAIL=1; fi
+fi
+
+if [ "$FAIL" -ne 0 ]; then
+  echo "[pre-commit] FAILED — fix above, or bypass with SKIP_HOOKS=1 git commit ..."
+  exit 1
+fi
+echo "[pre-commit] OK"

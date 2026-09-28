@@ -242,3 +242,23 @@ git config user.email "ptelgm.yt@gmail.com"
 | Update signing (P0-T3) | Generate once (`minisign -G -p update.pub -s update.key`); set `UPDATE_SIGNING_KEY_B64` (base64 of the secret key file) and `UPDATE_SIGNING_PUBKEY` (pubkey string). Without these, release artifacts ship unsigned and the in-app updater refuses them |
 | Audio assets | Add `.mp3` files to `public/sounds/` (see `public/sounds/README.md`) |
 | Onboarding video | Add `intro.mp4` to `public/onboarding/` (SVG fallback already rendered) |
+
+---
+
+## Swarm workflow (polish waves)
+
+Parallel agents work file-partitioned lanes; the coordinator merges, verifies, tags.
+
+| Lane | Scope |
+|------|-------|
+| rust | `src-tauri/src/**`, `src-tauri/build.rs`, `src-tauri/capabilities/**` |
+| frontend | `src/**`, `e2e/**`, `tsconfig*.json`, `vite.config.*`, `package.json` |
+| workflows | `.github/**`, `scripts/**`, `src-tauri/tauri.conf.*`, packaging docs |
+
+Rules:
+
+1. Verify your own lane before handing off — rust: `cargo fmt --check` + `cargo check`; frontend: `npm run build` + `npm test`; workflows: `python3 -c "import yaml; yaml.safe_load(...)"` per touched file.
+2. Never commit, push, or create PRs — leave changes in the working tree for the coordinator.
+3. Never touch outside your lane; flag cross-lane needs instead of reaching over.
+4. Coordinator merges lanes, runs full verification, then commits/tags.
+5. CI is fire-and-forget (rule 9): dispatch, report the run URL, move on — never poll.

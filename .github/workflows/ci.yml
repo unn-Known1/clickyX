@@ -112,6 +112,35 @@ jobs:
       # committed (see e2e/visual.spec.ts header + `npm run test:visual:update`).
       # (W-MIN-9: no `cargo test` here — the Build legs run it on all 3 OSes.)
 
+  # Polish enforcer (mirrors release.yml `gate` pattern): standalone job with
+  # no `needs`, so it runs IN PARALLEL with Check/Build — but it is a required
+  # status check, so a red polish BLOCKS merge. Kept lean (<5 min, no Rust
+  # toolchain, no Playwright): i18n + npm audit + codespell only.
+  # Deliberately OMITTED: gitleaks (no verifiable action pin offline; BLOCKED)
+  # and cargo-audit (already covered in Check via `cargo install cargo-audit`;
+  # duplicating the ~2 min install here is wasteful; BLOCKED as duplicate).
+  polish:
+    name: Polish (i18n + audit + spelling)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - name: Install npm dependencies
+        run: npm ci
+      - name: Check i18n completeness
+        run: node scripts/check-i18n.mjs
+      # Fail-hard (not continue-on-error): verified 0 vulnerabilities on master
+      # via local `npm audit --audit-level=high` (2026-09-28).
+      - name: Audit npm dependencies
+        run: npm audit --audit-level=high
+      # Inline --skip flags (no dotfiles): generated deps, snapshots, lockfiles.
+      - name: Check spelling (codespell)
+        run: |
+          pipx run codespell --skip="./node_modules,./src-tauri/target,./target,./e2e/*snapshots*,./package-lock.json,./src-tauri/Cargo.lock,./.git" --ignore-words-list="crate,tauri,webview"
+
   # Resolves the build matrix so manual runs can drop the already-green
   # ubuntu leg (skip-linux). `matrix` can't be read in a job-level `if`,
   # so the OS list is computed here and consumed via fromJSON below.
