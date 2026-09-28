@@ -60,10 +60,12 @@ pub async fn jarvis_analyze(
             jev::declassify_jev_error(&e.to_string())
         )
     })?;
-    let resp = client
-        .decide(state, questions)
-        .await
-        .map_err(|e| format!("judge_unavailable: {}", jev::declassify_jev_error(&e.to_string())))?;
+    let resp = client.decide(state, questions).await.map_err(|e| {
+        format!(
+            "judge_unavailable: {}",
+            jev::declassify_jev_error(&e.to_string())
+        )
+    })?;
 
     let input_tokens = resp.usage.as_ref().map(|u| u.input_tokens).unwrap_or(0);
     let verdict = jarvis::questions::parse_verdict(&resp.answers, input_tokens);
@@ -211,8 +213,8 @@ pub async fn jarvis_draft(
         return Err("jarvis_draft needs at least 1 message".into());
     }
 
-    let model =
-        model.unwrap_or_else(|| crate::ai::get_default_model(&config.ai, &config.ai.default_provider));
+    let model = model
+        .unwrap_or_else(|| crate::ai::get_default_model(&config.ai, &config.ai.default_provider));
     // Never route a decision model into the chat provider (fail-closed).
     if crate::ai::resolve_provider_for_model(&model) == "jev" {
         return Err("jarvis_draft needs a chat model (jev models are decision-only)".into());
@@ -241,7 +243,10 @@ pub async fn jarvis_draft(
                 if parts.len() == 2 {
                     Some(crate::ai::ImageInput {
                         media_type: parts[0].to_string(),
-                        data: parts[1].strip_prefix("base64,").unwrap_or(parts[1]).to_string(),
+                        data: parts[1]
+                            .strip_prefix("base64,")
+                            .unwrap_or(parts[1])
+                            .to_string(),
                     })
                 } else {
                     None
@@ -318,13 +323,19 @@ pub async fn jarvis_rank(
     if drafts.is_empty() {
         return Err("jarvis_rank needs at least 1 draft".into());
     }
-    let client = jev::JevClient::new(&config.jev)
-        .map_err(|e| format!("judge_unavailable: {}", jev::declassify_jev_error(&e.to_string())))?;
+    let client = jev::JevClient::new(&config.jev).map_err(|e| {
+        format!(
+            "judge_unavailable: {}",
+            jev::declassify_jev_error(&e.to_string())
+        )
+    })?;
     let st = state.unwrap_or_else(|| serde_json::json!({"drafts": drafts.len()}));
-    let (winner, ranked) = client
-        .decide_rank(st, &drafts)
-        .await
-        .map_err(|e| format!("judge_unavailable: {}", jev::declassify_jev_error(&e.to_string())))?;
+    let (winner, ranked) = client.decide_rank(st, &drafts).await.map_err(|e| {
+        format!(
+            "judge_unavailable: {}",
+            jev::declassify_jev_error(&e.to_string())
+        )
+    })?;
     Ok(serde_json::json!({
         "winner": winner,
         "ranked": ranked.iter().map(|(i, p)| serde_json::json!({"index": i, "prob": p})).collect::<Vec<_>>(),

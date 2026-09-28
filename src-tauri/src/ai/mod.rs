@@ -93,7 +93,8 @@ Only use these tags when you explicitly need to interact with the screen.
 
 pub fn resolve_provider_for_model(model: &str) -> &str {
     let lower = model.to_ascii_lowercase();
-    if lower.contains("jev") || lower.starts_with("typesafe/") || lower.starts_with("typesafe-ai/") {
+    if lower.contains("jev") || lower.starts_with("typesafe/") || lower.starts_with("typesafe-ai/")
+    {
         "jev"
     } else if model.contains("claude") || model.contains("anthropic") {
         "anthropic"
@@ -147,7 +148,7 @@ pub fn get_default_model(config: &AiConfig, provider: &str) -> String {
     }
 }
 
-pub use jev::{merge_jev_config, JevConfig};
+pub use jev::merge_jev_config;
 
 pub fn merge_ai_config(current: &AiConfig, partial: &serde_json::Value) -> AiConfig {
     let mut config = current.clone();

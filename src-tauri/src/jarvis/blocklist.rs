@@ -49,8 +49,8 @@ fn glob_hit(pattern: &str, text: &str) -> bool {
         t.contains(&p[1..p.len() - 1])
     } else if p.ends_with('*') {
         t.starts_with(&p[..p.len() - 1])
-    } else if p.starts_with('*') {
-        t.ends_with(&p[1..])
+    } else if let Some(suffix) = p.strip_prefix('*') {
+        t.ends_with(suffix)
     } else {
         t.contains(&p)
     }

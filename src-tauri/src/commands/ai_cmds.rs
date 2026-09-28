@@ -93,10 +93,7 @@ pub fn get_jev_config(app: AppHandle) -> Result<JevConfig, String> {
 }
 
 #[tauri::command]
-pub fn update_jev_config(
-    app: AppHandle,
-    partial: serde_json::Value,
-) -> Result<JevConfig, String> {
+pub fn update_jev_config(app: AppHandle, partial: serde_json::Value) -> Result<JevConfig, String> {
     let mut config = config::load_config(&app).unwrap_or_default();
     config.jev = ai::merge_jev_config(&config.jev, &partial);
     // Same invariant as OpenAI: the Jev URL receives the API key.
@@ -145,9 +142,7 @@ pub async fn jev_decide(
     let client =
         jev::JevClient::new(&config.jev).map_err(|e| jev::declassify_jev_error(&e.to_string()))?;
     // Honor a per-request model override only when non-empty; else config model.
-    let model_override = if request.model.trim().is_empty()
-        || request.model == config.jev.model
-    {
+    let model_override = if request.model.trim().is_empty() || request.model == config.jev.model {
         None
     } else {
         Some(request.model.as_str())

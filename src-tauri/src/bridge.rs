@@ -156,10 +156,10 @@ async fn toggle_panel(data: web::Data<BridgeState>) -> HttpResponse {
     }
 }
 
-async fn screenshot(data: web::Data<BridgeState>) -> HttpResponse {
+async fn screenshot() -> HttpResponse {
     // Sync xcap capture on a blocking thread so one /screenshot cannot starve
     // the 2 workers (same reason jarvis/fill uses spawn_blocking).
-    let res = tokio::task::spawn_blocking(|| capture::capture_all_screens()).await;
+    let res = tokio::task::spawn_blocking(capture::capture_all_screens).await;
     match res {
         Ok(Ok(images)) => HttpResponse::Ok().json(ScreenshotResponse { images }),
         Ok(Err(e)) => HttpResponse::InternalServerError().json(ErrorResponse {

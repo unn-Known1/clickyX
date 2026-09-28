@@ -166,6 +166,12 @@ export function invoke<T>(cmd: string, args?: any): Promise<T> {
     if (cmd === "jev_decide") {
       return Promise.resolve({ answers: {}, usage: { input_tokens: 0, output_tokens: 0 } }) as any;
     }
+    if (cmd === "chat_with_vision") {
+      // Mocked vision transcript (JSON array the panel parses; keep sides her/me).
+      return Promise.resolve(
+        '[{"side":"her","text":"hey, are you free tonight?"},{"side":"me","text":"maybe — what did you have in mind?"}]',
+      ) as any;
+    }
     if (cmd === "jarvis_extract") {
       return Promise.resolve({
         title: "Mock Chat",

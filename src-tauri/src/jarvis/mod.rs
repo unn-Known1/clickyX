@@ -12,7 +12,7 @@ pub mod fill;
 pub mod kb;
 pub mod questions;
 
-pub use blocklist::{is_blocklisted, normalize_window_title, session_key};
+pub use blocklist::{is_blocklisted, session_key};
 pub use extract::{extract_focused, FocusedApp};
 pub use fill::{fill_draft, FillOutcome};
 pub use kb::{background_for, load_kb, save_kb, wipe_kb, JarvisKb};
@@ -47,9 +47,7 @@ pub struct JarvisStatus {
 
 /// Rust-enforced gate. Returns the loaded config on success so callers reuse
 /// it (no double-load). Errors are typed `permission_denied…` / `jarvis_…`.
-pub fn require_jarvis_gates(
-    app: &tauri::AppHandle,
-) -> Result<crate::config::AppConfig, String> {
+pub fn require_jarvis_gates(app: &tauri::AppHandle) -> Result<crate::config::AppConfig, String> {
     let config = crate::config::load_config(app)?;
     if !config.jarvis.enabled {
         return Err("jarvis_disabled: enable Jarvis in Settings → Jev Jarvis".into());
@@ -60,11 +58,13 @@ pub fn require_jarvis_gates(
     // OS permission gates (fail-closed where the check is real).
     #[cfg(target_os = "macos")]
     {
-        let sr = crate::permissions::check_permission(&crate::permissions::Permission::ScreenRecording);
+        let sr =
+            crate::permissions::check_permission(&crate::permissions::Permission::ScreenRecording);
         if !sr.granted {
             return Err("permission_denied: screen recording required (System Settings → Privacy → Screen Recording)".into());
         }
-        let ax = crate::permissions::check_permission(&crate::permissions::Permission::Accessibility);
+        let ax =
+            crate::permissions::check_permission(&crate::permissions::Permission::Accessibility);
         if !ax.granted {
             return Err("permission_denied: accessibility required (System Settings → Privacy → Accessibility)".into());
         }

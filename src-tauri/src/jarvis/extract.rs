@@ -63,16 +63,7 @@ pub fn extract_focused() -> Result<FocusedApp, String> {
     let app_name = title.clone();
     let session = super::blocklist::session_key(&title);
 
-    log::info!(
-        "jarvis extract: title_len={} {}x{} fallback={} ds={}",
-        title.len(),
-        img.width,
-        img.height,
-        fallback,
-        display_server
-    );
-
-    Ok(FocusedApp {
+    let focused = FocusedApp {
         title,
         app_name,
         session,
@@ -81,7 +72,9 @@ pub fn extract_focused() -> Result<FocusedApp, String> {
         image_base64: img.data_base64,
         fallback,
         display_server,
-    })
+    };
+    log::info!("jarvis extract: {}", extract_summary(&focused));
+    Ok(focused)
 }
 
 /// One-line declassified summary for logs/status (no title, no pixels).

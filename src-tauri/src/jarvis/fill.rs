@@ -137,7 +137,10 @@ pub fn fill_draft(text: &str) -> Result<FillOutcome, String> {
             })
         }
         Err(e) => {
-            log::warn!("jarvis fill: paste failed ({e}) — copy-only len={}", text.len());
+            log::warn!(
+                "jarvis fill: paste failed ({e}) — copy-only len={}",
+                text.len()
+            );
             Ok(FillOutcome {
                 filled: false,
                 copied: true,

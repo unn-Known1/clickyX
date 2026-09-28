@@ -4,16 +4,16 @@
 //! (lowercase wire types) with calibrated probabilities.
 //!
 //! Surfaces (verified, see JEV_JARVIS_IMPLEMENTATION_REPORT.md rev.2 §1.1):
-//! - Direct:      `POST https://api.typesafe.ai/v1/systemone`
-//!                models `jev-latest`, `jev-1.13.0`, `jev-preview`
-//! - OpenRouter:  `POST https://openrouter.ai/api/alpha/decisions`
-//!                (compat `https://openrouter.ai/api/v1/systemone`)
-//!                request models `typesafe/jev-1.13`, `~typesafe/jev-latest`
-//! - Bocha (CN):  `POST https://jev.bocha.cn/v1/systemone` model `bocha-jev-v1`
-//! - Vercel:      `POST https://ai-gateway.vercel.sh/typesafe/v1/systemone`
-//!                model `typesafe-ai/jev`
-//! - Zen:         `POST https://opencode.ai/zen/v1/systemone` model `jev-1.13`
-//!                (limited-free `jev-1.13-free`, Zen only)
+//! - Direct: `POST https://api.typesafe.ai/v1/systemone`
+//!   models `jev-latest`, `jev-1.13.0`, `jev-preview`
+//! - OpenRouter: `POST https://openrouter.ai/api/alpha/decisions`
+//!   (compat `https://openrouter.ai/api/v1/systemone`)
+//!   request models `typesafe/jev-1.13`, `~typesafe/jev-latest`
+//! - Bocha (CN): `POST https://jev.bocha.cn/v1/systemone` model `bocha-jev-v1`
+//! - Vercel: `POST https://ai-gateway.vercel.sh/typesafe/v1/systemone`
+//!   model `typesafe-ai/jev`
+//! - Zen: `POST https://opencode.ai/zen/v1/systemone` model `jev-1.13`
+//!   (limited-free `jev-1.13-free`, Zen only)
 //!
 //! Store the (provider, base_url, model) triple — never a bare model string.
 
@@ -87,7 +87,11 @@ pub fn merge_jev_config(current: &JevConfig, partial: &serde_json::Value) -> Jev
         }
         if let Some(v) = obj.get("api_key").and_then(|v| v.as_str()) {
             // Explicit empty string clears the key (user-initiated); missing key = keep.
-            config.api_key = if v.is_empty() { None } else { Some(v.to_string()) };
+            config.api_key = if v.is_empty() {
+                None
+            } else {
+                Some(v.to_string())
+            };
         }
     }
     config
@@ -323,6 +327,24 @@ pub fn validate_answer_echo(
     Ok(())
 }
 
+/// Build the dependent rank question over N drafts (call 2).
+/// Always includes an `other` escape hatch so the judge can abstain.
+pub fn build_rank_question(drafts: &[String]) -> Result<serde_json::Value, String> {
+    if drafts.is_empty() {
+        return Err("rank needs at least 1 draft".into());
+    }
+    let mut criteria = BTreeMap::new();
+    for (i, d) in drafts.iter().enumerate() {
+        criteria.insert(
+            format!("draft_{i}"),
+            d.chars().take(500).collect::<String>(),
+        );
+    }
+    // Always include an escape hatch so the judge can abstain.
+    criteria.insert("other".into(), "None of the drafts is acceptable".into());
+    choice_question("Pick the best draft reply.", &criteria)
+}
+
 /// Concentration statistic — NOT P(correct). `(n·max − 1) / (n − 1)`.
 pub fn concentration_stat(probabilities: &BTreeMap<String, f64>) -> f64 {
     let n = probabilities.len() as f64;
@@ -400,7 +422,11 @@ pub fn declassify_jev_error(msg: &str) -> String {
                 .map(|e| idx + e)
                 .unwrap_or(out.len());
             // Keep the prefix kind, drop the secret tail.
-            let keep = if prefix == "Bearer " { "Bearer " } else { prefix };
+            let keep = if prefix == "Bearer " {
+                "Bearer "
+            } else {
+                prefix
+            };
             out.replace_range(idx..end.min(idx + 64), &format!("{keep}[redacted]"));
             if out.len() > 2048 {
                 break;
@@ -416,10 +442,16 @@ pub fn declassify_jev_error(msg: &str) -> String {
 fn map_status(status: reqwest::StatusCode, body: &str) -> AiError {
     let body = declassify_jev_error(&body.chars().take(500).collect::<String>());
     match status.as_u16() {
-        401 | 403 => AiError::Config(format!("jev auth failed ({status}): {body} (no-retry: check key)")),
+        401 | 403 => AiError::Config(format!(
+            "jev auth failed ({status}): {body} (no-retry: check key)"
+        )),
         400 | 422 => AiError::Config(format!("jev bad request ({status}): {body} (fix shape)")),
-        429 => AiError::Api(format!("jev rate-limited (429): {body} (backoff + Retry-After)")),
-        529 => AiError::Api(format!("jev overloaded (529): {body} (backoff + Retry-After)")),
+        429 => AiError::Api(format!(
+            "jev rate-limited (429): {body} (backoff + Retry-After)"
+        )),
+        529 => AiError::Api(format!(
+            "jev overloaded (529): {body} (backoff + Retry-After)"
+        )),
         _ => AiError::Api(format!("jev API error ({status}): {body}")),
     }
 }
@@ -525,18 +557,18 @@ impl JevClient {
         if drafts.len() == 1 {
             return Ok((0, vec![(0, 1.0)]));
         }
-        let mut criteria = BTreeMap::new();
-        for (i, d) in drafts.iter().enumerate() {
-            criteria.insert(format!("draft_{i}"), d.chars().take(500).collect::<String>());
-        }
-        // Always include an escape hatch so the judge can abstain.
-        criteria.insert("other".into(), "None of the drafts is acceptable".into());
-        let q = choice_question("Pick the best draft reply.", &criteria).map_err(AiError::Config)?;
+        let q = build_rank_question(drafts).map_err(AiError::Config)?;
         let mut qs = BTreeMap::new();
         qs.insert("rank".into(), q);
         let resp = self.decide(state, qs).await?;
-        let ans = resp.answers.get("rank").ok_or_else(|| AiError::Decode("missing rank answer".into()))?;
-        let choice = ans.get("choice").and_then(|c| c.as_str()).unwrap_or("draft_0");
+        let ans = resp
+            .answers
+            .get("rank")
+            .ok_or_else(|| AiError::Decode("missing rank answer".into()))?;
+        let choice = ans
+            .get("choice")
+            .and_then(|c| c.as_str())
+            .unwrap_or("draft_0");
         let probs: BTreeMap<String, f64> = ans
             .get("probabilities")
             .and_then(|p| serde_json::from_value(p.clone()).ok())
@@ -571,6 +603,14 @@ pub fn build_judge_state(
         "background": background,
         "history": hist,
     })
+}
+
+// Small helper for the cost test below (keeps response struct minimal).
+impl JevDecideResponse {
+    #[cfg(test)]
+    fn cost_is_some(&self) -> bool {
+        self.usage.as_ref().and_then(|u| u.cost).is_some()
+    }
 }
 
 #[cfg(test)]
@@ -637,7 +677,13 @@ mod tests {
 
     #[test]
     fn test_validate_jev_base_url_rejects_schemes() {
-        for bad in ["file:///etc/passwd", "gopher://x", "ftp://x", "", "api.typesafe.ai/v1"] {
+        for bad in [
+            "file:///etc/passwd",
+            "gopher://x",
+            "ftp://x",
+            "",
+            "api.typesafe.ai/v1",
+        ] {
             assert!(validate_jev_base_url(bad).is_err(), "should reject {bad}");
         }
     }
@@ -674,7 +720,10 @@ mod tests {
     #[test]
     fn test_validate_answer_echo_mismatch() {
         let mut qs = BTreeMap::new();
-        qs.insert("a".into(), serde_json::json!({"type": "noul", "instructions": "x"}));
+        qs.insert(
+            "a".into(),
+            serde_json::json!({"type": "noul", "instructions": "x"}),
+        );
         let mut ans = BTreeMap::new();
         ans.insert("a".into(), serde_json::json!({"type": "choice"}));
         assert!(validate_answer_echo(&qs, &ans).is_err());
@@ -687,15 +736,13 @@ mod tests {
         let c = concentration_stat(&probs);
         assert!((0.0..=1.0).contains(&c));
         // Uniform → 0, peaked → high.
-        let uni: BTreeMap<String, f64> =
-            BTreeMap::from([("a".into(), 0.5), ("b".into(), 0.5)]);
+        let uni: BTreeMap<String, f64> = BTreeMap::from([("a".into(), 0.5), ("b".into(), 0.5)]);
         assert!(concentration_stat(&uni) < 0.01);
     }
 
     #[test]
     fn test_weighted_score_mean() {
-        let probs: BTreeMap<String, f64> =
-            BTreeMap::from([("0".into(), 0.2), ("1".into(), 0.8)]);
+        let probs: BTreeMap<String, f64> = BTreeMap::from([("0".into(), 0.2), ("1".into(), 0.8)]);
         assert!((weighted_score(&probs) - 0.8).abs() < 1e-9);
     }
 
@@ -711,7 +758,10 @@ mod tests {
     fn test_check_limits_flags_overflow() {
         let big_state = serde_json::json!({"t": "x".repeat(200_000)});
         let mut qs = BTreeMap::new();
-        qs.insert("q".into(), serde_json::json!({"type": "noul", "instructions": "s"}));
+        qs.insert(
+            "q".into(),
+            serde_json::json!({"type": "noul", "instructions": "s"}),
+        );
         let err = check_limits(&big_state, &qs).unwrap_err();
         assert!(err.contains("max_tokens_exceeded"));
     }
@@ -762,7 +812,10 @@ mod tests {
     fn test_presets_have_exact_paths() {
         let presets = jev_presets();
         let by_id = |id: &str| presets.iter().find(|p| p.id == id).unwrap().base_url;
-        assert_eq!(by_id("openrouter"), "https://openrouter.ai/api/alpha/decisions");
+        assert_eq!(
+            by_id("openrouter"),
+            "https://openrouter.ai/api/alpha/decisions"
+        );
         assert_eq!(by_id("typesafe"), "https://api.typesafe.ai/v1/systemone");
         assert_eq!(by_id("bocha"), "https://jev.bocha.cn/v1/systemone");
         assert_eq!(
@@ -770,14 +823,12 @@ mod tests {
             "https://ai-gateway.vercel.sh/typesafe/v1/systemone"
         );
         assert_eq!(by_id("zen"), "https://opencode.ai/zen/v1/systemone");
-        assert!(presets.iter().find(|p| p.id == "bocha").unwrap().residency_warning);
-    }
-}
-
-// Small helper for the cost test above (keeps response struct minimal).
-impl JevDecideResponse {
-    #[cfg(test)]
-    fn cost_is_some(&self) -> bool {
-        self.usage.as_ref().and_then(|u| u.cost).is_some()
+        assert!(
+            presets
+                .iter()
+                .find(|p| p.id == "bocha")
+                .unwrap()
+                .residency_warning
+        );
     }
 }

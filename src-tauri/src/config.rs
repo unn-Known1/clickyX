@@ -3,8 +3,8 @@ use std::fs;
 use std::path::PathBuf;
 use tauri::AppHandle;
 
-use crate::ai::AiConfig;
 use crate::ai::jev::JevConfig;
+use crate::ai::AiConfig;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
