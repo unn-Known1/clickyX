@@ -151,7 +151,7 @@ Verified good: localhost-only bind + Host allowlist + token-on-by-default + cons
 
 ---
 
-## 6. Implementation status (2026-09-28, commits `e722dbe` + fixes)
+## 5. Implementation status (2026-09-28, commits `e722dbe` + fixes)
 
 Local verification at commit time: `cargo fmt --check` clean, `cargo check --all-features` 0 warnings,
 `cargo clippy --all-features --tests` 0 warnings, `npm run build` exit 0, `npm test` 18 files / 126 pass,
@@ -194,7 +194,7 @@ CI Build legs run it as gate.
 - W-MIN-11 publishing hosted `releases.clickyx.app` metadata (code now falls back correctly).
 - W-MAJ-8 pre-fix nightly failure heals on next schedule.
 
-## 5. Suggested fix order (ship-blockers first)
+## 6. Suggested fix order (ship-blockers first)
 
 1. W-MAJ-5 — re-tag `v0.2.3` onto `6b04f98` (or cut v0.2.4) so Release can go green; fire-and-forget, don't poll.
 2. W-CRIT-1 + R-MAJ-12 — Flatpak deps (`libpipewire-0.3-dev libdrm-dev libgbm-dev libclang-dev`) + same for docs/CI; re-run Flatpak.
