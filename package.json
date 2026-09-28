@@ -48,7 +48,7 @@
     "react-markdown": "^9",
     "rehype-highlight": "^7",
     "remark-gfm": "^4",
-    "three": "^0.170",
+    "three": "^0.186",
     "zustand": "^5"
   },
   "devDependencies": {
@@ -60,7 +60,7 @@
     "@testing-library/user-event": "^14",
     "@types/react": "^19",
     "@types/react-dom": "^19",
-    "@types/three": "^0.170",
+    "@types/three": "^0.186",
     "@vitejs/plugin-react": "^4",
     "eslint": "^10.11.0",
     "eslint-plugin-react-hooks": "^7.1.1",
