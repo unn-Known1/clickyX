@@ -151,6 +151,49 @@ Verified good: localhost-only bind + Host allowlist + token-on-by-default + cons
 
 ---
 
+## 6. Implementation status (2026-09-28, commits `e722dbe` + fixes)
+
+Local verification at commit time: `cargo fmt --check` clean, `cargo check --all-features` 0 warnings,
+`cargo clippy --all-features --tests` 0 warnings, `npm run build` exit 0, `npm test` 18 files / 126 pass,
+`playwright e2e/jarvis.spec.ts` 3/3 pass, `test:visual:update` 8/8 baselines committed.
+Full `cargo test --all-features` was NOT completed locally (long cold build kept getting aborted);
+CI Build legs run it as gate.
+
+### Fixed in code (see commit `e722dbe` for the full diff)
+- Rust: R-CRIT-3, R-MAJ-5/6 (scorer prefers nsis `-setup.exe`, msiexec kept for real `.msi`), R-MAJ-8,
+  R-MAJ-10, R-MAJ-13, R-MAJ-14, R-MIN-2/3/4/5, R-CRIT-2 (prominent missing-secrets error).
+- Security: S-MAJ-1/2/3/4/6/7/9/10, S-MIN-1/2/3/4/5/7/10/12.
+- Frontend: F-CRIT-1 (8 baselines committed under `e2e/visual.spec.ts-snapshots/`), F-CRIT-2,
+  F-MAJ-1 (+400 keys fr, +400 keys ja, `node scripts/check-i18n.mjs` parity gate), F-MAJ-2/5/6/7/8,
+  F-MIN-1/2/3/4/5/6/7/8/9/10/11.
+- Workflows/packaging/docs: R-CRIT-1/W-CRIT-1, R-CRIT-5/S-MAJ-8, R-MAJ-1/3/11/12, R-MIN-8 (documented),
+  W-MAJ-2/3/4/6/7/9/10, W-MIN-1/2/3/4/5/6/9/12/13/14, R-MIN-7/W-MIN-7 (zip fallback deleted),
+  S-MAJ-5/S-MIN-8/S-MIN-13 (docs), S-MIN-11 (updater 404 → GitHub fallback).
+
+### Corrected after the fact
+- W-MAJ-1: the `secrets.X != ''` STEP-`if:` gate is ILLEGAL — GitHub rejects the entire workflow file
+  at load (zero jobs, instant failure, "workflow file issue"). Reverted to matrix-only step `if:` with
+  the empty-secret check + skip notice INSIDE the pwsh script (commit `72577d5`).
+
+### Release status
+- Tag `v0.2.3` moved `e196413` → `e722dbe`. Tag delete+recreate fired two runs (`36435394301`,
+  `36435414573`) that both startup-failed with zero jobs (loader race on the rewritten ref).
+- `workflow_dispatch` + `RELEASE_TAG` added to `release.yml` (commit `6ae7457`); manual dispatch
+  run `36436065942` (https://github.com/unn-Known1/clickyX/actions/runs/36436065942) — gate job
+  started. Fire-and-forget; CI is the final gate.
+
+### Deferred (breaking or needs a product decision — NOT forgotten)
+- R-MIN-1 deep-link scheme `openclicky` rename; W-MIN-8 identifier `com.clickyx.app` rename.
+- S-MIN-6 secrets-omitting config getter (renderer is same-origin trusted; needs API design).
+- S-MIN-9 autostart/login-item (needs per-OS plugin decision).
+- R-MIN-6 local `targets: all` vs CI-pinned bundles (accepted skew, CI is source of truth).
+
+### External / owner actions (unchanged — cannot be fixed in code)
+- R-CRIT-4 Apple signing secrets; Windows PFX secrets (guard fixed, cert itself is owner-side).
+- F-MAJ-3 six `.mp3` in `public/sounds/`; F-MAJ-4 `intro.mp4` in `public/onboarding/`.
+- W-MIN-11 publishing hosted `releases.clickyx.app` metadata (code now falls back correctly).
+- W-MAJ-8 pre-fix nightly failure heals on next schedule.
+
 ## 5. Suggested fix order (ship-blockers first)
 
 1. W-MAJ-5 — re-tag `v0.2.3` onto `6b04f98` (or cut v0.2.4) so Release can go green; fire-and-forget, don't poll.
