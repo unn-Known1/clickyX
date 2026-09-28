@@ -287,6 +287,49 @@ AI provider configuration. Keys here override the matching entries in `api_keys[
 
 ---
 
+### `jev`
+
+TypeSafe Jev decision-model connection (provider + base URL + model triple + key).
+Jev is decision-only (`choice`/`noul`/`score`) — it never chats; the chat picker
+excludes Jev models by capability.
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `provider` | string | `"openrouter"` | Preset id: `openrouter`, `typesafe`, `bocha`, `vercel`, `zen`, `custom`. |
+| `base_url` | string | `"https://openrouter.ai/api/alpha/decisions"` | Decisions endpoint (explicit `http(s)` only, validated on save/import). |
+| `model` | string | `"typesafe/jev-1.13"` | Namespaced model for the selected surface (e.g. `jev-1.13.0` direct, `bocha-jev-v1`, `jev-1.13` Zen). |
+| `api_key` | string \| null | `null` | Jev/OpenRouter/Gateway key (keychain-backed; file stays empty after migration). |
+
+Presets: OpenRouter `…/api/alpha/decisions` (`typesafe/jev-1.13`), TypeSafe
+`…/v1/systemone` (`jev-1.13.0`), Bocha `https://jev.bocha.cn/v1/systemone`
+(`bocha-jev-v1`, residency warning), Vercel `…/typesafe/v1/systemone`
+(`typesafe-ai/jev`), Zen `https://opencode.ai/zen/v1/systemone` (`jev-1.13`).
+Pricing: $0.042/1M input tokens, output free; limits 64k total + 32k single.
+
+---
+
+### `jarvis`
+
+Jarvis co-pilot mode (fill-only — never auto-send).
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `enabled` | boolean | `true` | Master switch (Rust-enforced with `paused`/permissions/blocklist). |
+| `paused` | boolean | `false` | Pause collection/analysis without losing settings. |
+| `hotkey` | string | `"Ctrl+Shift+J"` | Panel toggle (registered globally; Wayland may swallow it — use the Chat header button). |
+| `auto_trigger` | boolean | `false` | Opt-in auto-analyze on capture-engine frames + session change (60 s throttle). Requires the auto-capture engine running. |
+| `fill_mode` | string | `"clipboard"` | `clipboard` (save → set → paste → restore) — the only mode. |
+| `kb_opt_in_history` | boolean | `false` | Include recent history in judge state (default off). |
+| `blocklist_extra` | string[] | `[]` | Extra substring/glob denies (`*confidential*`, `hr-portal*`). WeChat/banking/payment are always blocked. |
+
+Platform fill notes: Windows `focus + Ctrl+V + restore`, macOS `activate + Cmd+V + restore`,
+X11 `windowfocus + Ctrl+V + restore`, **Wayland copy-only** (no programmatic focus).
+Clipboard needs `xclip` (X11) or `wl-clipboard` (Wayland) where the bundled `arboard`
+backend can't reach the selection; Flatpak ships copy-only unless the Secrets +
+RemoteDesktop portals grant access (see `SETUP.md`).
+
+---
+
 ### `computer_use`
 
 Controls Computer Use Automation (CUA) — autonomous click, scroll, and type operations.

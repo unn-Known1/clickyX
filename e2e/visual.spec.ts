@@ -85,4 +85,16 @@ test.describe("Visual regression", () => {
       animations: "disabled",
     });
   });
+
+  test("jarvis panel matches snapshot", async ({ page }) => {
+    // Mocked verdict + drafts (browser mocks) — no capture hardware needed.
+    await page.click(".start-chat-btn");
+    await page.locator(".chat-jarvis-btn").click();
+    await page.locator(".jarvis-panel-head button").click();
+    await page.waitForSelector(".jarvis-drafts li", { timeout: 10_000 });
+    await expect(page.locator(".jarvis-panel")).toHaveScreenshot("jarvis-panel.png", {
+      maxDiffPixelRatio: THRESHOLD,
+      animations: "disabled",
+    });
+  });
 });

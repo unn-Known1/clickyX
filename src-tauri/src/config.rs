@@ -4,6 +4,33 @@ use std::path::PathBuf;
 use tauri::AppHandle;
 
 use crate::ai::AiConfig;
+use crate::ai::jev::JevConfig;
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct JarvisConfig {
+    pub enabled: bool,
+    pub paused: bool,
+    pub hotkey: String,
+    pub auto_trigger: bool,
+    pub fill_mode: String,
+    pub kb_opt_in_history: bool,
+    pub blocklist_extra: Vec<String>,
+}
+
+impl Default for JarvisConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            paused: false,
+            hotkey: "Ctrl+Shift+J".into(),
+            auto_trigger: false,
+            fill_mode: "clipboard".into(),
+            kb_opt_in_history: false,
+            blocklist_extra: vec![],
+        }
+    }
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
@@ -231,6 +258,8 @@ pub struct AppConfig {
     pub window: WindowPrefs,
     pub version: String,
     pub ai: AiConfig,
+    pub jev: JevConfig,
+    pub jarvis: JarvisConfig,
     pub screen: ScreenConfig,
     pub overlay: OverlayPrefs,
     pub audio: AudioConfig,
@@ -259,12 +288,15 @@ impl Default for AppConfig {
             hotkeys: vec![
                 HotkeyBinding::default(),
                 HotkeyBinding::new("Ctrl+Shift+T", "toggle_type_mode"),
+                HotkeyBinding::new("Ctrl+Shift+J", "toggle_jarvis"),
             ],
             theme: "system".into(),
             api_keys: vec![],
             window: WindowPrefs::default(),
             version: env!("CARGO_PKG_VERSION").into(),
             ai: AiConfig::default(),
+            jev: JevConfig::default(),
+            jarvis: JarvisConfig::default(),
             screen: ScreenConfig::default(),
             overlay: OverlayPrefs::default(),
             audio: AudioConfig::default(),

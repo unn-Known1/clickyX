@@ -4,6 +4,7 @@ import { useAppContext } from "../context/AppContext";
 import GeneralSettings from "./SettingsSections/GeneralSettings";
 import VoiceSettings from "./SettingsSections/VoiceSettings";
 import AiProviderSettings from "./SettingsSections/AiProviderSettings";
+import JarvisSettings from "./SettingsSections/JarvisSettings";
 import ComputerUseSettings from "./SettingsSections/ComputerUseSettings";
 import PermissionsSettings from "./SettingsSections/PermissionsSettings";
 import SystemSettings from "./SettingsSections/SystemSettings";
@@ -14,7 +15,7 @@ import type { IconName } from "./Icon";
 const ModelGeneratorTab = lazy(() => import("./ModelGeneratorTab"));
 
 type SettingsTabId =
-  | "general" | "voice" | "providers" | "computer_use"
+  | "general" | "voice" | "providers" | "jarvis" | "computer_use"
   | "permissions" | "system" | "3d_models" | "connections";
 
 interface NavItem {
@@ -26,6 +27,7 @@ interface NavItem {
 const SETTINGS_TABS: NavItem[] = [
   { id: "general",      label: "settings.sections.general",      icon: "settings" },
   { id: "providers",    label: "settings.sections.providers",    icon: "ai" },
+  { id: "jarvis",       label: "settings.sections.jarvis",       icon: "sparkle" },
   { id: "voice",        label: "settings.sections.voice",        icon: "microphone" },
   { id: "computer_use", label: "settings.sections.computerUse",  icon: "cursor" },
   { id: "connections",  label: "settings.sections.connections",  icon: "connections" },
@@ -41,7 +43,7 @@ interface NavGroup {
 
 const NAV_GROUPS: NavGroup[] = [
   { label: "settings.groups.appearance",  items: ["general"] },
-  { label: "settings.groups.aiVoice",  items: ["providers", "voice"] },
+  { label: "settings.groups.aiVoice",  items: ["providers", "jarvis", "voice"] },
   { label: "settings.groups.automation",  items: ["computer_use", "connections"] },
   { label: "settings.groups.system",      items: ["permissions", "system", "3d_models"] },
 ];
@@ -58,12 +60,15 @@ function SettingsTab({ onOpenAbout }: Props) {
   // Scroll memory: save scroll position per section
   const scrollMemory = useRef<Record<string, number>>({});
 
-  // Consume pending section from CommandPalette / deep-links (via AppContext)
+  // Consume pending section from CommandPalette / deep-links (via AppContext).
+  // Unknown sections are rejected (consumed and ignored) so a stale
+  // `pendingSection` can never wedge the tab forever.
   useEffect(() => {
-    if (pendingSection && SETTINGS_TABS.some((tab) => tab.id === pendingSection)) {
+    if (!pendingSection) return;
+    if (SETTINGS_TABS.some((tab) => tab.id === pendingSection)) {
       setActiveSection(pendingSection as SettingsTabId);
-      consumeSection();
     }
+    consumeSection();
   }, [pendingSection, consumeSection]);
 
   // Save scroll when leaving a section
@@ -119,6 +124,7 @@ function SettingsTab({ onOpenAbout }: Props) {
           {activeSection === "general"      && <GeneralSettings />}
           {activeSection === "voice"        && <VoiceSettings />}
           {activeSection === "providers"    && <AiProviderSettings />}
+          {activeSection === "jarvis"       && <JarvisSettings />}
           {activeSection === "computer_use" && <ComputerUseSettings />}
           {activeSection === "connections"  && <ConnectionsSettings />}
           {activeSection === "permissions"  && <PermissionsSettings />}

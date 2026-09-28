@@ -90,6 +90,11 @@ fn is_dangerous_path(path: &str) -> bool {
         "/agent/",
         "/transcribe",
         "/speak",
+        // Jarvis: screen pixels + AI spend + input injection. Token-always,
+        // even when `bridge_auth_disabled` (same tier as /click /screenshot).
+        // Exact-or-slash: "/jarvis" + "/jarvis/…" match, "/jarvisx" does not.
+        "/jarvis",
+        "/jarvis/",
     ];
     // Exact match for short paths; prefix match for nested ones (/agent/{slug}/run).
     DANGEROUS_PREFIXES.iter().any(|p| {
@@ -383,7 +388,11 @@ mod tests {
                 .wrap(auth)
                 .route("/health", web::get().to(ok_handler))
                 .route("/click", web::post().to(ok_handler))
-                .route("/models", web::get().to(ok_handler)),
+                .route("/models", web::get().to(ok_handler))
+                .route("/jarvis/analyze", web::post().to(ok_handler))
+                .route("/jarvis/fill", web::post().to(ok_handler))
+                .route("/jarvis/status", web::get().to(ok_handler))
+                .route("/jarvis/test", web::post().to(ok_handler)),
         )
         .await
     }
@@ -472,6 +481,34 @@ mod tests {
     }
 
     #[actix_web::test]
+    async fn test_jarvis_routes_require_token_even_when_disabled() {
+        // /jarvis/* is dangerous-tier: token-always, even with auth_disabled.
+        let app = test_app(test_auth(AuthSettings::new(Some("secret".into()), true))).await;
+        for (method, uri) in [
+            ("post", "/jarvis/analyze"),
+            ("post", "/jarvis/fill"),
+            ("get", "/jarvis/status"),
+            ("post", "/jarvis/test"),
+        ] {
+            let req = if method == "get" {
+                actix_web::test::TestRequest::get().uri(uri).to_request()
+            } else {
+                actix_web::test::TestRequest::post().uri(uri).to_request()
+            };
+            assert_eq!(
+                actix_web::test::call_service(&app, req).await.status(),
+                401,
+                "{method} {uri} must require a token"
+            );
+        }
+        let req = actix_web::test::TestRequest::get()
+            .uri("/jarvis/status")
+            .insert_header(("x-bridge-token", "secret"))
+            .to_request();
+        assert_eq!(actix_web::test::call_service(&app, req).await.status(), 200);
+    }
+
+    #[actix_web::test]
     async fn test_rebound_host_rejected() {
         // C-3: DNS rebinding (Host: evil.tld) must 403 even with valid token.
         let app = test_app(test_auth(AuthSettings::new(Some("secret".into()), false))).await;
@@ -526,11 +563,18 @@ mod tests {
         assert!(is_dangerous_path("/agent/foo/stop"));
         assert!(is_dangerous_path("/transcribe"));
         assert!(is_dangerous_path("/speak"));
+        // Jarvis tier (analyze/fill/status/test all token-gated).
+        assert!(is_dangerous_path("/jarvis"));
+        assert!(is_dangerous_path("/jarvis/analyze"));
+        assert!(is_dangerous_path("/jarvis/fill"));
+        assert!(is_dangerous_path("/jarvis/status"));
+        assert!(is_dangerous_path("/jarvis/test"));
         assert!(!is_dangerous_path("/health"));
         assert!(!is_dangerous_path("/models"));
         assert!(!is_dangerous_path("/agents"));
         assert!(!is_dangerous_path("/cursor"));
         assert!(!is_dangerous_path("/clicky")); // prefix trap must not match
+        assert!(!is_dangerous_path("/jarvisx")); // exact-or-slash trap
     }
 
     #[test]

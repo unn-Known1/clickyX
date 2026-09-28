@@ -52,6 +52,7 @@ export default function AboutDialog({ onClose }: Props) {
           <span className="about-copy">© 2026 ClickyX Contributors</span>
         </div>
         <p className="about-build-info">{t("about.builtWith")}</p>
+        <p className="about-build-info">{t("jarvis.attribution")}</p>
       </div>
     </div>
   );

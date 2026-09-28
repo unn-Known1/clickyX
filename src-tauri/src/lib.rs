@@ -9,6 +9,7 @@ mod commands;
 mod config;
 mod cua;
 mod gen3d;
+mod jarvis;
 mod mcp_session;
 mod overlay;
 mod permissions;
@@ -232,6 +233,16 @@ pub(crate) fn register_hotkeys(app: &AppHandle) -> Result<(), String> {
                                     }
                                 }
                             }
+                        }
+                        "toggle_jarvis" => {
+                            // Jarvis co-pilot: show the main window and let the
+                            // frontend open the panel (fill-only, no auto-send).
+                            if let Some(window) = handler_app.get_webview_window("main") {
+                                window.show().ok();
+                                window.set_focus().ok();
+                            }
+                            let _ = handler_app.emit("open-jarvis", ());
+                            log::info!("Jarvis panel toggled via hotkey");
                         }
                         _ => {}
                     }
@@ -662,6 +673,23 @@ pub fn run() {
             commands::get_3d_model_task,
             commands::overlay_show_highlight,
             commands::overlay_show_shape,
+            commands::get_jev_config,
+            commands::update_jev_config,
+            commands::test_jev_judge,
+            commands::jev_decide,
+            commands::get_jev_models,
+            commands::get_jev_presets,
+            commands::get_chat_models,
+            commands::jarvis_analyze,
+            commands::jarvis_fill,
+            commands::jarvis_copy,
+            commands::jarvis_status,
+            commands::jarvis_get_kb,
+            commands::jarvis_save_kb,
+            commands::jarvis_wipe,
+            commands::jarvis_extract,
+            commands::jarvis_draft,
+            commands::jarvis_rank,
         ])
         .build(tauri::generate_context!())
         .expect("error while building ClickyX")

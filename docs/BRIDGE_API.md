@@ -22,7 +22,8 @@ Requests without a valid token receive `401 Unauthorized`.
 **Tiers.** `GET /health` never requires auth. When `bridge_auth_disabled: true` is set
 (explicit opt-out — the Settings UI warns), read-only endpoints are open, but the
 **dangerous tier always requires a token**: `/click`, `/scroll`, `/screenshot`,
-`/v1/messages`, `/v1/responses`, `/mcp/call`, `/agent/*`, `/transcribe`, `/speak`.
+`/v1/messages`, `/v1/responses`, `/mcp/call`, `/agent/*`, `/transcribe`, `/speak`,
+`/jarvis/*` (screen pixels + AI spend + input injection).
 
 **Host validation.** The bridge binds `127.0.0.1:32123` and rejects any `Host` header
 outside `{127.0.0.1, localhost}` with `403` (DNS-rebinding defense).
@@ -49,7 +50,8 @@ outside `{127.0.0.1, localhost}` with `403` (DNS-rebinding defense).
 ```
 
 Common error codes: `not_found`, `bad_request`, `internal_error`, `auth_error`, `overlay_error`,
-`capture_error`, `provider_error`, `transcription_failed`.
+`capture_error`, `provider_error`, `transcription_failed`, `jarvis_analyze_error`,
+`jarvis_fill_error`, `jarvis_status_error`, `jarvis_test_error`.
 
 ---
 
@@ -823,6 +825,69 @@ Perform an automated scroll action at the specified screen coordinates.
 **Response `200`:** `{ "ok": true }`
 
 **Note:** Added in the B-008 CUA scroll fix. Requires accessibility permission on macOS.
+
+---
+
+### `POST /jarvis/analyze`
+
+Judge a transcribed conversation with the TypeSafe Jev decision model
+(batched call: intent, danger, need, should-reply, best-action, tension).
+Fail-closed: judge-down returns `500 jarvis_analyze_error` — callers go
+copy-only, never blind-fill. Blocklisted windows (WeChat/banking/payment)
+are refused before any pixels move.
+
+**Request body:**
+```json
+{
+  "app_id": "Slack — #general",
+  "messages": [{ "role": "user", "content": "her: can you send the report?" }],
+  "background": null,
+  "history": null
+}
+```
+
+**Response `200`:** `{ verdict, session, app, injection, money_or_secret, may_fill, fill_reason, what_was_read }`
+(`what_was_read` carries lengths/cost only — never content.)
+
+---
+
+### `POST /jarvis/fill`
+
+Fill-only paste of an approved draft (clipboard save → set → Ctrl/Cmd+V →
+restore original). Never synthesizes Enter, never clicks send, never calls
+a11y press/click/submit. Secret-shaped drafts and Wayland sessions degrade
+honestly to copy-only (`{ filled: false, copied: true }`).
+
+**Request body:**
+```json
+{ "text": "On it — sending by 3pm.", "app_id": "Slack — #general" }
+```
+
+**Response `200`:** `{ filled, copied, mode, restored }`
+(`mode` is `clipboard-paste` | `copy-only-wayland` | `copy-only-refused-paste`.)
+
+---
+
+### `GET /jarvis/status`
+
+Counts and booleans only (safe to poll with a token; no secrets, no content).
+
+**Response `200`:**
+```json
+{
+  "enabled": true, "paused": false, "hotkey": "Ctrl+Shift+J",
+  "auto_trigger": false, "has_jev_key": true, "wayland_fill_limited": false,
+  "kb_notes": 3, "kb_contacts": 1
+}
+```
+
+---
+
+### `POST /jarvis/test`
+
+Connectivity probe: one minimal Jev `noul` question. Never persists.
+
+**Response `200`:** `{ ok, model, answers, usage, cost_usd }`
 
 ---
 

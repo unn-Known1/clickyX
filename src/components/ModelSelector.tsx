@@ -27,21 +27,23 @@ function ModelSelector({ selectedModel, onModelChange }: ModelSelectorProps) {
   const hasOpenaiKey = !!aiConfig?.openai_api_key;
   const baseUrl = aiConfig?.openai_base_url ?? "";
 
-  // Load model catalog from backend
+  // Load chat-capable models only — Jev decision entries are excluded by the
+  // backend `get_chat_models` allowlist (deny by default, never fallback).
   const { data: allModels = [], isLoading, isError } = useQuery<ModelInfo[]>({
-    queryKey: ["models", hasAnthropicKey, hasOpenaiKey, baseUrl],
-    queryFn: () => commands.getModels(),
+    queryKey: ["models", "chat", hasAnthropicKey, hasOpenaiKey, baseUrl],
+    queryFn: () => commands.getChatModels(),
     staleTime: 60_000,
     enabled: !!aiConfig,
   });
 
   const hasAnyProvider = hasAnthropicKey || hasOpenaiKey;
 
-  // Filter models to only show those for which we have credentials
+  // Filter models to only show those for which we have credentials.
+  // Deny by default: unknown providers are hidden (never `hasAnyProvider` fallback).
   const availableModels = allModels.filter((m) => {
     if (m.provider === "anthropic") return hasAnthropicKey;
     if (m.provider === "openai") return hasOpenaiKey;
-    return hasAnyProvider; // show other provider models if any key exists
+    return false;
   });
 
   // Group by provider for <optgroup> display

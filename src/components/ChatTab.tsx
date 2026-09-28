@@ -7,8 +7,10 @@ import "highlight.js/styles/github-dark.css";
 import { useChat } from "../hooks/useChat";
 import { useVision } from "../hooks/useVision";
 import { useConversations } from "../hooks/useConversations";
+import { useTauriEvent } from "../hooks/useTauriEvent";
 import type { ChatMessage } from "../hooks/useChat";
 import ModelSelector from "./ModelSelector";
+import JarvisPanel from "./JarvisPanel";
 import { Icon } from "./Icon";
 import ConfirmDialog from "./ConfirmDialog";
 import { useAppContext } from "../context/AppContext";
@@ -208,6 +210,11 @@ function ChatTab({ initialText }: { initialText?: string }) {
   const [isDraggingOver, setIsDraggingOver] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [confirmClear, setConfirmClear] = useState(false);
+  const [jarvisOpen, setJarvisOpen] = useState(false);
+
+  // Global hotkey (default Ctrl+Shift+J) + overlay button path: the backend
+  // emits `open-jarvis`; the panel opens fill-only (never auto-send).
+  useTauriEvent("open-jarvis", () => setJarvisOpen(true));
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -380,6 +387,15 @@ function ChatTab({ initialText }: { initialText?: string }) {
         </div>
         <div className="chat-controls">
           <ModelSelector selectedModel={selectedModel} onModelChange={setSelectedModel} />
+          <button
+            className="chat-jarvis-btn"
+            onClick={() => setJarvisOpen((v) => !v)}
+            aria-expanded={jarvisOpen}
+            title={t("jpanel.title")}
+          >
+            <Icon name="sparkle" size={10} />
+            {t("jpanel.short", "Jarvis")}
+          </button>
           {streaming && (
             <button className="chat-stop-btn" onClick={cancelStream}>
               <Icon name="stop" size={10} />
@@ -393,6 +409,7 @@ function ChatTab({ initialText }: { initialText?: string }) {
       </div>
 
       <div className="chat-messages" role="log" aria-live="polite" aria-label={t("chat.chatMessages")}>
+        {jarvisOpen && <JarvisPanel />}
         {messages.length === 0 && !streaming && (
           <div className="chat-empty">
             {t("chat.empty")}

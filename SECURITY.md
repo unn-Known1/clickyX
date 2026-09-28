@@ -59,6 +59,21 @@ ClickyX is a **local-first** desktop app. The following principles apply:
   provider's own API endpoint — or a user-configured `openai_base_url`, which must use an explicit
   `http(s)` scheme and is validated on save. Config exports **redact secrets by default** (explicit
   opt-in required to include them); redacted exports are refused on import so keys can't be wiped silently.
+- **Keychain-first secrets**: when the OS keychain is available, API keys (Anthropic, OpenAI-compatible,
+  Jev) move there on load and the file copies stay empty (`secrets_in_keychain`); reads hydrate from the
+  keychain, writes persist straight to it, and `reset_config` wipes keychain copies so rotated secrets
+  can't be resurrected. `get_config` / `get_ai_config` / `get_agent_config` echo plaintext to the
+  same-principal WebView by design (never to disk or the bridge); only redacted exports leave the machine.
+  Windows file fallback has no ACL — keychain present is the supported path there.
+- **Jev / Jarvis (fail-closed co-pilot)**: the Jev decisions URL receives the API key and is validated to
+  explicit `http(s)` on save/import (same rule as `openai_base_url`); all Jev/bridge errors are
+  declassified (no key material reaches UI, logs, or bridge bodies). Every `jarvis_*` command starts with
+  a Rust-enforced gate (`enabled && !paused && OS permissions && !blocklisted`) — the Settings toggle is
+  UX only. Fill is a dedicated path (clipboard save → set draft → paste → restore original) that hard-refuses
+  Enter, send-region clicks, and a11y `press|click|submit`; secret-shaped drafts and Wayland sessions degrade
+  to copy-only. Logs record lengths/tokens/cost only; `get_logs` redacts; AI errors are declassified.
+  The local KB lives in encrypted `kb.enc` (agent key) with an explicit wipe (`jarvis_wipe`: overwrite +
+  delete + fsync). See `PRIVACY.md` for the data model.
 - **CUA / input simulation**: Click execution via `enigo` is rate-limited and bounds-checked; it can be disabled in settings.
 - **Auto-updater**: Custom platform-aware updater (`updater.rs`). Version comparison is semver-aware
   (downgrades are never offered). Artifacts are installed only after minisign signature verification

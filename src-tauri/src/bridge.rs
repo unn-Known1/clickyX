@@ -111,6 +111,22 @@ struct ClickRequest {
     y: f64,
 }
 
+// ── Jarvis (dangerous tier: token-always) ─────────────────────────────────────
+
+#[derive(Deserialize)]
+struct JarvisAnalyzeBridgeRequest {
+    app_id: String,
+    messages: Vec<crate::ai::ChatMessage>,
+    background: Option<serde_json::Value>,
+    history: Option<Vec<crate::ai::ChatMessage>>,
+}
+
+#[derive(Deserialize)]
+struct JarvisFillBridgeRequest {
+    text: String,
+    app_id: String,
+}
+
 async fn health() -> HttpResponse {
     HttpResponse::Ok().json(HealthResponse {
         status: "ok".into(),
@@ -141,12 +157,18 @@ async fn toggle_panel(data: web::Data<BridgeState>) -> HttpResponse {
 }
 
 async fn screenshot(data: web::Data<BridgeState>) -> HttpResponse {
-    let _app = &data.app_handle;
-    match capture::capture_all_screens() {
-        Ok(images) => HttpResponse::Ok().json(ScreenshotResponse { images }),
-        Err(e) => HttpResponse::InternalServerError().json(ErrorResponse {
+    // Sync xcap capture on a blocking thread so one /screenshot cannot starve
+    // the 2 workers (same reason jarvis/fill uses spawn_blocking).
+    let res = tokio::task::spawn_blocking(|| capture::capture_all_screens()).await;
+    match res {
+        Ok(Ok(images)) => HttpResponse::Ok().json(ScreenshotResponse { images }),
+        Ok(Err(e)) => HttpResponse::InternalServerError().json(ErrorResponse {
             error: "capture_error".into(),
             message: e,
+        }),
+        Err(e) => HttpResponse::InternalServerError().json(ErrorResponse {
+            error: "capture_error".into(),
+            message: format!("capture task failed: {e}"),
         }),
     }
 }
@@ -797,6 +819,84 @@ async fn notify(data: web::Data<BridgeState>, body: web::Json<NotifyRequest>) ->
     HttpResponse::Ok().json(OkResponse { ok: true })
 }
 
+// ── Jarvis bridge handlers (thin wrappers over the Tauri commands) ───────────
+// All four live under /jarvis/* → dangerous tier (token-always). Heavy work
+// (capture/Jev network) runs in the command itself; only the deprecated sync
+// screenshot path below uses spawn_blocking.
+
+async fn jarvis_analyze_bridge(
+    data: web::Data<BridgeState>,
+    body: web::Json<JarvisAnalyzeBridgeRequest>,
+) -> HttpResponse {
+    let app = data.app_handle.clone();
+    match crate::commands::jarvis_analyze(
+        app,
+        body.app_id.clone(),
+        body.messages.clone(),
+        body.background.clone(),
+        body.history.clone(),
+    )
+    .await
+    {
+        Ok(result) => HttpResponse::Ok().json(result),
+        Err(e) => HttpResponse::InternalServerError().json(ErrorResponse {
+            error: "jarvis_analyze_error".into(),
+            message: crate::ai::jev::declassify_jev_error(&e),
+        }),
+    }
+}
+
+async fn jarvis_fill_bridge(
+    data: web::Data<BridgeState>,
+    body: web::Json<JarvisFillBridgeRequest>,
+) -> HttpResponse {
+    let app = data.app_handle.clone();
+    // fill_draft is sync + fast (clipboard + key combo); run it on a blocking
+    // thread so a stuck clipboard/VM never starves the 2 bridge workers.
+    let text = body.text.clone();
+    let app_id = body.app_id.clone();
+    let res = tokio::task::spawn_blocking(move || {
+        let config = crate::config::load_config(&app)?;
+        crate::jarvis::require_window_allowed(&app_id, &config.jarvis.blocklist_extra)?;
+        crate::jarvis::fill::refuse_action_shape("paste-text")?;
+        crate::jarvis::fill_draft(&text)
+    })
+    .await;
+    match res {
+        Ok(Ok(outcome)) => HttpResponse::Ok().json(outcome),
+        Ok(Err(e)) => HttpResponse::InternalServerError().json(ErrorResponse {
+            error: "jarvis_fill_error".into(),
+            message: e,
+        }),
+        Err(e) => HttpResponse::InternalServerError().json(ErrorResponse {
+            error: "jarvis_fill_error".into(),
+            message: format!("fill task failed: {e}"),
+        }),
+    }
+}
+
+async fn jarvis_status_bridge(data: web::Data<BridgeState>) -> HttpResponse {
+    let app = data.app_handle.clone();
+    match crate::commands::jarvis_status(app) {
+        Ok(status) => HttpResponse::Ok().json(status),
+        Err(e) => HttpResponse::InternalServerError().json(ErrorResponse {
+            error: "jarvis_status_error".into(),
+            message: e,
+        }),
+    }
+}
+
+async fn jarvis_test_bridge(data: web::Data<BridgeState>) -> HttpResponse {
+    let app = data.app_handle.clone();
+    match crate::commands::test_jev_judge(app).await {
+        Ok(result) => HttpResponse::Ok().json(result),
+        Err(e) => HttpResponse::InternalServerError().json(ErrorResponse {
+            error: "jarvis_test_error".into(),
+            message: crate::ai::jev::declassify_jev_error(&e),
+        }),
+    }
+}
+
 /// Per-line deadline for MCP child-process I/O (P1/H-01).
 const MCP_IO_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30);
 
@@ -1396,6 +1496,10 @@ async fn run_bridge_server(data: web::Data<BridgeState>, auth: Auth) {
                     .allowed_headers(vec![
                         actix_web::http::header::AUTHORIZATION,
                         actix_web::http::header::CONTENT_TYPE,
+                        // Token aliases the middleware accepts (H-7) — without
+                        // these, browser preflight fails and users disable auth.
+                        actix_web::http::header::HeaderName::from_static("x-openclicky-token"),
+                        actix_web::http::header::HeaderName::from_static("x-bridge-token"),
                     ])
                     .max_age(3600),
             )
@@ -1427,6 +1531,11 @@ async fn run_bridge_server(data: web::Data<BridgeState>, auth: Auth) {
             .route("/agent/{slug}/stop", web::post().to(bridge_stop_agent))
             .route("/agent/{slug}/status", web::get().to(bridge_agent_status))
             .route("/skills", web::get().to(bridge_list_skills))
+            // Jarvis (dangerous tier — token-always even when auth disabled).
+            .route("/jarvis/analyze", web::post().to(jarvis_analyze_bridge))
+            .route("/jarvis/fill", web::post().to(jarvis_fill_bridge))
+            .route("/jarvis/status", web::get().to(jarvis_status_bridge))
+            .route("/jarvis/test", web::post().to(jarvis_test_bridge))
             .default_service(web::route().to(not_found))
     })
     // P0-T1: more than one worker so a single slow/blocking request

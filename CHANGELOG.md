@@ -4,6 +4,26 @@ All notable changes to ClickyX are documented here.
 
 ## [Unreleased]
 
+### Added — Jev decision provider + Jarvis co-pilot (Track 1 + 2)
+- **TypeSafe Jev provider** (`ai/jev.rs`): `JevClient` over OpenRouter / TypeSafe-direct /
+  Bocha (CN, residency warning) / Vercel / Zen / custom triples; `choice`/`noul`/`score`
+  builders + echo/limit validation, band gates, cost accounting, declassified errors,
+  `test_jev_judge` connectivity probe; keychain-backed single key; `get/chat/jev_models`
+  capability split so decision models never leak into the chat picker
+- **Jarvis co-pilot** (manual hotkey + panel, fill-only): `jarvis/` runtime (blocklist,
+  extract, judge pack + rank, encrypted KB, fill-only paste), `jarvis_extract/analyze/
+  draft/rank/fill/copy/status/kb/wipe` commands, chat-panel UI with danger/intent/3×% +
+  what-was-read, knowledge editor, 4-locale strings, palette entry, `Ctrl+Shift+J`
+  hotkey, opt-in auto-trigger (engine frames + 60 s throttle + session change)
+- **Bridge** (`/jarvis/analyze|/fill|/status|/test`, dangerous tier, token-always;
+  token-header CORS fix; `/screenshot` + fill offloaded to blocking threads)
+- **Docs**: `docs/PRIVACY.md` (new), `BRIDGE_API`/`SECURITY` Jarvis sections,
+  `CONFIGURATION`/`SETUP` Jev + clipboard requirements; `e2e/jarvis.spec.ts` (mocked)
+- **Known follow-ups** (not in this change): overlay annotation wiring for Jarvis
+  highlights, AT-SPI2/UIA/AX FFI extraction, Rust OCR eval, 100–200-sample
+  calibration harness, visual-snapshot baselines (`npm run test:visual:update`),
+  Tauri WebDriver real-capture E2E
+
 ### Security (P0 — trust surface rebuilt)
 - **Bridge auth on by default**: high-entropy token generated on first run (and migrated for legacy configs); explicit opt-out only via `bridge_auth_disabled` with UI warning
 - **Dangerous tier always gated**: `/click`, `/scroll`, `/screenshot`, `/v1/*`, `/mcp/call`, `/agent/*`, `/transcribe`, `/speak` require a token even when auth is disabled for read-only routes

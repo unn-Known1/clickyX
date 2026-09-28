@@ -1,6 +1,8 @@
 pub mod anthropic;
+pub mod app_contexts;
 pub mod catalog;
 pub mod guidance;
+pub mod jev;
 pub mod openai;
 pub mod streaming;
 
@@ -90,7 +92,10 @@ Only use these tags when you explicitly need to interact with the screen.
 "#;
 
 pub fn resolve_provider_for_model(model: &str) -> &str {
-    if model.contains("claude") || model.contains("anthropic") {
+    let lower = model.to_ascii_lowercase();
+    if lower.contains("jev") || lower.starts_with("typesafe/") || lower.starts_with("typesafe-ai/") {
+        "jev"
+    } else if model.contains("claude") || model.contains("anthropic") {
         "anthropic"
     } else {
         "openai"
@@ -104,6 +109,10 @@ pub fn create_provider_for_model(
     let provider_name = resolve_provider_for_model(model);
     let full_prompt = format!("{}\n{}", config.system_prompt, CUA_SYSTEM_PROMPT);
     match provider_name {
+        "jev" => Err(AiError::Config(
+            "Jev models are decision-only (choice/noul/score) — use JevClient::decide, not chat()"
+                .into(),
+        )),
         "anthropic" => {
             let api_key = config
                 .anthropic_api_key
@@ -133,32 +142,48 @@ pub fn get_default_model(config: &AiConfig, provider: &str) -> String {
     match provider {
         "anthropic" => config.anthropic_model.clone(),
         "openai" => config.openai_model.clone(),
+        "jev" => "typesafe/jev-1.13".to_string(),
         _ => config.anthropic_model.clone(),
     }
 }
+
+pub use jev::{merge_jev_config, JevConfig};
 
 pub fn merge_ai_config(current: &AiConfig, partial: &serde_json::Value) -> AiConfig {
     let mut config = current.clone();
     if let Some(obj) = partial.as_object() {
         if let Some(v) = obj.get("anthropic_api_key").and_then(|v| v.as_str()) {
-            config.anthropic_api_key = Some(v.to_string());
+            if !v.is_empty() {
+                config.anthropic_api_key = Some(v.to_string());
+            }
         }
         if let Some(v) = obj.get("anthropic_model").and_then(|v| v.as_str()) {
-            config.anthropic_model = v.to_string();
+            if !v.is_empty() {
+                config.anthropic_model = v.to_string();
+            }
         }
         if let Some(v) = obj.get("openai_api_key").and_then(|v| v.as_str()) {
-            config.openai_api_key = Some(v.to_string());
+            if !v.is_empty() {
+                config.openai_api_key = Some(v.to_string());
+            }
         }
         if let Some(v) = obj.get("openai_model").and_then(|v| v.as_str()) {
-            config.openai_model = v.to_string();
+            if !v.is_empty() {
+                config.openai_model = v.to_string();
+            }
         }
         if let Some(v) = obj.get("openai_base_url").and_then(|v| v.as_str()) {
-            config.openai_base_url = v.to_string();
+            if !v.is_empty() {
+                config.openai_base_url = v.to_string();
+            }
         }
         if let Some(v) = obj.get("default_provider").and_then(|v| v.as_str()) {
-            config.default_provider = v.to_string();
+            if !v.is_empty() {
+                config.default_provider = v.to_string();
+            }
         }
         if let Some(v) = obj.get("system_prompt").and_then(|v| v.as_str()) {
+            // system_prompt may legitimately be cleared — allow empty here.
             config.system_prompt = v.to_string();
         }
     }

@@ -346,10 +346,10 @@ Scroll position is remembered per sub-tab.
 
 | Suite | Files | Coverage |
 |-------|-------|----------|
-| Vitest (unit) | `src/context/AppContext.test.tsx`, `useChat.test.ts`, `useConversations.test.ts`, `CommandPalette.test.tsx`, `agentStatus.test.ts` | 30+ cases |
-| Playwright E2E | `e2e/app.spec.ts`, `e2e/chat.spec.ts`, `e2e/settings.spec.ts` | Tab switching, Ctrl+K, input |
+| Vitest (unit) | `src/context/AppContext.test.tsx`, `useChat.test.ts`, `useConversations.test.ts`, `useAiConfig.test.ts`, `useJevConfig.test.ts`, `useJarvis.test.ts`, `useJarvisAutoTrigger.test.ts`, `CommandPalette.test.tsx`, `agentStatus.test.ts` (+ audio/overlay/capture/vision) | 120+ cases |
+| Playwright E2E | `e2e/app.spec.ts`, `e2e/chat.spec.ts`, `e2e/settings.spec.ts`, `e2e/jarvis.spec.ts` (mocked) | Tab switching, Ctrl+K, input, Jarvis verdict + drafts + fill/copy |
 | Playwright visual | `e2e/visual.spec.ts` | `toHaveScreenshot()` for all 4 tabs + palette + status bar |
-| Rust unit | `config.rs` (15), `gen3d.rs` (9), `agent/skills.rs` (10), `automation/mod.rs` (20+) | 50+ cases |
+| Rust unit | `config.rs` (15), `gen3d.rs` (9), `agent/skills.rs` (10), `automation/mod.rs` (20+), `ai/jev.rs` (20), `ai/app_contexts.rs` (4), `jarvis/{blocklist,questions,kb,fill,mod}` (20+), `bridge_auth.rs` (17) | 130+ cases |
 
 Run commands:
 ```sh

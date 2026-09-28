@@ -78,10 +78,10 @@ jobs:
         run: npm run lint
       - name: Audit npm dependencies
         run: npm audit --audit-level=high
-      - name: Run Playwright E2E (app/chat/settings)
+      - name: Run Playwright E2E (app/chat/settings/jarvis-mocked)
         run: |
           npx playwright install --with-deps chromium
-          npx playwright test e2e/app.spec.ts e2e/chat.spec.ts e2e/settings.spec.ts
+          npx playwright test e2e/app.spec.ts e2e/chat.spec.ts e2e/settings.spec.ts e2e/jarvis.spec.ts
         env:
           CI: true
       # NOTE: e2e/visual.spec.ts runs manually only until pixel baselines are

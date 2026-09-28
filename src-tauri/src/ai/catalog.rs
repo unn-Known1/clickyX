@@ -82,6 +82,25 @@ impl ModelCatalog {
                 name: "o3-mini".into(),
                 capabilities: vec!["chat".into(), "streaming".into()],
             },
+            // Jev decision models — decide/judge/rank only, NEVER chat.
+            ModelInfo {
+                id: "typesafe/jev-1.13".into(),
+                provider: "jev".into(),
+                name: "Jev 1.13 (OpenRouter)".into(),
+                capabilities: vec!["decide".into(), "judge".into(), "rank".into()],
+            },
+            ModelInfo {
+                id: "jev-1.13.0".into(),
+                provider: "jev".into(),
+                name: "Jev 1.13.0 (Direct)".into(),
+                capabilities: vec!["decide".into(), "judge".into(), "rank".into()],
+            },
+            ModelInfo {
+                id: "jev-latest".into(),
+                provider: "jev".into(),
+                name: "Jev Latest (Direct)".into(),
+                capabilities: vec!["decide".into(), "judge".into(), "rank".into()],
+            },
         ]
     }
 
@@ -135,6 +154,20 @@ impl ModelCatalog {
             .iter()
             .filter(|m| m.provider == provider)
             .collect()
+    }
+
+    /// Models exposing a capability (e.g. `"chat"` for the chat picker,
+    /// `"decide"`/`"judge"` for the Jev picker). Jev entries carry
+    /// `decide/judge/rank` and are excluded from chat lists by construction.
+    pub fn get_capability_models(&self, capability: &str) -> Vec<&ModelInfo> {
+        self.models
+            .iter()
+            .filter(|m| m.capabilities.iter().any(|c| c == capability))
+            .collect()
+    }
+
+    pub fn get_jev_models(&self) -> Vec<&ModelInfo> {
+        self.get_provider_models("jev")
     }
 
     pub fn merge_remote(&mut self, remote: Vec<ModelInfo>) {

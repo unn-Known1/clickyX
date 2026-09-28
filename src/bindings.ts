@@ -38,6 +38,21 @@ export function invoke<T>(cmd: string, args?: any): Promise<T> {
           default_provider: "anthropic",
           system_prompt: "",
         },
+        jev: {
+          provider: "openrouter",
+          base_url: "https://openrouter.ai/api/alpha/decisions",
+          model: "typesafe/jev-1.13",
+          api_key: null,
+        },
+        jarvis: {
+          enabled: true,
+          paused: false,
+          hotkey: "Ctrl+Shift+J",
+          auto_trigger: false,
+          fill_mode: "clipboard",
+          kb_opt_in_history: false,
+          blocklist_extra: [],
+        },
         screen: { max_dimension: 1280, jpeg_quality: 80, cache_ttl_secs: 3 },
         overlay: {
           cursor_accent: "#4fc3f7",
@@ -118,6 +133,99 @@ export function invoke<T>(cmd: string, args?: any): Promise<T> {
         default_provider: "anthropic",
         system_prompt: "",
       }) as any;
+    }
+    if (cmd === "get_jev_config") {
+      return Promise.resolve({
+        provider: "openrouter",
+        base_url: "https://openrouter.ai/api/alpha/decisions",
+        model: "typesafe/jev-1.13",
+        api_key: null,
+      }) as any;
+    }
+    if (cmd === "get_jev_presets") {
+      return Promise.resolve([
+        { id: "openrouter", label: "OpenRouter Decisions", base_url: "https://openrouter.ai/api/alpha/decisions", model: "typesafe/jev-1.13", residency_warning: false },
+        { id: "typesafe", label: "TypeSafe Direct", base_url: "https://api.typesafe.ai/v1/systemone", model: "jev-1.13.0", residency_warning: false },
+        { id: "bocha", label: "Bocha (CN)", base_url: "https://jev.bocha.cn/v1/systemone", model: "bocha-jev-v1", residency_warning: true },
+        { id: "vercel", label: "Vercel AI Gateway", base_url: "https://ai-gateway.vercel.sh/typesafe/v1/systemone", model: "typesafe-ai/jev", residency_warning: false },
+        { id: "zen", label: "OpenCode Zen", base_url: "https://opencode.ai/zen/v1/systemone", model: "jev-1.13", residency_warning: false },
+      ]) as any;
+    }
+    if (cmd === "get_jev_models") {
+      return Promise.resolve([
+        { id: "typesafe/jev-1.13", provider: "jev", name: "Jev 1.13 (OpenRouter)", capabilities: ["decide", "judge", "rank"] },
+        { id: "jev-1.13.0", provider: "jev", name: "Jev 1.13.0 (Direct)", capabilities: ["decide", "judge", "rank"] },
+      ]) as any;
+    }
+    if (cmd === "get_chat_models") {
+      return Promise.resolve([]) as any;
+    }
+    if (cmd === "test_jev_judge") {
+      return Promise.resolve({ ok: true, model: "typesafe/jev-1.13", answers: {}, usage: { input_tokens: 0, output_tokens: 0 }, cost_usd: 0 }) as any;
+    }
+    if (cmd === "jev_decide") {
+      return Promise.resolve({ answers: {}, usage: { input_tokens: 0, output_tokens: 0 } }) as any;
+    }
+    if (cmd === "jarvis_extract") {
+      return Promise.resolve({
+        title: "Mock Chat",
+        app_name: "Mock Chat",
+        session: "jarvis-mock",
+        width: 800,
+        height: 600,
+        image_base64: "",
+        fallback: true,
+        display_server: "mock",
+      }) as any;
+    }
+    if (cmd === "jarvis_analyze") {
+      return Promise.resolve({
+        verdict: {
+          intent: "question", intent_confidence: 0.8,
+          danger_0idx: 1.0, danger_1idx: 2.0, danger_confidence: 0.7,
+          need: "answer", should_reply: 0.9, best_action: "reply",
+          tension_0idx: 2.0, cost_usd: 0, input_tokens: 0,
+        },
+        session: "jarvis-mock",
+        app: "Mock Chat",
+        injection: false,
+        money_or_secret: false,
+        may_fill: true,
+        fill_reason: "ok",
+        what_was_read: { messages: 1, msg_chars: 10, history: 0, kb_notes: 0, kb_contacts: 0, model: null, input_tokens: 0, cost_usd: 0, injection: false },
+      }) as any;
+    }
+    if (cmd === "jarvis_draft") {
+      return Promise.resolve(["Mock draft one", "Mock draft two", "Mock draft three"]) as any;
+    }
+    if (cmd === "jarvis_rank") {
+      const n = (args?.drafts?.length ?? 1) as number;
+      return Promise.resolve({
+        winner: 0,
+        ranked: Array.from({ length: n }, (_, i) => ({ index: i, prob: i === 0 ? 0.7 : 0.3 / Math.max(1, n - 1) })),
+      }) as any;
+    }
+    if (cmd === "jarvis_fill") {
+      return Promise.resolve({ filled: false, copied: true, mode: "copy-only-wayland", restored: false }) as any;
+    }
+    if (cmd === "jarvis_copy") {
+      return Promise.resolve(true) as any;
+    }
+    if (cmd === "jarvis_status") {
+      return Promise.resolve({
+        enabled: true, paused: false, hotkey: "Ctrl+Shift+J",
+        auto_trigger: false, has_jev_key: false, wayland_fill_limited: false,
+        kb_notes: 0, kb_contacts: 0,
+      }) as any;
+    }
+    if (cmd === "jarvis_get_kb") {
+      return Promise.resolve({ notes: [], contacts: [], history_opt_in: false }) as any;
+    }
+    if (cmd === "jarvis_save_kb") {
+      return Promise.resolve(args?.kb ?? { notes: [], contacts: [], history_opt_in: false }) as any;
+    }
+    if (cmd === "jarvis_wipe") {
+      return Promise.resolve(undefined) as any;
     }
     if (cmd === "get_models") {
       // In browser mode, return empty list to simulate no provider configured
@@ -251,6 +359,9 @@ export interface AppConfig {
   window: { pin: boolean; width: number; height: number };
   version: string;
   onboarding_completed?: boolean;
+  ai?: AiConfig;
+  jev?: JevConfig;
+  jarvis?: JarvisConfig;
   overlay: {
     cursor_accent: string;
     cursor_size: number;
@@ -294,6 +405,127 @@ export interface AiConfig {
   openai_base_url: string;
   default_provider: string;
   system_prompt: string;
+}
+
+export interface JevConfig {
+  provider: string;
+  base_url: string;
+  model: string;
+  api_key: string | null;
+}
+
+export interface JarvisConfig {
+  enabled: boolean;
+  paused: boolean;
+  hotkey: string;
+  auto_trigger: boolean;
+  fill_mode: string;
+  kb_opt_in_history: boolean;
+  blocklist_extra: string[];
+}
+
+export interface JevPreset {
+  id: string;
+  label: string;
+  base_url: string;
+  model: string;
+  residency_warning: boolean;
+}
+
+export interface JevUsage {
+  input_tokens: number;
+  output_tokens: number;
+  cost?: number | null;
+}
+
+export interface JevDecideRequest {
+  model: string;
+  state: unknown;
+  questions: Record<string, unknown>;
+}
+
+export interface JevDecideResponse {
+  model?: string | null;
+  id?: string | null;
+  provider?: string | null;
+  answers: Record<string, unknown>;
+  usage?: JevUsage | null;
+}
+
+// ── Jarvis co-pilot ───────────────────────────────────────────────────────────
+export interface FocusedApp {
+  title: string;
+  app_name: string;
+  session: string;
+  width: number;
+  height: number;
+  image_base64: string;
+  fallback: boolean;
+  display_server: string;
+}
+
+export interface JudgeVerdict {
+  intent: string;
+  intent_confidence: number;
+  danger_0idx: number;
+  danger_1idx: number;
+  danger_confidence: number;
+  need: string;
+  should_reply: number;
+  best_action: string;
+  tension_0idx: number;
+  cost_usd: number;
+  input_tokens: number;
+}
+
+export interface JarvisAnalyzeResult {
+  verdict: JudgeVerdict;
+  session: string;
+  app: string;
+  injection: boolean;
+  money_or_secret: boolean;
+  may_fill: boolean;
+  fill_reason: string;
+  what_was_read: {
+    messages: number;
+    msg_chars: number;
+    history: number;
+    kb_notes: number;
+    kb_contacts: number;
+    model?: string | null;
+    input_tokens: number;
+    cost_usd: number;
+    injection: boolean;
+  };
+}
+
+export interface FillOutcome {
+  filled: boolean;
+  copied: boolean;
+  mode: string;
+  restored: boolean;
+}
+
+export interface JarvisStatus {
+  enabled: boolean;
+  paused: boolean;
+  hotkey: string;
+  auto_trigger: boolean;
+  has_jev_key: boolean;
+  wayland_fill_limited: boolean;
+  kb_notes: number;
+  kb_contacts: number;
+}
+
+export interface JarvisKb {
+  notes: { tag: string; text: string }[];
+  contacts: { name: string }[];
+  history_opt_in: boolean;
+}
+
+export interface RankResult {
+  winner: number;
+  ranked: { index: number; prob: number }[];
 }
 
 export interface AudioConfig {
@@ -456,6 +688,29 @@ export const commands = {
   getAiConfig: () => invoke<AiConfig>("get_ai_config"),
   updateAiConfig: (partial: Partial<AiConfig>) => invoke<AiConfig>("update_ai_config", { partial }),
   getModels: () => invoke<ModelInfo[]>("get_models"),
+  getChatModels: () => invoke<ModelInfo[]>("get_chat_models"),
+  // Jev decision provider (Track 1)
+  getJevConfig: () => invoke<JevConfig>("get_jev_config"),
+  updateJevConfig: (partial: Partial<JevConfig>) => invoke<JevConfig>("update_jev_config", { partial }),
+  getJevModels: () => invoke<ModelInfo[]>("get_jev_models"),
+  getJevPresets: () => invoke<JevPreset[]>("get_jev_presets"),
+  testJevJudge: () => invoke<{ ok: boolean; model?: string | null; answers: Record<string, unknown>; usage?: JevUsage | null; cost_usd: number }>("test_jev_judge"),
+  jevDecide: (request: JevDecideRequest) => invoke<JevDecideResponse>("jev_decide", { request }),
+
+  // Jarvis co-pilot (Track 2)
+  jarvisExtract: () => invoke<FocusedApp>("jarvis_extract"),
+  jarvisAnalyze: (appId: string, messages: { role: string; content: string }[], background?: unknown, history?: { role: string; content: string }[]) =>
+    invoke<JarvisAnalyzeResult>("jarvis_analyze", { appId, messages, background: background ?? null, history: history ?? null }),
+  jarvisDraft: (appId: string, messages: { role: string; content: string }[], images?: string[], model?: string | null, background?: string | null) =>
+    invoke<string[]>("jarvis_draft", { appId, messages, images: images ?? [], model: model ?? null, background: background ?? null }),
+  jarvisRank: (drafts: string[], state?: unknown) =>
+    invoke<RankResult>("jarvis_rank", { drafts, state: state ?? null }),
+  jarvisFill: (text: string, appId: string) => invoke<FillOutcome>("jarvis_fill", { text, appId }),
+  jarvisCopy: (text: string) => invoke<boolean>("jarvis_copy", { text }),
+  jarvisStatus: () => invoke<JarvisStatus>("jarvis_status"),
+  jarvisGetKb: () => invoke<JarvisKb>("jarvis_get_kb"),
+  jarvisSaveKb: (kb: JarvisKb) => invoke<JarvisKb>("jarvis_save_kb", { kb }),
+  jarvisWipe: () => invoke<void>("jarvis_wipe"),
 
   // Audio
   getAudioConfig: () => invoke<AudioConfig>("get_audio_config"),

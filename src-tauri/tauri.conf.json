@@ -36,7 +36,7 @@
       "tooltip": "ClickyX"
     },
     "security": {
-      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self' https://*.clickyx.app https://api.openai.com https://api.anthropic.com https://api.deepgram.com https://api.elevenlabs.io wss://api.deepgram.com; img-src 'self' data: blob:"
+      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self' https://*.clickyx.app https://api.openai.com https://api.anthropic.com https://api.deepgram.com https://api.elevenlabs.io wss://api.deepgram.com https://openrouter.ai https://api.typesafe.ai https://jev.bocha.cn https://ai-gateway.vercel.sh https://opencode.ai; img-src 'self' data: blob:"
     }
   },
   "bundle": {

@@ -21,8 +21,17 @@ sudo apt-get install -y \
   libgbm-dev \
   libasound2-dev \
   libpulse-dev \
-  libspeechd-dev
+  libspeechd-dev \
+  xclip \
+  wl-clipboard
 ```
+
+Jarvis clipboard fill uses the bundled `arboard` backend first; `xclip` (X11)
+and `wl-clipboard` (Wayland) are the documented fallbacks where the sandbox
+blocks direct selection access. Wayland sessions are copy-only in v1 (no
+programmatic focus) — the panel copies and the user pastes. Flatpak adds the
+ScreenCast/RemoteDesktop/a11y-Bus permissions but no Secrets portal: clipboard
+fill is copy-only there and API keys fall back to the encrypted file store.
 
 > [!NOTE]
 > CI runs on `ubuntu-24.04` (xcap 0.9 needs PipeWire 1.x headers, unavailable on 22.04).

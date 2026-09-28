@@ -72,6 +72,17 @@ pub fn update_config(app: AppHandle, partial: serde_json::Value) -> Result<AppCo
                 config.wake_word = w;
             }
         }
+        // Jev triple + Jarvis prefs (silently dropping these bricking setup).
+        if let Some(jev) = obj.get("jev") {
+            config.jev = crate::ai::merge_jev_config(&config.jev, jev);
+            crate::ai::jev::validate_jev_base_url(&config.jev.base_url)?;
+            persist_config_secrets(&mut config);
+        }
+        if let Some(jarvis) = obj.get("jarvis") {
+            if let Ok(j) = serde_json::from_value(jarvis.clone()) {
+                config.jarvis = j;
+            }
+        }
         // #60: persist bridge_token changes from the UI
         if let Some(bt) = obj.get("bridge_token") {
             if bt.is_null() {
@@ -227,6 +238,15 @@ fn redact_config_value(config: &AppConfig) -> serde_json::Value {
                 }
             }
         }
+        // Jev API key.
+        if let Some(jev) = obj.get_mut("jev").and_then(|j| j.as_object_mut()) {
+            if jev.contains_key("api_key") {
+                jev.insert(
+                    "api_key".into(),
+                    serde_json::Value::String(REDACTED_SENTINEL.into()),
+                );
+            }
+        }
         // MCP server env blocks frequently hold tokens — redact values, keep names.
         if let Some(servers) = obj.get_mut("mcp_servers").and_then(|s| s.as_array_mut()) {
             for server in servers.iter_mut() {
@@ -270,6 +290,7 @@ pub fn import_config(app: AppHandle, json: String) -> Result<AppConfig, String> 
     // P0-T2/H-6: the OpenAI-compatible base URL receives the user's API key —
     // only allow explicit http(s) hosts so a typo can't become key exfiltration.
     validate_openai_base_url(&config.ai.openai_base_url)?;
+    crate::ai::jev::validate_jev_base_url(&config.jev.base_url)?;
     // P3/T2: new secrets go straight to the OS keychain when available.
     crate::secret_store::persist_config_secrets(&mut config);
     config::save_config(&app, &config)?;
@@ -292,6 +313,8 @@ pub(crate) fn validate_openai_base_url(base_url: &str) -> Result<(), String> {
 
 #[tauri::command]
 pub fn reset_config(app: AppHandle) -> Result<AppConfig, String> {
+    // Wipe keychain copies first so hydration can't resurrect rotated secrets.
+    crate::secret_store::wipe_secrets(&crate::secret_store::KeychainStore);
     let config = AppConfig::default();
     config::save_config(&app, &config)?;
     Ok(config)

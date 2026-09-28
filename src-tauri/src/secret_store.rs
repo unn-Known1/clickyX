@@ -25,6 +25,7 @@ pub mod keys {
     pub const AGENT_ENCRYPTION_KEY: &str = "agent_encryption_key";
     pub const ANTHROPIC_API_KEY: &str = "ai.anthropic_api_key";
     pub const OPENAI_API_KEY: &str = "ai.openai_api_key";
+    pub const JEV_API_KEY: &str = "jev.api_key";
 
     pub fn legacy_api_key(provider: &str) -> String {
         format!("apikey.{provider}")
@@ -175,6 +176,7 @@ pub fn migrate_secrets_to_store(
     }
     move_opt(&mut config.ai.anthropic_api_key, keys::ANTHROPIC_API_KEY);
     move_opt(&mut config.ai.openai_api_key, keys::OPENAI_API_KEY);
+    move_opt(&mut config.jev.api_key, keys::JEV_API_KEY);
     for api_key in &mut config.api_keys {
         if api_key.key.is_empty() {
             continue;
@@ -229,6 +231,15 @@ pub fn hydrate_secrets_from_store(config: &mut crate::config::AppConfig, store: 
         .unwrap_or(true)
     {
         config.ai.openai_api_key = store.get(keys::OPENAI_API_KEY);
+    }
+    if config
+        .jev
+        .api_key
+        .as_ref()
+        .map(|k| k.is_empty())
+        .unwrap_or(true)
+    {
+        config.jev.api_key = store.get(keys::JEV_API_KEY);
     }
     for api_key in &mut config.api_keys {
         if api_key.key.is_empty() {
@@ -289,6 +300,11 @@ pub fn persist_config_secrets(config: &mut crate::config::AppConfig) {
             landed = true;
         }
     }
+    if let Some(k) = config.jev.api_key.clone() {
+        if persist_secret(&store, keys::JEV_API_KEY, &k) {
+            landed = true;
+        }
+    }
     for api_key in &config.api_keys {
         if persist_secret(
             &store,
@@ -339,12 +355,34 @@ pub fn strip_verified_secrets(
             stripped.ai.openai_api_key = None;
         }
     }
+    if let Some(k) = config.jev.api_key.clone() {
+        if same(keys::JEV_API_KEY, &k) {
+            stripped.jev.api_key = None;
+        }
+    }
     for (i, k) in config.api_keys.iter().enumerate() {
         if same(&keys::legacy_api_key(&k.provider), &k.key) {
             stripped.api_keys[i].key.clear();
         }
     }
     stripped
+}
+
+/// Best-effort wipe of every known keychain entry (used by `reset_config`
+/// so rotated secrets can't be resurrected by hydration).
+pub fn wipe_secrets(store: &dyn SecretStore) {
+    if !store.available() {
+        return;
+    }
+    for key in [
+        keys::BRIDGE_TOKEN,
+        keys::AGENT_ENCRYPTION_KEY,
+        keys::ANTHROPIC_API_KEY,
+        keys::OPENAI_API_KEY,
+        keys::JEV_API_KEY,
+    ] {
+        let _ = store.delete(key);
+    }
 }
 
 #[cfg(test)]
