@@ -138,15 +138,16 @@ jobs:
       # W-MAJ-4/R-MIN-7/W-MIN-7: no unsigned .app.zip fallback — the updater
       # scorer never selects .zip, and an unsigned zip would ship without .sig.
       - name: Sign Windows artifacts
-        # W-MAJ-1: gate on the secret itself — a step-level env var is not
-        # populated at if-condition evaluation time, so env.SIGNING_CERT here
-        # would silently never run signing even with secrets set.
-        if: matrix.os == 'windows-latest' && secrets.WINDOWS_SIGNING_CERT != ''
+        # NOTE: `secrets.*` is not allowed in a step `if:` (the whole workflow
+        # fails to parse with zero jobs) — gate on matrix only and check the
+        # secret inside the script, where empty means "skip with a notice".
+        if: matrix.os == 'windows-latest'
         env:
           SIGNING_CERT: ${{ secrets.WINDOWS_SIGNING_CERT }}
           SIGNING_PASSWORD: ${{ secrets.WINDOWS_SIGNING_PASSWORD }}
         shell: pwsh
         run: |
+          if ([string]::IsNullOrEmpty($env:SIGNING_CERT)) { Write-Host "No Windows signing cert — shipping unsigned"; exit 0 }
           $certBytes = [Convert]::FromBase64String($env:SIGNING_CERT)
           $certPath = "$env:TEMP\signing.pfx"
           [IO.File]::WriteAllBytes($certPath, $certBytes)
