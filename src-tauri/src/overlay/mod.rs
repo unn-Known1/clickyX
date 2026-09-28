@@ -13,20 +13,36 @@ use crate::agent::dock::AgentDockState;
 use lifecycle::AnnotationState;
 use manager::AnnotationManager;
 
-/// Log a warning if running on a display server or compositor with known
-/// transparency / input-passthrough limitations.
+/// Note display servers / compositors with known transparency or
+/// input-passthrough limitations (informational only — never a gate).
+///
+/// - Wayland on a compositor outside the GNOME/KDE/Unity/Budgie/POP allowlist
+///   (e.g. wlroots/Sway): many work fine, so this is `info`, not `warn`.
+/// - Bare X11 without a compositor (no xcompmgr/picom/compton running):
+///   fullscreen `always_on_top` transparent overlay windows may render opaque
+///   and cover the screen. If overlays look solid, install + enable a
+///   compositor. (S-MIN-4: documented; no process scan — env-only detection
+///   would be racy and platform-specific.)
 #[cfg(target_os = "linux")]
-fn warn_compositor_quirks() {
-    if crate::platform::display_server() == "wayland" {
+fn note_compositor_quirks() {
+    let ds = crate::platform::display_server();
+    if ds == "wayland" {
         let de = std::env::var("XDG_CURRENT_DESKTOP").unwrap_or_default();
         let known_good = ["GNOME", "KDE", "Unity", "Budgie", "POP"];
         if !known_good.iter().any(|k| de.contains(k)) {
-            log::warn!(
+            // R-MIN-5: informational — wlroots/Sway and friends usually work.
+            log::info!(
                 "Display server: Wayland, compositor: {}. Overlay transparency \
                  and input-passthrough may not work as expected on this compositor.",
                 if de.is_empty() { "unknown" } else { &de }
             );
         }
+    } else if ds == "x11" {
+        // S-MIN-4: bare-X11 compositor note (see doc comment above).
+        log::info!(
+            "Display server: X11. Overlay transparency needs a running compositor \
+             (xcompmgr/picom/compton); without one overlays may render opaque."
+        );
     }
 }
 
@@ -94,7 +110,7 @@ pub struct CaptionPayload {
 
 pub fn init_manager() -> Mutex<AnnotationManager> {
     #[cfg(target_os = "linux")]
-    warn_compositor_quirks();
+    note_compositor_quirks();
     Mutex::new(AnnotationManager::new())
 }
 

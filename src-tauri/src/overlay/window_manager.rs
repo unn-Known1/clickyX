@@ -54,6 +54,10 @@ impl<R: Runtime> OverlayWindowManager<R> {
                     .resizable(false)
                     .fullscreen(false)
                     .transparent(true)
+                    // S-MIN-5: overlays must never steal keyboard focus — a
+                    // focus-steal right before a fill-paste would retarget the
+                    // paste into the wrong window.
+                    .focusable(false)
                     .visible(false); // B-012: start hidden; shown explicitly via show_overlay
             let window = builder
                 .build()
@@ -124,6 +128,8 @@ impl<R: Runtime> OverlayWindowManager<R> {
                         .skip_taskbar(true)
                         .resizable(false)
                         .transparent(true)
+                        // S-MIN-5: see create_per_screen_windows — no focus steal.
+                        .focusable(false)
                         .visible(false); // B-012: start hidden
                 let window = builder
                     .build()

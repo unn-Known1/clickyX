@@ -46,9 +46,43 @@ fn with_capture_guide<T>(result: Result<T, String>) -> Result<T, String> {
     })
 }
 
+/// R-MIN-4: per-OS capture-failure hints (the Linux PipeWire/portal hints
+/// above have Windows/macOS equivalents here instead of raw errors).
+#[cfg(target_os = "macos")]
+fn capture_hint(permission: bool) -> Option<&'static str> {
+    if permission {
+        Some("Hint (macOS): grant Screen Recording permission in System Settings → Privacy & Security → Screen Recording, then relaunch the app (TCC requires a restart to take effect).")
+    } else {
+        Some("Hint (macOS): if this persists, re-grant Screen Recording in System Settings → Privacy & Security and relaunch.")
+    }
+}
+
+#[cfg(target_os = "windows")]
+fn capture_hint(permission: bool) -> Option<&'static str> {
+    if permission {
+        Some("Hint (Windows): grant screen-capture permission in Settings → Privacy & security, and run the app as the same user as the desktop session.")
+    } else {
+        Some("Hint (Windows): if this persists, check Settings → Privacy & security → screen capture for this app.")
+    }
+}
+
+#[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows")))]
+fn capture_hint(_permission: bool) -> Option<&'static str> {
+    None
+}
+
 #[cfg(not(target_os = "linux"))]
 fn with_capture_guide<T>(result: Result<T, String>) -> Result<T, String> {
-    result
+    result.map_err(|e| {
+        let lower = e.to_ascii_lowercase();
+        let permission = lower.contains("permission")
+            || lower.contains("denied")
+            || lower.contains("access is denied");
+        match capture_hint(permission) {
+            Some(hint) => format!("{e}\n\n{hint}"),
+            None => e,
+        }
+    })
 }
 
 fn capture_monitor(monitor: &Monitor) -> Result<ScreenImage, String> {

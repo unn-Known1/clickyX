@@ -119,7 +119,11 @@ impl VoicePipeline {
     pub fn new() -> Self {
         let config = AudioConfig::default();
         Self {
-            capture: CaptureThreadHandle::spawn(config.sample_rate, config.buffer_size),
+            capture: CaptureThreadHandle::spawn(config.sample_rate, config.buffer_size)
+                .unwrap_or_else(|e| {
+                    log::error!("VoicePipeline: {e}; audio capture disabled");
+                    CaptureThreadHandle::disabled()
+                }),
             state: Arc::new(Mutex::new(PipelineState::Idle)),
             stt_config: Arc::new(Mutex::new(SttConfig::default())),
             tts_config: Arc::new(Mutex::new(TtsConfig::default())),
@@ -143,7 +147,11 @@ impl VoicePipeline {
             ..Default::default()
         };
         Self {
-            capture: CaptureThreadHandle::spawn(config.sample_rate, config.buffer_size),
+            capture: CaptureThreadHandle::spawn(config.sample_rate, config.buffer_size)
+                .unwrap_or_else(|e| {
+                    log::error!("VoicePipeline: {e}; audio capture disabled");
+                    CaptureThreadHandle::disabled()
+                }),
             state: Arc::new(Mutex::new(PipelineState::Idle)),
             stt_config: Arc::new(Mutex::new(stt)),
             tts_config: Arc::new(Mutex::new(tts)),

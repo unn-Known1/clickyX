@@ -68,7 +68,22 @@
           "libxdo3",
           "librsvg2-2",
           "libasound2",
-          "libappindicator3-1"
+          "libappindicator3-1",
+          "xdotool",
+          "xclip",
+          "wtype"
+        ]
+      },
+      "rpm": {
+        "depends": [
+          "webkit2gtk4.1",
+          "libxdo",
+          "librsvg2",
+          "alsa-lib",
+          "libappindicator-gtk3",
+          "xdotool",
+          "xclip",
+          "wtype"
         ]
       },
       "appimage": {

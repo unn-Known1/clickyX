@@ -117,7 +117,7 @@ python3 -c "import yaml; yaml.safe_load(open('.github/workflows/ci.yml'))"  # va
 | `i18n/index.ts` | i18next config — EN/ES/FR/JA |
 | `utils/agentStatus.ts` | `agentStatusColor()` / `agentStatusLabel()` — do not duplicate |
 | `utils/sounds.ts` | `Sounds.agentLaunch()` etc. — sound effect player |
-| `global.d.ts` | `window.__paletteSection`, `window.__deepLinkPending` |
+| `global.d.ts` | `window.__AGENT_SLUG` (agent-HUD slug only) |
 | `hooks/useConfig.ts` | react-query config CRUD |
 | `hooks/useAgents.ts` | react-query agents + mutations + `agent-state-changed` invalidation |
 | `hooks/useChat.ts` | Streaming chat with per-session `sessionIdRef` scoping |

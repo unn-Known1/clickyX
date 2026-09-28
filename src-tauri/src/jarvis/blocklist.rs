@@ -35,6 +35,18 @@ fn hardcoded_denies() -> &'static [&'static str] {
         "微信",
         "banking",
         "bank ",
+        // S-MAJ-7: bare `bank` (no trailing-space trick — `MyBank` must hit)
+        // plus common fintech names.
+        "bank",
+        "paypal",
+        "alipay",
+        "venmo",
+        "cashapp",
+        "cash app",
+        "revolut",
+        // S-MAJ-7: the extract fallback for "no focused window found" must
+        // never be fillable — unknown focus is fail-closed.
+        "unknown window",
         " payment",
         "payment ",
         "*payment*",
@@ -57,10 +69,12 @@ fn glob_hit(pattern: &str, text: &str) -> bool {
 }
 
 /// True when the window must NOT be Jarvis-processed.
+/// S-MAJ-7: empty/unknown titles are BLOCKED for fill (fail-closed — an
+/// unresolved focus must never paste).
 pub fn is_blocklisted(raw_title: &str, extra: &[String]) -> bool {
     let norm = normalize_window_title(raw_title);
     if norm.is_empty() {
-        return false;
+        return true;
     }
     for pat in hardcoded_denies() {
         if glob_hit(pat, &norm) {
@@ -124,7 +138,31 @@ mod tests {
     fn test_allowed_apps_pass() {
         assert!(!is_blocklisted("Slack — #general", &[]));
         assert!(!is_blocklisted("Discord", &[]));
-        assert!(!is_blocklisted("", &[]));
+    }
+
+    #[test]
+    fn test_empty_and_unknown_titles_blocked() {
+        // S-MAJ-7: unresolved focus is fail-closed for fill.
+        assert!(is_blocklisted("", &[]));
+        assert!(is_blocklisted("   ", &[]));
+        assert!(is_blocklisted("unknown window", &[]));
+    }
+
+    #[test]
+    fn test_fintech_blocked() {
+        // S-MAJ-7: bare `bank` (no trailing-space trick) + fintech names.
+        for title in [
+            "MyBank",
+            "Bank of America",
+            "PayPal — Send Money",
+            "Alipay",
+            "Venmo",
+            "Cash App",
+            "CashApp",
+            "Revolut",
+        ] {
+            assert!(is_blocklisted(title, &[]), "should block {title}");
+        }
     }
 
     #[test]

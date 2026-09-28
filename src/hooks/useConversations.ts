@@ -1,4 +1,5 @@
 import { useState, useCallback, useEffect, useRef } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { commands } from "../bindings";
 import type { ChatMessage } from "./useChat";
 
@@ -9,6 +10,8 @@ export interface Conversation {
   updatedAt: number;
   messages: ChatMessage[];
 }
+
+export const CONVERSATIONS_QUERY_KEY = ["conversations"];
 
 function generateId(): string {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -48,41 +51,49 @@ function deriveTitle(messages: ChatMessage[]): string {
   return text.length > 50 ? text.slice(0, 47) + "…" : text;
 }
 
+function trimForSave(convos: Conversation[]): Conversation[] {
+  return convos.slice(-50).map(c => ({
+    ...c,
+    messages: c.messages.slice(-200),
+  }));
+}
+
 export function useConversations() {
-  const [conversations, setConversations] = useState<Conversation[]>([]);
+  const queryClient = useQueryClient();
   const [activeId, setActiveId] = useState<string | null>(null);
-  const [isLoaded, setIsLoaded] = useState(false);
-  // Mirrors conversations for imperative updates (avoids disk writes inside
-  // state updaters, which StrictMode double-invokes in dev)
-  const conversationsRef = useRef<Conversation[]>([]);
+  // Ensures the "select most recent on first load" default runs exactly once,
+  // so a later user delete-to-null is never resurrected by a refetch.
+  const didInitActiveRef = useRef(false);
+
+  const convosQuery = useQuery<Conversation[], Error>({
+    queryKey: CONVERSATIONS_QUERY_KEY,
+    queryFn: async () => sanitizeConversations(await commands.loadConversations()),
+    staleTime: Infinity,
+  });
+
+  const saveMutation = useMutation<void, Error, Conversation[]>({
+    mutationFn: (convos) => commands.saveConversations(trimForSave(convos)),
+  });
+
+  const conversations = convosQuery.data ?? [];
+  const isLoaded = convosQuery.isSuccess || convosQuery.isError;
 
   useEffect(() => {
-    conversationsRef.current = conversations;
-  }, [conversations]);
-
-  useEffect(() => {
-    commands.loadConversations().then((loaded) => {
-      const convos = sanitizeConversations(loaded);
-      setConversations(convos);
+    if (!didInitActiveRef.current && convosQuery.isSuccess) {
+      didInitActiveRef.current = true;
+      const convos = convosQuery.data ?? [];
       if (convos.length > 0) {
         setActiveId(convos[convos.length - 1].id);
       }
-      setIsLoaded(true);
-    }).catch(e => {
-      console.error("Failed to load conversations:", e);
-      setIsLoaded(true);
-    });
-  }, []);
+    }
+  }, [convosQuery.isSuccess, convosQuery.data]);
 
   const activeConversation = conversations.find(c => c.id === activeId) ?? null;
 
-  const saveSnapshot = useCallback((convos: Conversation[]) => {
-    const trimmed = convos.slice(-50).map(c => ({
-      ...c,
-      messages: c.messages.slice(-200),
-    }));
-    commands.saveConversations(trimmed).catch(console.error);
-  }, []);
+  const persist = useCallback((updated: Conversation[]) => {
+    queryClient.setQueryData<Conversation[]>(CONVERSATIONS_QUERY_KEY, updated);
+    saveMutation.mutate(updated);
+  }, [queryClient, saveMutation]);
 
   const createConversation = useCallback((): string => {
     const id = generateId();
@@ -93,37 +104,31 @@ export function useConversations() {
       updatedAt: Date.now(),
       messages: [],
     };
-    const updated = [...conversationsRef.current, newConvo];
-    setConversations(updated);
-    saveSnapshot(updated);
+    const updated = [...conversations, newConvo];
+    persist(updated);
     setActiveId(id);
     return id;
-  }, [saveSnapshot]);
+  }, [conversations, persist]);
 
   const deleteConversation = useCallback((id: string) => {
-    const updated = conversationsRef.current.filter(c => c.id !== id);
-    setConversations(updated);
-    saveSnapshot(updated);
+    const updated = conversations.filter(c => c.id !== id);
+    persist(updated);
     setActiveId(prev => prev === id ? null : prev);
-  }, [saveSnapshot]);
+  }, [conversations, persist]);
 
   const updateMessages = useCallback((id: string, messages: ChatMessage[]) => {
-    const updated = conversationsRef.current.map(c =>
+    const updated = conversations.map(c =>
       c.id === id
         ? { ...c, messages, title: deriveTitle(messages), updatedAt: Date.now() }
         : c,
     );
-    setConversations(updated);
-    saveSnapshot(updated);
-  }, [saveSnapshot]);
+    persist(updated);
+  }, [conversations, persist]);
 
   const renameConversation = useCallback((id: string, title: string) => {
-    setConversations(prev => {
-      const updated = prev.map(c => c.id === id ? { ...c, title } : c);
-      saveSnapshot(updated);
-      return updated;
-    });
-  }, [saveSnapshot]);
+    const updated = conversations.map(c => c.id === id ? { ...c, title } : c);
+    persist(updated);
+  }, [conversations, persist]);
 
   return {
     conversations,

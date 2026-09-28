@@ -13,6 +13,7 @@ import { getCurrentWindow as tauriGetCurrentWindow } from "@tauri-apps/api/windo
 
 export type { UnlistenFn, Event };
 
+// NOTE: isTauri is true under vitest (NODE_ENV=test), so unit tests exercise the real invoke path, not the browser mocks below.
 export const isTauri =
   (typeof window !== "undefined" && "__TAURI_INTERNALS__" in window) ||
   (globalThis as unknown as Record<string, { env?: Record<string, string> }>).process?.env?.NODE_ENV === "test";
@@ -158,6 +159,15 @@ export function invoke<T>(cmd: string, args?: any): Promise<T> {
       ]) as any;
     }
     if (cmd === "get_chat_models") {
+      // ?mockModels=1 seeds 2 fake models so web/E2E exercises the populated list; default stays [].
+      try {
+        if (typeof window !== "undefined" && new URLSearchParams(window.location.search).get("mockModels")) {
+          return Promise.resolve([
+            { id: "claude-sonnet-4-20250514", provider: "anthropic", name: "Claude Sonnet 4", capabilities: ["chat"] },
+            { id: "gpt-4o", provider: "openai", name: "GPT-4o", capabilities: ["chat"] },
+          ]) as any;
+        }
+      } catch { /* non-browser URL — fall through to [] */ }
       return Promise.resolve([]) as any;
     }
     if (cmd === "test_jev_judge") {
@@ -326,6 +336,28 @@ export function invoke<T>(cmd: string, args?: any): Promise<T> {
     }
     if (cmd === "test_mcp_server") {
       return Promise.resolve(true) as any;
+    }
+    if (cmd === "get_app_version") {
+      // Browser mock — keep in sync with the "version" field in package.json.
+      return Promise.resolve("0.2.3") as any;
+    }
+    if (cmd === "load_conversations") {
+      return Promise.resolve([]) as any;
+    }
+    if (cmd === "save_conversations") {
+      return Promise.resolve(undefined) as any;
+    }
+    if (cmd === "update_config") {
+      return invoke("get_config").then((base) => ({ ...(base as object), ...((args?.partial ?? {}) as object) }) as any);
+    }
+    if (cmd === "update_ai_config") {
+      return invoke("get_ai_config").then((base) => ({ ...(base as object), ...((args?.partial ?? {}) as object) }) as any);
+    }
+    if (cmd === "update_audio_config") {
+      return invoke("get_audio_config").then((base) => ({ ...(base as object), ...((args?.partial ?? {}) as object) }) as any);
+    }
+    if (cmd === "update_jev_config") {
+      return invoke("get_jev_config").then((base) => ({ ...(base as object), ...((args?.partial ?? {}) as object) }) as any);
     }
     if (cmd.startsWith("list_") || cmd.startsWith("get_mcp_servers") || cmd === "get_app_usage_log" || cmd === "get_automation_runs" || cmd === "get_logs") {
       return Promise.resolve([]) as any;

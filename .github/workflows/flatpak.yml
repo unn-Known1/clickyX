@@ -4,6 +4,21 @@ on:
   push:
     tags: ["v*"]
 
+# W-MIN-13: least-privilege token (no releases created here).
+permissions:
+  contents: read
+
+# W-MAJ-7: serialize tag-push Flatpak rebuilds; never cancel one in flight.
+concurrency:
+  group: flatpak-${{ github.ref }}
+  cancel-in-progress: false
+
+# W-MIN-5: sccache/mold env mirroring ci.yml.
+env:
+  CARGO_TERM_COLOR: always
+  SCCACHE_GHA_ENABLED: "true"
+  RUSTC_WRAPPER: sccache
+
 jobs:
   build-binary:
     name: Build Rust Binary for Flatpak
@@ -23,11 +38,17 @@ jobs:
           toolchain: stable
           cache: false
 
+      - name: Install sccache
+        uses: mozilla-actions/sccache-action@v0.0.11
+
       - name: Install system deps
+        # R-CRIT-1/W-CRIT-1: pipewire/drm/gbm headers (xcap 0.9 needs
+        # PipeWire 1.x) + libclang-dev (bindgen via libspa-sys) — mirrors ci.yml.
         run: |
           sudo apt-get update -y
           sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev \
-            patchelf libxdo-dev libasound2-dev libspeechd-dev
+            patchelf libxdo-dev libasound2-dev libspeechd-dev libpipewire-0.3-dev \
+            libdrm-dev libgbm-dev libclang-dev
 
       - name: Install npm dependencies
         run: npm ci
@@ -40,7 +61,7 @@ jobs:
         run: cargo build --release
 
       - name: Upload release binary
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: clickyx-release-binary
           path: src-tauri/target/release/clickyx

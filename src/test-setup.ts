@@ -17,10 +17,6 @@ vi.mock("@tauri-apps/api/window", () => ({
   })),
 }));
 
-vi.mock("@tauri-apps/plugin-updater", () => ({
-  check: vi.fn().mockResolvedValue(null),
-}));
-
 vi.mock("react-i18next", async () => {
   // Resolve keys against the real EN locale so tests assert real strings.
   const en = (await import("./i18n/locales/en.json")).default as Record<string, unknown>;

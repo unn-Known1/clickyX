@@ -161,6 +161,21 @@ impl TypeModeEngine {
         ensure_com();
         #[cfg(target_os = "linux")]
         if is_wayland() {
+            // R-MAJ-10: prefer `wtype -- <text>` text mode (unicode-safe) over
+            // `-k` key mode; keep key mode as the fallback on failure.
+            match std::process::Command::new("wtype")
+                .args(["--", text])
+                .output()
+            {
+                Ok(out) if out.status.success() => return Ok(()),
+                Ok(out) => log::warn!(
+                    "type_text: wtype text mode failed ({}); trying key mode",
+                    String::from_utf8_lossy(&out.stderr).trim()
+                ),
+                Err(e) => {
+                    log::warn!("type_text: wtype text mode launch failed ({e}); trying key mode")
+                }
+            }
             let escaped = text.replace('\\', "\\\\").replace('"', "\\\"");
             return std::process::Command::new("wtype")
                 .args(["-k", "--", &escaped])

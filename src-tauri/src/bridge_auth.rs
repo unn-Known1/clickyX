@@ -87,6 +87,11 @@ fn is_dangerous_path(path: &str) -> bool {
         "/v1/messages",
         "/v1/responses",
         "/mcp/call",
+        // S-MAJ-2: GET /mcp/tools spawns a child process per enabled server —
+        // same tier as /mcp/call. The "/mcp/" prefix gates all present and
+        // future MCP routes; the exact entry documents the audited case.
+        "/mcp/tools",
+        "/mcp/",
         "/agent/",
         "/transcribe",
         "/speak",
@@ -392,7 +397,9 @@ mod tests {
                 .route("/jarvis/analyze", web::post().to(ok_handler))
                 .route("/jarvis/fill", web::post().to(ok_handler))
                 .route("/jarvis/status", web::get().to(ok_handler))
-                .route("/jarvis/test", web::post().to(ok_handler)),
+                .route("/jarvis/test", web::post().to(ok_handler))
+                .route("/mcp/tools", web::get().to(ok_handler))
+                .route("/mcp/call", web::post().to(ok_handler)),
         )
         .await
     }
@@ -509,6 +516,34 @@ mod tests {
     }
 
     #[actix_web::test]
+    async fn test_mcp_tools_requires_token_even_when_disabled() {
+        // S-MAJ-2: /mcp/tools spawns child processes — token-always, even with
+        // auth_disabled (same tier as /click and /jarvis/*).
+        let app = test_app(test_auth(AuthSettings::new(Some("secret".into()), true))).await;
+        let req = actix_web::test::TestRequest::get()
+            .uri("/mcp/tools")
+            .to_request();
+        assert_eq!(
+            actix_web::test::call_service(&app, req).await.status(),
+            401,
+            "GET /mcp/tools must require a token"
+        );
+        let req = actix_web::test::TestRequest::post()
+            .uri("/mcp/call")
+            .to_request();
+        assert_eq!(
+            actix_web::test::call_service(&app, req).await.status(),
+            401,
+            "POST /mcp/call must require a token"
+        );
+        let req = actix_web::test::TestRequest::get()
+            .uri("/mcp/tools")
+            .insert_header(("x-openclicky-token", "secret"))
+            .to_request();
+        assert_eq!(actix_web::test::call_service(&app, req).await.status(), 200);
+    }
+
+    #[actix_web::test]
     async fn test_rebound_host_rejected() {
         // C-3: DNS rebinding (Host: evil.tld) must 403 even with valid token.
         let app = test_app(test_auth(AuthSettings::new(Some("secret".into()), false))).await;
@@ -559,6 +594,10 @@ mod tests {
         assert!(is_dangerous_path("/v1/messages"));
         assert!(is_dangerous_path("/v1/responses"));
         assert!(is_dangerous_path("/mcp/call"));
+        // S-MAJ-2: /mcp/tools spawns processes — dangerous even when auth is
+        // disabled; the "/mcp/" prefix covers future MCP routes too.
+        assert!(is_dangerous_path("/mcp/tools"));
+        assert!(is_dangerous_path("/mcp/anything-else"));
         assert!(is_dangerous_path("/agent/foo/run"));
         assert!(is_dangerous_path("/agent/foo/stop"));
         assert!(is_dangerous_path("/transcribe"));

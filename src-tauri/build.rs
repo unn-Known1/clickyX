@@ -61,14 +61,28 @@ fn main() {
             let src_path = wrapper_dir.join("windres_wrapper.rs");
             let _ = std::fs::write(&src_path, wrapper_src);
 
-            // Compile the wrapper source code to executables in wrapper_dir
+            // Compile the wrapper source code to executables in wrapper_dir.
+            // R-MAJ-13: hard-fail with a clear message when the wrapper
+            // compile fails — a silent fallback reintroduces the
+            // STATUS_ENTRYPOINT_NOT_FOUND `cargo test` crash this file fixes.
             let compile_wrapper = |dest_name: &str| {
                 let dest_path = wrapper_dir.join(dest_name);
-                let _ = std::process::Command::new("rustc")
+                let status = std::process::Command::new("rustc")
                     .arg(&src_path)
                     .arg("-o")
                     .arg(&dest_path)
                     .status();
+                match status {
+                    Ok(s) if s.success() => {}
+                    Ok(s) => panic!(
+                        "clickyX build: windres wrapper compile failed for {dest_name} (exit {s}); \
+                         install the MinGW resource compiler (x86_64-w64-mingw32-windres) or ensure `rustc` is on PATH"
+                    ),
+                    Err(e) => panic!(
+                        "clickyX build: could not launch `rustc` to compile the windres wrapper ({e}); \
+                         ensure the Rust toolchain is on PATH"
+                    ),
+                }
             };
 
             compile_wrapper("windres.exe");
@@ -141,7 +155,10 @@ fn main() {
         // part of the rlib) would emit LNK4199, which trips the repo's
         // warnings-as-errors before tests even build: suppress just that one.
         println!("cargo:rustc-link-arg=/IGNORE:4199");
-        // delayimp.lib ships with MSVC; locate it via vswhere (fixed path).
+        // delayimp.lib ships with MSVC; locate it via vswhere, then fall back
+        // to %VCToolsInstallDir%\lib\x64 and each dir on %LIB% (R-MAJ-13 —
+        // the hardcoded vswhere path alone misses VS previews, Build Tools
+        // -only installs, and custom layouts).
         let vswhere = r"C:\Program Files (x86)\Microsoft Visual Studio\Installer\vswhere.exe";
         let delayimp = std::process::Command::new(vswhere)
             .args(["-latest", "-find", r"VC\Tools\MSVC\*\lib\x64\delayimp.lib"])
@@ -153,6 +170,31 @@ fn main() {
                     .map(str::trim)
                     .find(|l| !l.is_empty() && std::path::Path::new(l).is_file())
                     .map(str::to_owned)
+            })
+            .or_else(|| {
+                std::env::var("VCToolsInstallDir").ok().and_then(|dir| {
+                    let cand = std::path::PathBuf::from(dir)
+                        .join("lib")
+                        .join("x64")
+                        .join("delayimp.lib");
+                    if cand.is_file() {
+                        Some(cand.to_string_lossy().into_owned())
+                    } else {
+                        None
+                    }
+                })
+            })
+            .or_else(|| {
+                std::env::var("LIB").ok().and_then(|lib| {
+                    std::env::split_paths(&lib).find_map(|dir| {
+                        let cand = dir.join("delayimp.lib");
+                        if cand.is_file() {
+                            Some(cand.to_string_lossy().into_owned())
+                        } else {
+                            None
+                        }
+                    })
+                })
             });
         match delayimp {
             Some(p) => {

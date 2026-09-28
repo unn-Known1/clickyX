@@ -4,6 +4,8 @@
 fn setup_panic_hook() {
     std::panic::set_hook(Box::new(|panic_info| {
         let msg = format!("ClickyX panicked: {panic_info}");
+        // R-MIN-3: log for Linux/macOS parity (no dialog there); eprintln kept.
+        log::error!("{msg}");
         eprintln!("{msg}");
 
         #[cfg(target_os = "windows")]

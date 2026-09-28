@@ -368,6 +368,25 @@ pub fn strip_verified_secrets(
     stripped
 }
 
+/// Legacy `apikey.<provider>` slugs ever written by `migrate_secrets_to_store`.
+/// The keyring API offers no enumeration, so wipe-by-known-slug is the only
+/// cross-platform option (`reset_config` additionally wipes slugs named by
+/// the outgoing config for user-added providers).
+const KNOWN_LEGACY_PROVIDERS: &[&str] = &[
+    "deepgram",
+    "openai",
+    "whisper",
+    "assemblyai",
+    "elevenlabs",
+    "cartesia",
+    "edge",
+    "microsoftedge",
+    "aura",
+    "deepgramaura",
+    "tripo3d",
+    "anthropic",
+];
+
 /// Best-effort wipe of every known keychain entry (used by `reset_config`
 /// so rotated secrets can't be resurrected by hydration).
 pub fn wipe_secrets(store: &dyn SecretStore) {
@@ -382,6 +401,10 @@ pub fn wipe_secrets(store: &dyn SecretStore) {
         keys::JEV_API_KEY,
     ] {
         let _ = store.delete(key);
+    }
+    // S-MIN-7: legacy `apikey.<provider>` entries must not linger either.
+    for provider in KNOWN_LEGACY_PROVIDERS {
+        let _ = store.delete(&keys::legacy_api_key(provider));
     }
 }
 

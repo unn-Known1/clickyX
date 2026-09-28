@@ -24,7 +24,9 @@ pub struct CaptureThreadHandle {
 }
 
 impl CaptureThreadHandle {
-    pub fn spawn(sample_rate: u32, buffer_size: u32) -> Self {
+    /// Spawn the capture thread. Returns `Err` (instead of panicking the
+    /// caller) when the audio thread dies before handing over its handles.
+    pub fn spawn(sample_rate: u32, buffer_size: u32) -> Result<Self, String> {
         let (cmd_tx, cmd_rx) = mpsc::channel::<CaptureCommand>();
 
         // Create a shared buffer and recording atomic that outlive the AudioCapture
@@ -51,13 +53,32 @@ impl CaptureThreadHandle {
             // AudioCapture (and its cpal::Stream) destructs here on the same thread
         });
 
-        let buffer = buffer_rx.recv().expect("Capture thread failed to start");
-        let recording = recording_rx.recv().expect("Capture thread failed to start");
+        // S-MIN-2: no expect() across the thread boundary — a dead audio
+        // thread surfaces as Err so the pipeline can degrade to disabled.
+        let buffer = buffer_rx
+            .recv()
+            .map_err(|e| format!("Capture thread failed to start: {e}"))?;
+        let recording = recording_rx
+            .recv()
+            .map_err(|e| format!("Capture thread failed to start: {e}"))?;
 
-        Self {
+        Ok(Self {
             cmd_tx,
             buffer,
             recording,
+        })
+    }
+
+    /// Non-functional handle used when the capture thread fails to start.
+    /// Commands fail fast with "disconnected" instead of hanging/panicking.
+    pub fn disabled() -> Self {
+        let (cmd_tx, cmd_rx) = mpsc::channel::<CaptureCommand>();
+        // Drop the receiver: every command send then errors immediately.
+        drop(cmd_rx);
+        Self {
+            cmd_tx,
+            buffer: Arc::new(Mutex::new(RingBuffer::new(64))),
+            recording: Arc::new(AtomicBool::new(false)),
         }
     }
 

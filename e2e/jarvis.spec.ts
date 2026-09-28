@@ -34,16 +34,15 @@ test.describe("Jarvis co-pilot (mocked)", () => {
   });
 
   test("settings jarvis section shows all three cards", async ({ page }) => {
-    await page.click(".settings-tab, [aria-label='Settings'], button:has-text('Settings')");
-    // Navigate via palette-independent path: settings tab may vary; fall back.
-    const jarvisNav = page.locator("button:has-text('Jev Jarvis')");
-    if (await jarvisNav.count()) {
-      await jarvisNav.first().click();
-      await expect(page.locator(".settings-section")).toContainText("Decision model", {
-        timeout: 20000,
-      });
-    } else {
-      test.skip(true, "settings nav not reachable in this layout");
-    }
+    // Jev Jarvis lives under Settings › Jev Jarvis (settings.sections.jarvis).
+    await page.click('[role="tab"]:has-text("Settings")');
+    await expect(page.locator(".settings-nav")).toBeVisible({ timeout: 20000 });
+    await page.locator(".settings-nav-btn", { hasText: "Jev Jarvis" }).click();
+    await expect(page.locator(".settings-section")).toContainText("Decision model", {
+      timeout: 20000,
+    });
+    await expect(page.locator(".settings-section .settings-card")).toHaveCount(3, {
+      timeout: 20000,
+    });
   });
 });

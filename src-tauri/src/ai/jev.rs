@@ -97,16 +97,54 @@ pub fn merge_jev_config(current: &JevConfig, partial: &serde_json::Value) -> Jev
     config
 }
 
-/// `base_url` receives `Authorization: Bearer <key>` — explicit http(s) only.
+/// S-MAJ-6: `base_url` receives `Authorization: Bearer <key>` — explicit
+/// http(s) only, and plain `http://` is allowed ONLY for loopback hosts
+/// (local dev/proxy). Anything else must be `https://` so keys never travel
+/// in cleartext.
 pub fn validate_jev_base_url(base_url: &str) -> Result<(), String> {
     let lower = base_url.trim().to_ascii_lowercase();
-    if lower.starts_with("https://") || lower.starts_with("http://") {
+    if let Some(_rest) = lower.strip_prefix("https://") {
         Ok(())
+    } else if let Some(rest) = lower.strip_prefix("http://") {
+        if http_authority_is_loopback(rest) {
+            Ok(())
+        } else {
+            Err(format!(
+                "refusing non-local http jev_base_url (use https, or localhost for dev): {base_url}"
+            ))
+        }
     } else {
         Err(format!(
             "refusing jev_base_url without explicit http(s) scheme: {base_url}"
         ))
     }
+}
+
+/// True when the URL authority after `http://` is a loopback host:
+/// `localhost`, `loopback`, `127.0.0.0/8`, or `::1` (bracketed or bare),
+/// with optional `:port`. Case-insensitive; userinfo is stripped.
+pub fn http_authority_is_loopback(after_scheme: &str) -> bool {
+    let auth = after_scheme.split(['/', '?', '#']).next().unwrap_or("");
+    let auth = auth.rsplit('@').next().unwrap_or(auth);
+    let host = if let Some(rest) = auth.strip_prefix('[') {
+        // IPv6 literal: [::1] or [::1]:port
+        rest.split(']').next().unwrap_or("")
+    } else if auth.matches(':').count() == 1 {
+        let (h, p) = auth.split_at(auth.rfind(':').unwrap_or(0));
+        if !p.is_empty() && p[1..].chars().all(|c| c.is_ascii_digit()) {
+            h
+        } else {
+            auth
+        }
+    } else {
+        auth
+    };
+    let host = host.trim_end_matches('.');
+    host.eq_ignore_ascii_case("localhost")
+        || host.eq_ignore_ascii_case("loopback")
+        || host == "127.0.0.1"
+        || host.starts_with("127.")
+        || host == "::1"
 }
 
 // ── Presets ───────────────────────────────────────────────────────────────────
@@ -436,6 +474,25 @@ pub fn declassify_jev_error(msg: &str) -> String {
             out.truncate(4096);
         }
     }
+    // S-MIN-12: generic api_key-adjacent values (non-sk key formats can
+    // otherwise echo into bridge/UI errors via `key=...` / `"api_key":"..."`).
+    for (pat, rep) in [
+        (
+            r#"(?i)(api[_-]?key\s*[:=]\s*["']?)([^"'\s,};&\]]{2,})"#,
+            "${1}[redacted]",
+        ),
+        (
+            r"(?i)\b(key|token)\s*=\s*([A-Za-z0-9\-._~+/=]{8,})",
+            "$1=[redacted]",
+        ),
+    ] {
+        if let Ok(re) = regex::Regex::new(pat) {
+            out = re.replace_all(&out, rep).into_owned();
+        }
+    }
+    if out.len() > 4096 {
+        out.truncate(4096);
+    }
     out
 }
 
@@ -673,6 +730,27 @@ mod tests {
     fn test_validate_jev_base_url_accepts_http() {
         assert!(validate_jev_base_url("https://api.typesafe.ai/v1/systemone").is_ok());
         assert!(validate_jev_base_url("http://localhost:32123").is_ok());
+        // S-MAJ-6: loopback http stays allowed (dev/proxy).
+        assert!(validate_jev_base_url("http://127.0.0.1:8080/v1").is_ok());
+        assert!(validate_jev_base_url("http://[::1]:8080/v1").is_ok());
+        assert!(validate_jev_base_url("HTTP://LOCALHOST/").is_ok());
+    }
+
+    #[test]
+    fn test_validate_jev_base_url_rejects_remote_http() {
+        // S-MAJ-6: cleartext to non-loopback hosts would leak the Bearer key.
+        for bad in [
+            "http://api.typesafe.ai/v1/systemone",
+            "http://example.com:8080/x",
+            "http://192.168.1.1/v1",
+            "http://10.0.0.5/",
+            "http://evil.example",
+        ] {
+            assert!(
+                validate_jev_base_url(bad).is_err(),
+                "should reject remote http {bad}"
+            );
+        }
     }
 
     #[test]
@@ -786,6 +864,16 @@ mod tests {
         let msg = r#"auth failed with sk-ant-secret123 and Bearer tokengoeshere"#;
         let out = declassify_jev_error(msg);
         assert!(!out.contains("secret123"));
+        assert!(out.contains("[redacted]"));
+    }
+
+    #[test]
+    fn test_declassify_strips_api_key_adjacent() {
+        // S-MIN-12: non-sk key formats must not echo into UI/bridge errors.
+        let msg = r#"request failed: {"api_key":"hunter2-secret"} after key=abcdefgh1234"#;
+        let out = declassify_jev_error(msg);
+        assert!(!out.contains("hunter2-secret"), "leaked: {out}");
+        assert!(!out.contains("abcdefgh1234"), "leaked: {out}");
         assert!(out.contains("[redacted]"));
     }
 

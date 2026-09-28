@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef, useEffect } from "react";
-import { commands, listen, type UnlistenFn } from "../bindings";
+import { commands, listen, isTauri, type UnlistenFn } from "../bindings";
 
 /** Generate a small random session ID to scope stream events per useChat instance */
 function newSessionId(): string {
@@ -118,6 +118,24 @@ export function useChat() {
           return;
         }
         await commands.sendChatMessageStream(content, model ?? null, sessionId);
+        if (!isTauri) {
+          // Browser mock resolves void and never emits stream-event — resolve a
+          // synthetic Done so streaming:true cannot hang forever on web/E2E.
+          if (cancelledRef.current || !mountedRef.current) {
+            unlisten();
+            unlistenRef.current = null;
+            return;
+          }
+          const reply = accumulated || "(browser preview reply)";
+          setMessages((prev) => [
+            ...prev,
+            { role: "assistant", content: reply, timestamp: Date.now() },
+          ]);
+          setCurrentText("");
+          setStreaming(false);
+          unlisten();
+          unlistenRef.current = null;
+        }
       } catch (e) {
         if (!cancelledRef.current) {
           setError(String(e));

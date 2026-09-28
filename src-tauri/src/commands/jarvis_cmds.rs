@@ -28,7 +28,12 @@ pub async fn jarvis_analyze(
     history: Option<Vec<ChatMessage>>,
 ) -> Result<JarvisAnalyzeResult, String> {
     let config = require_jarvis_gates(&app)?;
-    let session = require_window_allowed(&app_id, &config.jarvis.blocklist_extra)?;
+    // S-MAJ-1: the caller-supplied app_id is untrusted — re-resolve the OS
+    // focused window server-side and blocklist-check THAT. Fail closed on
+    // mismatch/blocklisted. Response shape unchanged.
+    let focused_title =
+        jarvis::require_focused_window_allowed(&app_id, &config.jarvis.blocklist_extra)?;
+    let session = jarvis::session_key(&focused_title);
 
     if messages.is_empty() {
         return Err("jarvis_analyze needs at least 1 message (extract text first)".into());
@@ -37,15 +42,16 @@ pub async fn jarvis_analyze(
     // KB background (fail with a clear error on decrypt failure — never
     // silently judge without the user's notes).
     let kb = jarvis::load_kb(&config.agent.encryption_key).map_err(|e| format!("kb: {e}"))?;
-    let kb_bg = jarvis::background_for(&app_id, &kb);
+    let kb_bg = jarvis::background_for(&focused_title, &kb);
     let mut bg = background.unwrap_or_else(|| serde_json::json!({}));
     if let (Some(b), Some(k)) = (bg.as_object_mut(), kb_bg.as_object()) {
         for (k2, v2) in k {
             b.entry(k2.clone()).or_insert(v2.clone());
         }
     }
-    // App-context injection (Slack/Discord/… hints).
-    let ctx = crate::ai::app_contexts::injection_block(&app_id);
+    // App-context injection (Slack/Discord/… hints) — keyed on the trusted
+    // OS focus reading, not the caller claim.
+    let ctx = crate::ai::app_contexts::injection_block(&focused_title);
     if let Some(b) = bg.as_object_mut() {
         b.insert("app_context".into(), serde_json::json!(ctx));
     }
@@ -102,7 +108,7 @@ pub async fn jarvis_analyze(
     Ok(JarvisAnalyzeResult {
         verdict,
         session,
-        app: app_id.chars().take(120).collect(),
+        app: focused_title.chars().take(120).collect(),
         injection,
         money_or_secret,
         may_fill,
@@ -118,7 +124,8 @@ pub fn jarvis_fill(
     app_id: String,
 ) -> Result<jarvis::FillOutcome, String> {
     let config = require_jarvis_gates(&app)?;
-    require_window_allowed(&app_id, &config.jarvis.blocklist_extra)?;
+    // S-MAJ-1: re-resolve OS focus server-side; refuse on mismatch/blocklisted.
+    jarvis::require_focused_window_allowed(&app_id, &config.jarvis.blocklist_extra)?;
     // Belt-and-suspenders: this entry point only ever pastes text.
     jarvis::fill::refuse_action_shape("paste-text")?;
     let outcome = jarvis::fill_draft(&text)?;
@@ -208,7 +215,9 @@ pub async fn jarvis_draft(
     background: Option<String>,
 ) -> Result<Vec<String>, String> {
     let config = require_jarvis_gates(&app)?;
-    require_window_allowed(&app_id, &config.jarvis.blocklist_extra)?;
+    // S-MAJ-1: re-resolve OS focus server-side; refuse on mismatch/blocklisted.
+    let focused_title =
+        jarvis::require_focused_window_allowed(&app_id, &config.jarvis.blocklist_extra)?;
     if messages.is_empty() {
         return Err("jarvis_draft needs at least 1 message".into());
     }
@@ -220,7 +229,7 @@ pub async fn jarvis_draft(
         return Err("jarvis_draft needs a chat model (jev models are decision-only)".into());
     }
 
-    let ctx = crate::ai::app_contexts::injection_block(&app_id);
+    let ctx = crate::ai::app_contexts::injection_block(&focused_title);
     let bg = background.unwrap_or_default();
     let system = format!(
         "{}\n[Jarvis draft mode — fill-only co-pilot. {}]\nBackground: {}\nRules: draft EXACTLY 3 distinct short replies for the latest incoming message, separated by a line containing only ---. Match the user's own terse style (≤60 chars each unless the ask needs more). No numbering, no quotes, no `me:` prefix, no template filler. Never include money movement, credentials, or irreversible commitments. <<<untrusted-screen-below>>>",

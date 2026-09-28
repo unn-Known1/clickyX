@@ -74,15 +74,15 @@ describe("AppContext", () => {
       expect(screen.getByTestId("active-tab")).toHaveTextContent("home");
     });
 
-    it("switches tabs with animation", { timeout: 10000 }, async () => {
+    it("switches tabs synchronously with a cosmetic transition flag", { timeout: 10000 }, async () => {
       vi.useFakeTimers({ shouldAdvanceTime: true });
       const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
       render(<AppProvider><NavConsumer /></AppProvider>);
       await user.click(screen.getByText("Go agents"));
-      // During transition
+      // State switches synchronously; only the transition flag is deferred.
+      expect(screen.getByTestId("active-tab")).toHaveTextContent("agents");
       expect(screen.getByTestId("transitioning")).toHaveTextContent("true");
       act(() => { vi.advanceTimersByTime(150); });
-      expect(screen.getByTestId("active-tab")).toHaveTextContent("agents");
       expect(screen.getByTestId("transitioning")).toHaveTextContent("false");
       vi.useRealTimers();
     });
@@ -92,8 +92,9 @@ describe("AppContext", () => {
       const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
       render(<AppProvider><NavConsumer /></AppProvider>);
       await user.click(screen.getByText("Go settings"));
-      act(() => { vi.advanceTimersByTime(150); });
       expect(screen.getByTestId("active-tab")).toHaveTextContent("settings");
+      act(() => { vi.advanceTimersByTime(150); });
+      expect(screen.getByTestId("transitioning")).toHaveTextContent("false");
       vi.useRealTimers();
     });
   });

@@ -511,8 +511,21 @@ pub fn validate_hotkeys(hotkeys: &[HotkeyBinding]) -> Result<(), String> {
     Ok(())
 }
 
+/// S-MIN-3: `audio.buffer_size` feeds `RingBuffer::new(cap)` + `% capacity` —
+/// 0 (or a tiny value) means a divide-by-zero panic in the audio thread.
+/// Fail closed with a clear error instead of clamping silently.
+pub fn validate_audio_buffer_size(buffer_size: u32) -> Result<(), String> {
+    if buffer_size < 64 {
+        return Err(format!(
+            "audio.buffer_size must be >= 64 (got {buffer_size})"
+        ));
+    }
+    Ok(())
+}
+
 pub fn save_config(_app: &AppHandle, config: &AppConfig) -> Result<(), String> {
     validate_hotkeys(&config.hotkeys)?;
+    validate_audio_buffer_size(config.audio.buffer_size)?;
     save_config_inner(config)
 }
 
@@ -665,6 +678,17 @@ mod tests {
         let result = validate_hotkeys(&hotkeys);
         assert!(result.is_err());
         assert!(result.unwrap_err().contains("duplicate hotkey binding"));
+    }
+
+    #[test]
+    fn test_validate_audio_buffer_size_floor() {
+        // S-MIN-3: 0 (or tiny) would divide-by-zero the audio RingBuffer.
+        assert!(validate_audio_buffer_size(1024).is_ok());
+        assert!(validate_audio_buffer_size(64).is_ok());
+        for bad in [0, 1, 63] {
+            let err = validate_audio_buffer_size(bad).unwrap_err();
+            assert!(err.contains(">= 64"), "unexpected: {err}");
+        }
     }
 
     #[test]

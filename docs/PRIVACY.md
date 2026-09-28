@@ -40,6 +40,17 @@ The panel's "What was read" expander shows exactly this per run
 Lengths, token counts, and cost only — never message content, titles, or pixels.
 `get_logs` output is redacted; AI/bridge errors are declassified before display.
 
+## Update check (per-launch network request)
+
+Despite "no telemetry", the app performs one **update check per launch**
+(default-on via `check_updates_on_startup` — disable it in Settings to opt out):
+
+- **Endpoint**: primary `https://releases.clickyx.app` with fallback to the
+  GitHub releases API.
+- **Payload**: app version + platform identifier (sent as request parameters);
+  your IP address is visible to the endpoint as with any HTTPS request. No
+  message content, titles, screenshots, keys, or identifiers are sent.
+
 ## Attribution
 
 Decision backend by TypeSafe AI (user key, user endpoint). Chat co-pilot pattern

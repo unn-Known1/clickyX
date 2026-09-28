@@ -58,9 +58,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const setActiveTab = useCallback((tab: Tab) => {
+    // State switches synchronously so deep-link/palette/tray navigation is
+    // never racy; only the cosmetic transition flag clears on a timer.
+    setActiveTabState(tab);
     setTabTransition(true);
     setTimeout(() => {
-      setActiveTabState(tab);
       setTabTransition(false);
     }, 100);
   }, []);

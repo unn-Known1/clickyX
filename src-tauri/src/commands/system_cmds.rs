@@ -187,9 +187,39 @@ pub async fn install_update(url: String, signature: Option<String>) -> Result<()
     updater::install_update_from_url(&url, signature.as_deref()).await
 }
 
+/// S-MAJ-4: redact secret-shaped values before log lines reach the UI.
+/// `get_logs` output must never carry keys/tokens (declassify-style shapes:
+/// sk-ant-/sk-/xox/Bearer/api_key-adjacent values + generic tokens).
+fn redact_log_message(msg: &str, patterns: &[regex::Regex]) -> String {
+    let mut out = msg.to_string();
+    for re in patterns {
+        out = re.replace_all(&out, "[redacted]").into_owned();
+    }
+    out
+}
+
+fn log_redaction_patterns() -> Vec<regex::Regex> {
+    [
+        // sk-ant-... / sk-... (keep nothing — full match redacted).
+        r"(sk-ant-|sk-)[A-Za-z0-9\-_]{4,}",
+        // Slack-style tokens.
+        r"xox[a-z]?-[A-Za-z0-9\-_]{4,}",
+        // Bearer tokens.
+        r"(?i)Bearer\s+[A-Za-z0-9\-._~+/=]{4,}",
+        // api_key-adjacent values: "api_key":"...", api_key=..., api-key: ...
+        r#"(?i)api[_-]?key\s*[:=]\s*["']?[^"'\s,};&\]]{2,}"#,
+        // Generic secret-adjacent values: token=..., password: "...", etc.
+        r#"(?i)(access[_-]?token|auth[_-]?token|client[_-]?secret|password|passwd|secret)\s*[:=]\s*["']?[^"'\s,};&\]]{3,}"#,
+    ]
+    .iter()
+    .filter_map(|p| regex::Regex::new(p).ok())
+    .collect()
+}
+
 #[tauri::command]
 pub fn get_logs(count: Option<u32>) -> Result<Vec<LogEntry>, String> {
     let count = count.unwrap_or(100) as usize;
+    let redactions = log_redaction_patterns();
     let log_dir = crate::get_log_dir()?;
     let mut entries = Vec::new();
 
@@ -223,7 +253,7 @@ pub fn get_logs(count: Option<u32>) -> Result<Vec<LogEntry>, String> {
                     timestamp: parts[0].trim().into(),
                     level: parts[1].trim().into(),
                     target: parts[2].trim().into(),
-                    message: parts[3].into(),
+                    message: redact_log_message(parts[3], &redactions),
                 });
             } else {
                 // env_logger default format: "[2026-08-07T12:00:00Z INFO target] msg"
@@ -239,14 +269,14 @@ pub fn get_logs(count: Option<u32>) -> Result<Vec<LogEntry>, String> {
                         timestamp: ts.into(),
                         level: lvl.into(),
                         target: parts.next().unwrap_or("").into(),
-                        message: parts.next().unwrap_or("").into(),
+                        message: redact_log_message(parts.next().unwrap_or(""), &redactions),
                     });
                 } else {
                     entries.push(LogEntry {
                         timestamp: ts.into(),
                         level: lvl.into(),
                         target: String::new(),
-                        message: rest.into(),
+                        message: redact_log_message(rest, &redactions),
                     });
                 }
             }

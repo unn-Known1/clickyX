@@ -27,6 +27,8 @@ tauri-build = { version = "2", features = [] }
 embed-resource = "3"
 
 [dependencies]
+# R-MIN-2: `macos-private-api` is intentionally enabled globally — it only
+# takes effect on macOS builds (transparent overlay); harmless elsewhere.
 tauri = { version = "2", features = ["tray-icon", "macos-private-api"] }
 tauri-plugin-global-shortcut = "2"
 tauri-plugin-shell = "2"

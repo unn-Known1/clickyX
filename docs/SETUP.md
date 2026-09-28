@@ -19,12 +19,17 @@ sudo apt-get install -y \
   libpipewire-0.3-dev \
   libdrm-dev \
   libgbm-dev \
+  libclang-dev \
   libasound2-dev \
   libpulse-dev \
   libspeechd-dev \
   xclip \
   wl-clipboard
 ```
+
+(`libclang-dev` is required: `libspa-sys` → `bindgen` → `clang-sys`
+needs libclang at build time — same package installed in CI/release/
+nightly/flatpak workflows.)
 
 Jarvis clipboard fill uses the bundled `arboard` backend first; `xclip` (X11)
 and `wl-clipboard` (Wayland) are the documented fallbacks where the sandbox
@@ -33,9 +38,27 @@ programmatic focus) — the panel copies and the user pastes. Flatpak adds the
 ScreenCast/RemoteDesktop/a11y-Bus permissions but no Secrets portal: clipboard
 fill is copy-only there and API keys fall back to the encrypted file store.
 
+### Linux secret store (keyring) requirement
+
+API keys prefer the OS keychain (`keyring` crate), which on Linux needs a
+running **Secret Service provider over D-Bus** (e.g. GNOME Keyring or
+KWallet with Secret Service enabled). Without D-Bus/a keyring daemon,
+secrets fall back to the encrypted file store alongside `config.json`.
+
+- **Flatpak**: there is no Secrets portal wired up, so the keychain is
+  unreachable inside the sandbox — API keys always use the encrypted file
+  fallback there (copy-only clipboard likewise).
+- **Wayland background input**: programmatic click/scroll/type on Wayland
+  goes through `ydotool`, which requires the **`ydotoold` daemon** running
+  with input permissions. It is not bundled or packaged — install and start
+  it separately, otherwise Wayland CUA degrades to copy-only/manual-paste.
+
 > [!NOTE]
 > CI runs on `ubuntu-24.04` (xcap 0.9 needs PipeWire 1.x headers, unavailable on 22.04).
 > .deb/AppImage targets Ubuntu 24.04+; older distros should use the Flatpak.
+> Build tier: x86_64 Linux/Windows and macOS (aarch64) have CI legs; **ARM
+> Linux and ARM Windows have no CI leg** — they may build locally but are
+> untested/unsupported in v1.
 
 ### macOS
 Xcode 15+ with command line tools:

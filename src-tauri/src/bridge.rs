@@ -288,10 +288,12 @@ async fn clear_overlays(
 ) -> HttpResponse {
     let app = &data.app_handle;
     let result = match body {
-        Some(ref req) if req.screen.is_some() => {
-            crate::overlay::clear_overlays_on_screen(app, req.screen.unwrap())
-        }
-        _ => crate::overlay::clear_overlays(app),
+        // S-MIN-1: no unwrap() on bridge input — missing screen = all screens.
+        Some(ref req) => match req.screen {
+            Some(idx) => crate::overlay::clear_overlays_on_screen(app, idx),
+            None => crate::overlay::clear_overlays(app),
+        },
+        None => crate::overlay::clear_overlays(app),
     };
     match result {
         Ok(_) => HttpResponse::Ok().json(OkResponse { ok: true }),
@@ -556,10 +558,19 @@ async fn proxy_messages(
     });
 
     if let Some(system) = &body.system {
-        request_body
-            .as_object_mut()
-            .unwrap()
-            .insert("system".into(), serde_json::json!(system));
+        // S-MIN-1: no unwrap() on bridge-built JSON — fail 400, never panic
+        // the bridge worker on an unexpected shape.
+        match request_body.as_object_mut() {
+            Some(obj) => {
+                obj.insert("system".into(), serde_json::json!(system));
+            }
+            None => {
+                return HttpResponse::BadRequest().json(ErrorResponse {
+                    error: "bad_request".into(),
+                    message: "proxy request body is not a JSON object".into(),
+                });
+            }
+        }
     }
 
     let client = reqwest::Client::new();
@@ -772,7 +783,8 @@ async fn click_handler(
     body: web::Json<ClickRequest>,
 ) -> HttpResponse {
     let app = &data.app_handle;
-    log::info!("Click at ({}, {})", body.x, body.y);
+    // S-MAJ-4: never log user content — receipt only, no coordinates.
+    log::info!("bridge /click: 1 click request");
 
     let config = crate::config::load_config(app).unwrap_or_default();
     let backend = if config.computer_use.native_cua {
@@ -815,7 +827,12 @@ async fn notify(data: web::Data<BridgeState>, body: web::Json<NotifyRequest>) ->
         let _ = window.show();
         let _ = window.set_focus();
     }
-    log::info!("Notification: {} - {}", body.title, body.body);
+    // S-MAJ-4: never log notification content — lengths only.
+    log::info!(
+        "bridge /notify: received title_len={} body_len={}",
+        body.title.len(),
+        body.body.len()
+    );
     HttpResponse::Ok().json(OkResponse { ok: true })
 }
 
@@ -829,9 +846,36 @@ async fn jarvis_analyze_bridge(
     body: web::Json<JarvisAnalyzeBridgeRequest>,
 ) -> HttpResponse {
     let app = data.app_handle.clone();
+    // S-MAJ-1: re-resolve the OS focused window server-side BEFORE the judge
+    // call — the caller-supplied app_id is untrusted and never blocklisted
+    // directly. Fail closed on mismatch/blocklisted focus.
+    let focus_check = {
+        let app = app.clone();
+        let app_id = body.app_id.clone();
+        tokio::task::spawn_blocking(move || {
+            let config = crate::config::load_config(&app)?;
+            crate::jarvis::require_focused_window_allowed(&app_id, &config.jarvis.blocklist_extra)
+        })
+        .await
+    };
+    let focused_title = match focus_check {
+        Ok(Ok(title)) => title,
+        Ok(Err(e)) => {
+            return HttpResponse::InternalServerError().json(ErrorResponse {
+                error: "jarvis_analyze_error".into(),
+                message: e,
+            });
+        }
+        Err(e) => {
+            return HttpResponse::InternalServerError().json(ErrorResponse {
+                error: "jarvis_analyze_error".into(),
+                message: format!("focus check task failed: {e}"),
+            });
+        }
+    };
     match crate::commands::jarvis_analyze(
         app,
-        body.app_id.clone(),
+        focused_title,
         body.messages.clone(),
         body.background.clone(),
         body.history.clone(),
@@ -857,7 +901,9 @@ async fn jarvis_fill_bridge(
     let app_id = body.app_id.clone();
     let res = tokio::task::spawn_blocking(move || {
         let config = crate::config::load_config(&app)?;
-        crate::jarvis::require_window_allowed(&app_id, &config.jarvis.blocklist_extra)?;
+        // S-MAJ-1: re-resolve the OS focused window server-side — the caller
+        // claim is untrusted. Fail closed on mismatch/blocklisted focus.
+        crate::jarvis::require_focused_window_allowed(&app_id, &config.jarvis.blocklist_extra)?;
         crate::jarvis::fill::refuse_action_shape("paste-text")?;
         crate::jarvis::fill_draft(&text)
     })
@@ -1462,24 +1508,18 @@ pub fn start_bridge(app_handle: AppHandle, auth_settings: SharedAuthSettings) {
         let bridge_state = BridgeState::new(app_handle);
         let data = web::Data::new(bridge_state);
         let auth = Auth::new(auth_config, limits);
-        #[cfg(target_os = "windows")]
-        {
-            // On Windows, create a single-threaded runtime to avoid any I/O
-            // completion port interactions with Tauri's own tokio runtime.
-            actix_web::rt::System::new().block_on(async {
-                run_bridge_server(data, auth).await;
-            });
-        }
-        #[cfg(not(target_os = "windows"))]
-        {
-            actix_web::rt::System::new().block_on(async {
-                run_bridge_server(data, auth).await;
-            });
-        }
+        // R-MAJ-14: single runtime for all platforms (the old per-OS branches
+        // were byte-identical; no IOCP rationale — one worker model everywhere).
+        actix_web::rt::System::new().block_on(async {
+            run_bridge_server(data, auth).await;
+        });
     });
 }
 
 async fn run_bridge_server(data: web::Data<BridgeState>, auth: Auth) {
+    // S-MAJ-10: cloned before the server closure moves `data`, so a bind
+    // failure can still surface a UI event.
+    let bind_app = data.app_handle.clone();
     let server = HttpServer::new(move || {
         App::new()
             // NOTE on wrap order: in actix-web the LAST .wrap() is OUTERMOST.
@@ -1552,6 +1592,12 @@ async fn run_bridge_server(data: web::Data<BridgeState>, auth: Auth) {
         }
         Err(e) => {
             log::error!("Failed to bind bridge server: {e}");
+            // S-MAJ-10: the app would otherwise run bridgeless with no UI
+            // signal — emit so the frontend can surface it.
+            let _ = bind_app.emit(
+                "bridge-bind-failed",
+                serde_json::json!({ "port": 32123, "error": format!("{e}") }),
+            );
         }
     }
 }

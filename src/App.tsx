@@ -203,7 +203,9 @@ function AppInner() {
     console.log("[voice] Selected voice:", voiceId);
   });
 
-  // F-015: Deep-link handler for openclicky:// URLs
+  // F-015: Deep-link handler for openclicky:// URLs.
+  // NOTE: @tauri-apps/plugin-deep-link is intentionally NOT an npm dependency —
+  // the frontend only consumes the backend-emitted "deep-link-opened" event.
   useTauriEvent("deep-link-opened", (e) => {
     const url = e.payload as string;
     try {

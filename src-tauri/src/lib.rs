@@ -352,8 +352,33 @@ pub fn run() {
                 .unwrap_or_else(|| std::path::PathBuf::from("."))
                 .join("clickyx")
                 .join(&config.automations_file);
-            let automation_engine =
-                automation::AutomationEngine::load(&automations_path).unwrap_or_default();
+            // Initialize automation engine. S-MIN-10: a corrupt automations.json
+            // must never silently nuke user schedules — log, back the file up
+            // as `.corrupt-<unix-ts>`, and only then start with defaults.
+            let automation_engine = match automation::AutomationEngine::load(&automations_path) {
+                Ok(engine) => engine,
+                Err(e) => {
+                    log::error!(
+                        "Automations file corrupt ({e}); backing up and starting with an empty schedule"
+                    );
+                    let ts = std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .map(|d| d.as_secs())
+                        .unwrap_or(0);
+                    let backup =
+                        automations_path.with_extension(format!("json.corrupt-{ts}"));
+                    match std::fs::rename(&automations_path, &backup) {
+                        Ok(()) => log::warn!(
+                            "Backed up corrupt automations file to {}",
+                            backup.display()
+                        ),
+                        Err(be) => log::warn!(
+                            "Could not back up corrupt automations file: {be}"
+                        ),
+                    }
+                    automation::AutomationEngine::new(automations_path.clone())
+                }
+            };
             handle.manage(Mutex::new(automation_engine));
 
             // Start automation background tick loop

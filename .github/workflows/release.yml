@@ -7,14 +7,69 @@ on:
 permissions:
   contents: write
 
+# W-MAJ-7: serialize tag-push releases; never cancel a release in flight.
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
 env:
   CARGO_TERM_COLOR: always
   SCCACHE_GHA_ENABLED: "true"
   RUSTC_WRAPPER: sccache
 
 jobs:
+  # W-MAJ-2: pre-build Rust gate — fail fast on fmt/clippy/check before
+  # burning ~10 min x 3 runners on doomed tauri builds.
+  gate:
+    name: Rust gates (fmt + clippy + check)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions-rust-lang/setup-rust-toolchain@v2
+        with:
+          toolchain: stable
+          cache: false
+
+      - name: Cache Rust dependencies
+        uses: actions/cache@v5
+        with:
+          path: |
+            src-tauri/target
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: gate-cargo-${{ hashFiles('src-tauri/Cargo.lock') }}
+          restore-keys: |
+            gate-cargo-
+
+      - name: Install sccache (Rust compile cache)
+        uses: mozilla-actions/sccache-action@v0.0.11
+
+      - name: Install mold linker (Linux)
+        run: |
+          sudo apt-get install -y mold
+          echo 'CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER=/usr/bin/clang' >> $GITHUB_ENV
+          echo 'RUSTFLAGS=-C link-arg=-fuse-ld=mold' >> $GITHUB_ENV
+
+      - name: Install system deps (Linux)
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libxdo-dev libasound2-dev libspeechd-dev libpipewire-0.3-dev libdrm-dev libgbm-dev libclang-dev libclang-dev
+
+      - name: Check Rust compilation
+        working-directory: src-tauri
+        run: cargo check --all-features
+
+      - name: Lint (clippy, deny warnings)
+        working-directory: src-tauri
+        run: cargo clippy --all-features -- -D warnings
+
+      - name: Check formatting
+        working-directory: src-tauri
+        run: cargo fmt --check
+
   build:
     name: Build ${{ matrix.os }}
+    needs: gate
     strategy:
       fail-fast: false
       matrix:
@@ -57,7 +112,7 @@ jobs:
         if: matrix.os == 'ubuntu-24.04'
         run: |
           sudo apt-get update -y
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libxdo-dev libasound2-dev libspeechd-dev libpipewire-0.3-dev libdrm-dev libgbm-dev
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libxdo-dev libasound2-dev libspeechd-dev libpipewire-0.3-dev libdrm-dev libgbm-dev libclang-dev
 
       - name: Install npm dependencies
         run: npm ci
@@ -72,15 +127,13 @@ jobs:
           CLICKYX_UPDATE_PUBKEY: ${{ secrets.UPDATE_SIGNING_PUBKEY }}
         run: npm run tauri build ${{ startsWith(matrix.os, 'macos') && '-- --bundles dmg,app' || '' }}
 
-      - name: Create macOS zip (fallback)
-        if: startsWith(matrix.os, 'macos')
-        run: |
-          cd src-tauri/target/release/bundle/macos 2>/dev/null || true
-          zip -r ClickyX.app.zip ClickyX.app 2>/dev/null || true
-          mv ClickyX.app.zip ../dmg/ 2>/dev/null || true
-
+      # W-MAJ-4/R-MIN-7/W-MIN-7: no unsigned .app.zip fallback — the updater
+      # scorer never selects .zip, and an unsigned zip would ship without .sig.
       - name: Sign Windows artifacts
-        if: matrix.os == 'windows-latest' && env.SIGNING_CERT != ''
+        # W-MAJ-1: gate on the secret itself — a step-level env var is not
+        # populated at if-condition evaluation time, so env.SIGNING_CERT here
+        # would silently never run signing even with secrets set.
+        if: matrix.os == 'windows-latest' && secrets.WINDOWS_SIGNING_CERT != ''
         env:
           SIGNING_CERT: ${{ secrets.WINDOWS_SIGNING_CERT }}
           SIGNING_PASSWORD: ${{ secrets.WINDOWS_SIGNING_PASSWORD }}
@@ -94,7 +147,7 @@ jobs:
           if (-not $signtool) { $signtool = (Get-Command signtool -ErrorAction SilentlyContinue).Source }
           if (-not $signtool) { throw "signtool not found — cannot sign" }
           Get-ChildItem -Path "src-tauri/target/release/bundle" -Recurse -Include "*.msi","*.exe" | ForEach-Object {
-            & $signtool sign /f $certPath /p $env:SIGNING_PASSWORD /tr http://timestamp.digicert.com /td sha256 /fd sha256 $_.FullName
+            & $signtool sign /f $certPath /p $env:SIGNING_PASSWORD /tr https://timestamp.digicert.com /td sha256 /fd sha256 $_.FullName
           }
           Remove-Item $certPath -Force
 
@@ -114,7 +167,7 @@ jobs:
           fi
 
       - name: Upload artifacts
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: clickyx-${{ matrix.os }}
           path: src-tauri/target/release/bundle/
@@ -210,4 +263,9 @@ jobs:
             artifacts/**/*.AppImage
             artifacts/**/*.deb
             artifacts/**/*.rpm
+            # W-MAJ-10: flatpak bundle slot. The flatpak.yml job currently
+            # builds clickyx.flatpak but never uploads it as an artifact, so
+            # this glob matches nothing today (decoupled by design); if the
+            # Flatpak job starts uploading the bundle, it rides along here.
+            artifacts/**/*.flatpak
             artifacts/**/*.sig

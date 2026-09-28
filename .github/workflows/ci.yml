@@ -23,6 +23,10 @@ concurrency:
   group: ci-v2-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+# W-MIN-13: least-privilege token (no releases created here).
+permissions:
+  contents: read
+
 env:
   CARGO_TERM_COLOR: always
   SCCACHE_GHA_ENABLED: "true"
@@ -67,7 +71,7 @@ jobs:
       - name: Install system deps (Linux)
         run: |
           sudo apt-get update -y
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libxdo-dev libasound2-dev libspeechd-dev libpipewire-0.3-dev libdrm-dev libgbm-dev
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libxdo-dev libasound2-dev libspeechd-dev libpipewire-0.3-dev libdrm-dev libgbm-dev libclang-dev
       - name: Install npm dependencies
         run: npm ci
       - name: Build frontend
@@ -78,6 +82,26 @@ jobs:
         run: npm run lint
       - name: Audit npm dependencies
         run: npm audit --audit-level=high
+      # Rust gates run BEFORE E2E (W-MAJ-6): a Rust failure must fail fast
+      # instead of being masked behind a green-or-red Playwright run.
+      - name: Check Rust compilation
+        working-directory: src-tauri
+        run: cargo check --all-features
+      - name: Lint (clippy, deny warnings)
+        working-directory: src-tauri
+        run: cargo clippy --all-features -- -D warnings
+      - name: Check formatting
+        working-directory: src-tauri
+        run: cargo fmt --check
+      - name: Audit Rust dependencies
+        working-directory: src-tauri
+        run: |
+          cargo install cargo-audit --locked || true
+          ~/.cargo/bin/cargo-audit --deny warnings || echo "::warning::cargo-audit found advisories (see log)"
+      # E2E pinned spec list (W-MIN-14): app + chat + settings + jarvis (mocked).
+      # e2e/visual.spec.ts is EXCLUDED until pixel baselines land in
+      # e2e/*snapshots*/ (zero baselines committed → toHaveScreenshot fails
+      # on clean runs); run it manually via `npm run test:visual:update`.
       - name: Run Playwright E2E (app/chat/settings/jarvis-mocked)
         run: |
           npx playwright install --with-deps chromium
@@ -86,30 +110,14 @@ jobs:
           CI: true
       # NOTE: e2e/visual.spec.ts runs manually only until pixel baselines are
       # committed (see e2e/visual.spec.ts header + `npm run test:visual:update`).
-      - name: Check Rust compilation
-        working-directory: src-tauri
-        run: cargo check
-      - name: Run Rust tests
-        working-directory: src-tauri
-        run: cargo test --all-features
-      - name: Audit Rust dependencies
-        working-directory: src-tauri
-        run: |
-          cargo install cargo-audit --locked || true
-          ~/.cargo/bin/cargo-audit --deny warnings || echo "::warning::cargo-audit found advisories (see log)"
-      - name: Lint (clippy, deny warnings)
-        working-directory: src-tauri
-        run: cargo clippy --all-features -- -D warnings
-      - name: Check formatting
-        working-directory: src-tauri
-        run: cargo fmt --check
+      # (W-MIN-9: no `cargo test` here — the Build legs run it on all 3 OSes.)
 
   # Resolves the build matrix so manual runs can drop the already-green
   # ubuntu leg (skip-linux). `matrix` can't be read in a job-level `if`,
   # so the OS list is computed here and consumed via fromJSON below.
   setup:
     name: Setup matrix
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     outputs:
       os: ${{ steps.set.outputs.os }}
     steps:
@@ -169,7 +177,7 @@ jobs:
         if: matrix.os == 'ubuntu-24.04'
         run: |
           sudo apt-get update -y
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libxdo-dev libasound2-dev libspeechd-dev libpipewire-0.3-dev libdrm-dev libgbm-dev
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libxdo-dev libasound2-dev libspeechd-dev libpipewire-0.3-dev libdrm-dev libgbm-dev libclang-dev
 
       - name: Install npm dependencies
         run: npm ci
@@ -295,32 +303,27 @@ jobs:
           fi
           echo "=== Verification complete ==="
 
-      - name: Create macOS zip (fallback)
-        if: startsWith(matrix.os, 'macos')
-        run: |
-          cd src-tauri/target/release/bundle/macos 2>/dev/null || true
-          zip -r ClickyX.app.zip ClickyX.app 2>/dev/null || true
-          mv ClickyX.app.zip ../dmg/ 2>/dev/null || true
-
+      # W-MAJ-4/R-MIN-7/W-MIN-7: no unsigned .app.zip fallback — a missing
+      # .app must fail loudly, never ship a silent unsigned zip.
       - name: Upload artifacts (Linux)
         if: matrix.os == 'ubuntu-24.04'
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
-          name: clickyx-linux
+          name: clickyx-${{ matrix.os }}
           path: src-tauri/target/release/bundle/
 
       - name: Upload artifacts (Windows)
         if: matrix.os == 'windows-latest'
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
-          name: clickyx-windows
+          name: clickyx-${{ matrix.os }}
           path: src-tauri/target/release/bundle/
 
-      - name: Upload artifacts (macOS ARM64)
+      - name: Upload artifacts (macOS)
         if: matrix.os == 'macos-latest'
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
-          name: clickyx-macos-aarch64
+          name: clickyx-${{ matrix.os }}
           path: src-tauri/target/release/bundle/
 
 

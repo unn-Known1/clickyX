@@ -3,8 +3,16 @@
 //! Every `jarvis_*` entry point starts with `require_jarvis_gates`
 //! (Rust-enforced, never UI-only):
 //! `enabled && !paused && screen_recording && accessibility && !blocklisted`.
-//! Windows screen/a11y checks are vacuous (always-true, no UIAccess manifest)
-//! so they are NOT gating there; Linux needs the portal + a11y-bus checks.
+//!
+//! Per-OS enforcement level (honest accounting, R-MAJ-8):
+//! - macOS: REAL gates — Screen Recording + Accessibility are checked via the
+//!   OS permission APIs and denial is fail-closed.
+//! - Windows: NOT enforced — no UIAccess manifest is shipped, so there is no
+//!   OS screen/a11y check to gate on; Jarvis proceeds after a one-time
+//!   warning (capture-time consent still applies wherever the OS prompts).
+//! - Linux: INFORMATIONAL only — `display_server()` reports availability,
+//!   not consent; the real consent surface is the per-session portal dialog
+//!   at capture time. Never treated as a gate.
 
 pub mod blocklist;
 pub mod extract;
@@ -74,10 +82,33 @@ pub fn require_jarvis_gates(app: &tauri::AppHandle) -> Result<crate::config::App
         // Portal-based: best-effort presence check, fail-closed on explicit deny.
         // `pactl/pgrep` alone is availability, not consent — the real consent
         // surface is the per-session portal dialog at capture time.
+        // Informational only: never a gate (see module docs).
         let _ = crate::platform::display_server();
+        warn_once_non_macos_gates();
     }
-    // Windows: screen/a11y checks are vacuous (always-true) — never gate on them.
+    #[cfg(target_os = "windows")]
+    {
+        // No UIAccess manifest is shipped: there is no OS screen/a11y check
+        // to gate on. Proceed after a one-time warning (see module docs).
+        warn_once_non_macos_gates();
+    }
+    #[cfg(not(any(target_os = "macos", target_os = "linux", target_os = "windows")))]
+    {
+        warn_once_non_macos_gates();
+    }
     Ok(config)
+}
+
+/// One-time warning for platforms without real OS permission gates (R-MAJ-8).
+#[cfg(not(target_os = "macos"))]
+fn warn_once_non_macos_gates() {
+    static WARNED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+    if !WARNED.swap(true, std::sync::atomic::Ordering::Relaxed) {
+        log::warn!(
+            "jarvis gates: OS screen/accessibility checks are not enforced on this platform \
+             (real gates exist on macOS via TCC only); capture-time consent still applies"
+        );
+    }
 }
 
 /// Window allow-check AFTER the title is known (extract → check → use pixels).
@@ -86,6 +117,43 @@ pub fn require_window_allowed(title: &str, extra: &[String]) -> Result<String, S
         return Err(blocklist::blocklisted_refusal());
     }
     Ok(session_key(title))
+}
+
+/// Server-side focus re-resolution (S-MAJ-1).
+/// Resolves the OS focused window FRESH via `extract_focused()` and enforces,
+/// fail-closed, never trusting the caller-supplied `app_id`:
+/// - focus resolution failure → refuse;
+/// - focused title blocklisted (incl. empty/unknown) → refuse;
+/// - caller `app_id` blocklisted → refuse (defense in depth);
+/// - caller `app_id` mismatches the fresh focus (neither normalized form
+///   contains the other) → refuse as stale/spoofed.
+///
+/// Returns the trusted OS title on success. Never logs title bytes.
+pub fn require_focused_window_allowed(app_id: &str, extra: &[String]) -> Result<String, String> {
+    let focused = extract::extract_focused().map_err(|e| {
+        format!("refusing Jarvis action: could not resolve the focused window ({e})")
+    })?;
+    // Trust the OS reading, never the caller claim.
+    require_window_allowed(&focused.title, extra)?;
+    // The caller's claim must ALSO be clean.
+    require_window_allowed(app_id, extra)?;
+    let norm_focused = blocklist::normalize_window_title(&focused.title);
+    let norm_claim = blocklist::normalize_window_title(app_id);
+    if norm_focused != norm_claim
+        && !norm_focused.contains(&norm_claim)
+        && !norm_claim.contains(&norm_focused)
+    {
+        log::warn!(
+            "jarvis: focused-window mismatch (lengths: focused={} claim={})",
+            norm_focused.len(),
+            norm_claim.len()
+        );
+        return Err(
+            "refusing Jarvis action: focused window changed since extract — re-extract before retry"
+                .into(),
+        );
+    }
+    Ok(focused.title)
 }
 
 #[cfg(test)]

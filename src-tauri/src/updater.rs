@@ -109,7 +109,12 @@ async fn check_hosted_for_updates(current_version: &str) -> Result<UpdateInfo, S
     let resp = match client.get(&url).send().await {
         Ok(r) if r.status().is_success() => r,
         Ok(r) if r.status() == reqwest::StatusCode::NOT_FOUND => {
-            return Ok(no_update(None, None));
+            // W-MIN-11: a 404 from the hosted primary must NOT read as
+            // "no update" — that would permanently suppress the GitHub
+            // fallback once the host exists but has no metadata yet.
+            return Err(format!(
+                "hosted update metadata not found (404 at {url}); trying GitHub fallback"
+            ));
         }
         Ok(r) => {
             return Err(format!("updater server returned {}", r.status()));
@@ -229,6 +234,17 @@ fn detect_linux_package_format() -> &'static str {
 pub fn verify_update_signature(data: &[u8], signature: Option<&str>) -> Result<(), String> {
     let pubkey_b64 = update_signing_pubkey();
     if pubkey_b64.is_empty() {
+        // R-CRIT-2: refuse loudly AND say exactly what to set — a silent
+        // refusal here reads as "updater broken" in dev builds and forks.
+        static NO_KEY_WARNED: std::sync::atomic::AtomicBool =
+            std::sync::atomic::AtomicBool::new(false);
+        if !NO_KEY_WARNED.swap(true, std::sync::atomic::Ordering::Relaxed) {
+            log::error!(
+                "ClickyX updater: no trusted release key configured (CLICKYX_UPDATE_PUBKEY is empty) — \
+                 refusing update installs. Repo owners: set the UPDATE_SIGNING_PUBKEY and \
+                 UPDATE_SIGNING_KEY_B64 GitHub secrets and rebuild (see SECURITY.md P0-T3)."
+            );
+        }
         return Err(
             "refusing update install: no trusted release key configured in this build \
              (release process must set CLICKYX_UPDATE_PUBKEY; see SECURITY.md)"
@@ -276,17 +292,57 @@ pub async fn install_update_from_url(url: &str, signature: Option<&str>) -> Resu
             }
         }
     };
-    install_update(&data, sig)
+    match file_name_from_url(url) {
+        // R-MAJ-5/6: the URL file name selects the Windows installer driver.
+        Some(name) => install_update_for_file(&data, sig, Some(&name)),
+        // No file name (unusual) → default story via the direct-bytes entry.
+        None => install_update(&data, sig),
+    }
 }
 
+/// File name portion of a download URL (query/fragment stripped), used to
+/// pick the Windows installer driver (R-MAJ-5/6).
+fn file_name_from_url(url: &str) -> Option<String> {
+    url.rsplit('/')
+        .next()
+        .map(|s| s.split(['?', '#']).next().unwrap_or("").to_string())
+        .filter(|s| !s.is_empty())
+}
+
+/// R-MAJ-5/6: only a `.msi` file name takes the msiexec path; anything else
+/// (incl. `None` from direct-byte callers) follows the nsis story, since nsis
+/// is the only Windows bundle target configured.
+fn is_windows_msi(file_name: Option<&str>) -> bool {
+    file_name
+        .map(|n| n.to_ascii_lowercase().ends_with(".msi"))
+        .unwrap_or(false)
+}
+
+/// Direct-bytes install (no download URL): verifies then installs assuming
+/// the default (nsis) artifact story on Windows. URL downloads go through
+/// `install_update_from_url`, which picks the driver from the file name.
 pub fn install_update(update_data: &[u8], signature: Option<&str>) -> Result<(), String> {
+    install_update_for_file(update_data, signature, None)
+}
+
+fn install_update_for_file(
+    update_data: &[u8],
+    signature: Option<&str>,
+    file_name: Option<&str>,
+) -> Result<(), String> {
     // P0-T3/C-2: verify FIRST — unsigned artifacts are refused, no exceptions.
     verify_update_signature(update_data, signature)?;
     let tmp_dir = std::env::temp_dir().join("clickyx-update");
     std::fs::create_dir_all(&tmp_dir).map_err(|e| format!("failed to create temp dir: {e}"))?;
 
     let ext = if cfg!(target_os = "windows") {
-        ".msi"
+        // R-MAJ-5/6: nsis `-setup.exe` is the configured bundle target;
+        // `.msi` is kept for any ever-published wix artifact.
+        if is_windows_msi(file_name) {
+            ".msi"
+        } else {
+            ".exe"
+        }
     } else if cfg!(target_os = "macos") {
         ".dmg"
     } else {
@@ -308,10 +364,21 @@ pub fn install_update(update_data: &[u8], signature: Option<&str>) -> Result<(),
     let path_str = update_path.to_string_lossy().to_string();
 
     if cfg!(target_os = "windows") {
-        std::process::Command::new("msiexec")
-            .args(["/i", &path_str, "/quiet", "/norestart"])
-            .spawn()
-            .map_err(|e| format!("failed to launch installer: {e}"))?;
+        if is_windows_msi(file_name) {
+            // .msi (wix) path — kept working if an .msi is ever published.
+            std::process::Command::new("msiexec")
+                .args(["/i", &path_str, "/quiet", "/norestart"])
+                .spawn()
+                .map_err(|e| format!("failed to launch installer: {e}"))?;
+        } else {
+            // R-MAJ-6: nsis `-setup.exe` with per-user `/S` semantics —
+            // matches `installMode: currentUser` (no UAC, no system-wide
+            // writes). msiexec system semantics must NOT drive nsis artifacts.
+            std::process::Command::new(&path_str)
+                .args(["/S"])
+                .spawn()
+                .map_err(|e| format!("failed to launch installer: {e}"))?;
+        }
     } else if cfg!(target_os = "macos") {
         // Mount DMG, copy .app to /Applications, then unmount.
         let mount_output = std::process::Command::new("hdiutil")
@@ -542,8 +609,14 @@ fn score_github_asset(name: &str) -> Option<u32> {
             return None;
         }
         let mut score = 1u32;
-        if lower.ends_with(".msi") {
-            score += 2; // install_update shells to msiexec
+        // R-MAJ-5: nsis `-setup.exe` is the only configured Windows bundle
+        // target — it outscores `.msi` (kept working if one is ever published).
+        if lower.ends_with("-setup.exe") {
+            score += 3;
+        } else if lower.ends_with(".msi") {
+            score += 2;
+        } else if lower.ends_with(".exe") {
+            score += 1;
         }
         if arch_bonus {
             score += 2;
@@ -641,6 +714,31 @@ mod tests {
         // it errors on the key first — either way it refuses.)
         assert!(verify_update_signature(b"bytes", None).is_err());
         assert!(verify_update_signature(b"bytes", Some("   ")).is_err());
+    }
+
+    #[test]
+    fn test_windows_artifact_kind_from_url_name() {
+        // R-MAJ-5/6: driver selection from the download file name.
+        assert!(is_windows_msi(Some("ClickyX_0.2.3_x64.msi")));
+        assert!(!is_windows_msi(Some("ClickyX_0.2.3_x64-setup.exe")));
+        assert!(!is_windows_msi(None));
+        assert_eq!(
+            file_name_from_url("https://example.com/r/ClickyX_0.2.3_x64-setup.exe?x=1").as_deref(),
+            Some("ClickyX_0.2.3_x64-setup.exe")
+        );
+        assert!(file_name_from_url("https://example.com/").is_none());
+    }
+
+    #[cfg(target_os = "windows")]
+    #[test]
+    fn test_score_github_asset_windows_prefers_nsis_setup_exe() {
+        // R-MAJ-5: the configured nsis bundle must outscore any .msi.
+        let msi = score_github_asset("ClickyX_0.2.3_x64.msi").unwrap();
+        let exe = score_github_asset("ClickyX_0.2.3_x64-setup.exe").unwrap();
+        assert!(
+            exe > msi,
+            "nsis -setup.exe ({exe}) must outscore .msi ({msi})"
+        );
     }
 
     #[test]

@@ -44,7 +44,9 @@ jobs:
             src-tauri/target
             ~/.cargo/registry
             ~/.cargo/git
-          key: ${{ matrix.os }}-cargo-${{ hashFiles('src-tauri/Cargo.toml') }}
+          key: ${{ matrix.os }}-cargo-${{ hashFiles('src-tauri/Cargo.lock') }}
+          restore-keys: |
+            ${{ matrix.os }}-cargo-
 
       - name: Install sccache (Rust compile cache)
         uses: mozilla-actions/sccache-action@v0.0.11
@@ -60,7 +62,7 @@ jobs:
         if: matrix.os == 'ubuntu-24.04'
         run: |
           sudo apt-get update -y
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libxdo-dev libasound2-dev libspeechd-dev libpipewire-0.3-dev libdrm-dev libgbm-dev
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libxdo-dev libasound2-dev libspeechd-dev libpipewire-0.3-dev libdrm-dev libgbm-dev libclang-dev
 
       - name: Install npm dependencies
         run: npm ci
@@ -69,10 +71,14 @@ jobs:
         run: npm run build
 
       - name: Build Tauri app
+        env:
+          # W-MAJ-9: bake the trusted minisign release pubkey (mirrors
+          # release.yml) so local signature verification works on nightlies.
+          CLICKYX_UPDATE_PUBKEY: ${{ secrets.UPDATE_SIGNING_PUBKEY }}
         run: npm run tauri build ${{ startsWith(matrix.os, 'macos') && '-- --bundles dmg,app' || '' }}
 
       - name: Upload artifacts
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: clickyx-${{ matrix.os }}
           path: src-tauri/target/release/bundle/
@@ -108,9 +114,29 @@ jobs:
 
           ### Downloads
           EOF
-          find artifacts -type f | while read -r f; do
+          find artifacts -type f \( -name "*.msi" -o -name "*.exe" -o -name "*.dmg" -o -name "*.zip" -o -name "*.AppImage" -o -name "*.deb" -o -name "*.rpm" \) | while read -r f; do
             echo "- $(basename "$f")" >> release-notes.md
           done
+
+      - name: Sign update artifacts (minisign)
+        # W-MAJ-9: mirrors release.yml — nightlies ARE published as GitHub
+        # pre-releases, so they get .sig companions like releases do.
+        # Requires repo secret UPDATE_SIGNING_KEY_B64 (base64 minisign key).
+        env:
+          UPDATE_SIGNING_KEY_B64: ${{ secrets.UPDATE_SIGNING_KEY_B64 }}
+        run: |
+          if [ -z "$UPDATE_SIGNING_KEY_B64" ]; then
+            echo "::warning::UPDATE_SIGNING_KEY_B64 not set — nightly artifacts will ship WITHOUT .sig; the in-app updater will refuse them (fail-closed, by design)"
+            exit 0
+          fi
+          (sudo apt-get install -y minisign 2>/dev/null || cargo install minisign --locked) 2>&1 | tail -1
+          echo "$UPDATE_SIGNING_KEY_B64" | base64 -d > /tmp/update.key
+          chmod 600 /tmp/update.key
+          find artifacts -type f \( -name "*.msi" -o -name "*.exe" -o -name "*.dmg" -o -name "*.AppImage" -o -name "*.deb" -o -name "*.rpm" \) | while read f; do
+            minisign -S -m "$f" -s /tmp/update.key -x "$f.sig"
+            echo "signed: $f.sig"
+          done
+          rm -f /tmp/update.key
 
       - name: Delete older nightly releases (keep last 5)
         uses: dev-drprasad/delete-older-releases@v0.3.3
@@ -137,3 +163,4 @@ jobs:
             artifacts/**/*.AppImage
             artifacts/**/*.deb
             artifacts/**/*.rpm
+            artifacts/**/*.sig

@@ -20,6 +20,10 @@ pub struct FillOutcome {
     /// `clipboard-paste` | `copy-only-wayland` | `copy-only-refused-paste`.
     pub mode: String,
     pub restored: bool,
+    /// S-MAJ-9: honest failure detail (e.g. Wayland clipboard unavailable).
+    /// `None` on success paths; old payloads without it still deserialize.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reason: Option<String>,
 }
 
 fn clipboard() -> Result<arboard::Clipboard, String> {
@@ -101,27 +105,68 @@ pub fn fill_draft(text: &str) -> Result<FillOutcome, String> {
     }
     // Secret-shaped drafts never auto-paste (copy-only; user confirms).
     if super::questions::detect_money_or_secret(text) {
-        copy_text(text)?;
-        return Ok(FillOutcome {
-            filled: false,
-            copied: true,
-            mode: "copy-only-refused-paste".into(),
-            restored: false,
-        });
+        match copy_text(text) {
+            Ok(()) => {
+                return Ok(FillOutcome {
+                    filled: false,
+                    copied: true,
+                    mode: "copy-only-refused-paste".into(),
+                    restored: false,
+                    reason: None,
+                });
+            }
+            Err(e) => {
+                // S-MAJ-9: honest status instead of Err on the copy-only path.
+                if is_wayland() {
+                    log::warn!("jarvis fill: wayland copy failed ({e}) len={}", text.len());
+                    return Ok(FillOutcome {
+                        filled: false,
+                        copied: false,
+                        mode: "copy-only-refused-paste".into(),
+                        restored: false,
+                        reason: Some(format!(
+                            "clipboard copy failed ({e}); copy the draft manually"
+                        )),
+                    });
+                }
+                return Err(e);
+            }
+        }
     }
 
     let original: Option<String> = clipboard().ok().and_then(|mut cb| cb.get_text().ok());
 
-    copy_text(text)?;
-
+    let copy_err = copy_text(text).err();
     if is_wayland() {
-        log::info!("jarvis fill: wayland copy-only len={}", text.len());
-        return Ok(FillOutcome {
-            filled: false,
-            copied: true,
-            mode: "copy-only-wayland".into(),
-            restored: false,
-        });
+        // S-MAJ-9: the Wayland "copy-only" promise must survive an arboard
+        // failure — report {filled:false, copied:false} + reason, never Err.
+        match copy_err {
+            None => {
+                log::info!("jarvis fill: wayland copy-only len={}", text.len());
+                return Ok(FillOutcome {
+                    filled: false,
+                    copied: true,
+                    mode: "copy-only-wayland".into(),
+                    restored: false,
+                    reason: None,
+                });
+            }
+            Some(e) => {
+                log::warn!("jarvis fill: wayland copy failed ({e}) len={}", text.len());
+                return Ok(FillOutcome {
+                    filled: false,
+                    copied: false,
+                    mode: "copy-only-wayland".into(),
+                    restored: false,
+                    reason: Some(format!(
+                        "clipboard copy failed ({e}); copy the draft manually"
+                    )),
+                });
+            }
+        }
+    }
+    if let Some(e) = copy_err {
+        return Err(e);
     }
 
     match press_paste_combo() {
@@ -134,6 +179,7 @@ pub fn fill_draft(text: &str) -> Result<FillOutcome, String> {
                 copied: true,
                 mode: "clipboard-paste".into(),
                 restored,
+                reason: None,
             })
         }
         Err(e) => {
@@ -146,6 +192,7 @@ pub fn fill_draft(text: &str) -> Result<FillOutcome, String> {
                 copied: true,
                 mode: "copy-only-refused-paste".into(),
                 restored: false,
+                reason: None,
             })
         }
     }
@@ -168,5 +215,40 @@ mod tests {
         assert!(fill_draft("").is_err());
         assert!(fill_draft("   ").is_err());
         assert!(fill_draft(&"x".repeat(4001)).is_err());
+    }
+
+    #[test]
+    fn test_fill_outcome_status_shape() {
+        // S-MAJ-9: the honest copy-only status shape (no display needed —
+        // constructed directly, serialized like the bridge returns it).
+        let o = FillOutcome {
+            filled: false,
+            copied: false,
+            mode: "copy-only-wayland".into(),
+            restored: false,
+            reason: Some("clipboard copy failed (test); copy the draft manually".into()),
+        };
+        let v = serde_json::to_value(&o).unwrap();
+        assert_eq!(v["filled"], false);
+        assert_eq!(v["copied"], false);
+        assert_eq!(v["mode"], "copy-only-wayland");
+        assert_eq!(v["restored"], false);
+        assert!(v["reason"].as_str().unwrap().contains("manually"));
+        // Success paths carry no reason key.
+        let ok = FillOutcome {
+            filled: false,
+            copied: true,
+            mode: "copy-only-wayland".into(),
+            restored: false,
+            reason: None,
+        };
+        let v = serde_json::to_value(&ok).unwrap();
+        assert!(v.get("reason").is_none());
+        // Old payloads without `reason` still deserialize (back-compat).
+        let legacy: FillOutcome = serde_json::from_str(
+            r#"{"filled":true,"copied":true,"mode":"clipboard-paste","restored":true}"#,
+        )
+        .unwrap();
+        assert!(legacy.reason.is_none());
     }
 }

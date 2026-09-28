@@ -19,6 +19,11 @@ X-Bridge-Token: <your-token>
 
 Requests without a valid token receive `401 Unauthorized`.
 
+> **Note on the examples below:** every curl example that hits an
+> auth-protected endpoint includes `-H "x-openclicky-token: $TOKEN"`
+> (with `TOKEN` set to your bridge token). `GET /health` is the only
+> endpoint that never requires auth.
+
 **Tiers.** `GET /health` never requires auth. When `bridge_auth_disabled: true` is set
 (explicit opt-out — the Settings UI warns), read-only endpoints are open, but the
 **dangerous tier always requires a token**: `/click`, `/scroll`, `/screenshot`,
@@ -100,7 +105,8 @@ Show or hide the main ClickyX panel window.
 
 **Example:**
 ```sh
-curl -X POST http://127.0.0.1:32123/panel/toggle
+curl -X POST http://127.0.0.1:32123/panel/toggle \
+  -H "x-openclicky-token: $TOKEN"
 ```
 
 ---
@@ -139,6 +145,7 @@ The request/response format is identical to `https://api.anthropic.com/v1/messag
 **Example:**
 ```sh
 curl -X POST http://127.0.0.1:32123/v1/messages \
+  -H "x-openclicky-token: $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"messages":[{"role":"user","content":"Hi"}],"max_tokens":100}'
 ```
@@ -226,7 +233,8 @@ Capture all connected monitors and return JPEG images as base64.
 
 **Example:**
 ```sh
-curl -X POST http://127.0.0.1:32123/screenshot | jq '.images[0].width'
+curl -X POST http://127.0.0.1:32123/screenshot \
+  -H "x-openclicky-token: $TOKEN" | jq '.images[0].width'
 ```
 
 ---
@@ -261,6 +269,7 @@ Draw an AI cursor marker at a specific screen coordinate.
 **Example:**
 ```sh
 curl -X POST http://127.0.0.1:32123/cursor \
+  -H "x-openclicky-token: $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"x":100,"y":200,"label":"Target"}'
 ```
@@ -411,12 +420,14 @@ Omit the body (or omit the `screen` field) to clear all displays simultaneously.
 
 **Example — clear all:**
 ```sh
-curl -X POST http://127.0.0.1:32123/clear
+curl -X POST http://127.0.0.1:32123/clear \
+  -H "x-openclicky-token: $TOKEN"
 ```
 
 **Example — clear display 1 only:**
 ```sh
 curl -X POST http://127.0.0.1:32123/clear \
+  -H "x-openclicky-token: $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"screen":1}'
 ```
@@ -451,6 +462,7 @@ Synthesize speech using the configured TTS provider and return raw audio.
 **Example:**
 ```sh
 curl -X POST http://127.0.0.1:32123/speak \
+  -H "x-openclicky-token: $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"text":"Hello world"}' \
   --output speech.wav
@@ -492,6 +504,7 @@ Transcribe a WAV audio file using the configured STT provider.
 ```sh
 AUDIO_B64=$(base64 -w0 /tmp/recording.wav)
 curl -X POST http://127.0.0.1:32123/transcribe \
+  -H "x-openclicky-token: $TOKEN" \
   -H "Content-Type: application/json" \
   -d "{\"audio_base64\":\"$AUDIO_B64\"}"
 ```
@@ -523,7 +536,8 @@ Returns `{"rms":0,"peak":0,"clipping":false}` when the voice pipeline is not ini
 
 **Example:**
 ```sh
-curl http://127.0.0.1:32123/audio-level
+curl http://127.0.0.1:32123/audio-level \
+  -H "x-openclicky-token: $TOKEN"
 ```
 
 ---
@@ -557,7 +571,7 @@ data: <JSON-payload>
 
 **Example (curl):**
 ```sh
-curl -N -H "Accept: text/event-stream" http://127.0.0.1:32123/events
+curl -N -H "Accept: text/event-stream" -H "x-openclicky-token: $TOKEN" http://127.0.0.1:32123/events
 ```
 
 **Example (JavaScript):**
@@ -648,6 +662,11 @@ Invoke a tool on an MCP server.
 
 List all agents in the agent store.
 
+> **Sensitive when auth is disabled:** with `bridge_auth_disabled: true`
+> this read-only endpoint is open and each entry carries the agent's full
+> `transcript` (conversation content). Treat it as sensitive — keep auth on
+> unless you accept LAN-localhost exposure of transcripts.
+
 **Response `200`:**
 ```json
 {
@@ -696,6 +715,7 @@ Create a new agent.
 **Example:**
 ```sh
 curl -X POST http://127.0.0.1:32123/agent/create \
+  -H "x-openclicky-token: $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"name":"Analyst","slug":"analyst","skills":["code"]}'
 ```
@@ -726,6 +746,7 @@ Start or resume an agent with an optional prompt.
 **Example:**
 ```sh
 curl -X POST http://127.0.0.1:32123/agent/analyst/run \
+  -H "x-openclicky-token: $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"prompt":"Summarize the open tabs"}'
 ```
@@ -746,7 +767,8 @@ Pause a running agent.
 
 **Example:**
 ```sh
-curl -X POST http://127.0.0.1:32123/agent/analyst/stop
+curl -X POST http://127.0.0.1:32123/agent/analyst/stop \
+  -H "x-openclicky-token: $TOKEN"
 ```
 
 ---
@@ -754,6 +776,11 @@ curl -X POST http://127.0.0.1:32123/agent/analyst/stop
 ### `GET /agent/{slug}/status`
 
 Get the current status and transcript of an agent.
+
+> **Sensitive when auth is disabled:** with `bridge_auth_disabled: true`
+> this read-only endpoint is open and returns the full `transcript`
+> (conversation content). Treat it as sensitive — keep auth on unless you
+> accept LAN-localhost exposure of transcripts.
 
 **Path parameter:** `slug` — the agent's slug.
 

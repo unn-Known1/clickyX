@@ -300,10 +300,20 @@ pub fn import_config(app: AppHandle, json: String) -> Result<AppConfig, String> 
 
 /// P0-T2/H-6 guard: `openai_base_url` gets `Authorization: Bearer <user key>`,
 /// so it must be an explicit http(s) URL — never empty, never another scheme.
+/// S-MAJ-6: plain `http://` is allowed ONLY for loopback hosts (shared helper
+/// with the Jev validator); anything else must be `https://`.
 pub(crate) fn validate_openai_base_url(base_url: &str) -> Result<(), String> {
     let lower = base_url.trim().to_ascii_lowercase();
-    if lower.starts_with("https://") || lower.starts_with("http://") {
+    if lower.strip_prefix("https://").is_some() {
         Ok(())
+    } else if let Some(rest) = lower.strip_prefix("http://") {
+        if crate::ai::jev::http_authority_is_loopback(rest) {
+            Ok(())
+        } else {
+            Err(format!(
+                "refusing non-local http openai_base_url (use https, or localhost for dev): {base_url}"
+            ))
+        }
     } else {
         Err(format!(
             "refusing openai_base_url without explicit http(s) scheme: {base_url}"
@@ -313,9 +323,83 @@ pub(crate) fn validate_openai_base_url(base_url: &str) -> Result<(), String> {
 
 #[tauri::command]
 pub fn reset_config(app: AppHandle) -> Result<AppConfig, String> {
+    // S-MIN-7: drop legacy per-provider keychain entries named by the outgoing
+    // config (wipe_secrets covers the fixed key set + known provider slugs).
+    if let Ok(outgoing) = config::load_config(&app) {
+        let store = crate::secret_store::KeychainStore;
+        for k in &outgoing.api_keys {
+            let _ = store.delete(&crate::secret_store::keys::legacy_api_key(&k.provider));
+        }
+    }
     // Wipe keychain copies first so hydration can't resurrect rotated secrets.
     crate::secret_store::wipe_secrets(&crate::secret_store::KeychainStore);
-    let config = AppConfig::default();
+    let mut config = AppConfig::default();
+    // S-MAJ-3: the wipe destroyed the encryption key + bridge token — mint
+    // fresh ones (fail-closed: auth stays ON with a known token) and
+    // hot-reload the running bridge so it stops serving the dead token.
+    config.agent.encryption_key = config::generate_secret_token();
+    config.bridge_token = Some(config::generate_secret_token());
+    config.bridge_auth_disabled = false;
     config::save_config(&app, &config)?;
+    apply_bridge_auth_state(&app, &config);
+    // S-MAJ-3: kb.enc / conversations.enc / agents.enc are undecryptable under
+    // the fresh key — delete the orphans instead of leaving dead files.
+    let base = dirs::config_dir()
+        .unwrap_or_else(|| std::path::PathBuf::from("."))
+        .join("clickyx");
+    for name in ["kb.enc", "conversations.enc", "agents.enc"] {
+        match std::fs::remove_file(base.join(name)) {
+            Ok(()) => log::info!(
+                "reset_config: removed orphaned {name} (undecryptable after key rotation)"
+            ),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+            Err(e) => log::warn!("reset_config: could not remove {name}: {e}"),
+        }
+    }
+    // automations.json holds schedules/prompts, not secrets — left in place by
+    // design; log what was left so nothing is silently kept OR silently lost.
+    let auto_path = base.join(&config.automations_file);
+    match std::fs::read_to_string(&auto_path) {
+        Ok(content) => {
+            let n = serde_json::from_str::<Vec<serde_json::Value>>(&content)
+                .map(|v| v.len())
+                .unwrap_or(0);
+            log::info!(
+                "reset_config: left {n} automations.json schedule(s) in place at {}",
+                auto_path.display()
+            );
+        }
+        Err(_) => log::info!("reset_config: no automations.json found; nothing left behind"),
+    }
     Ok(config)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::validate_openai_base_url;
+
+    #[test]
+    fn test_validate_openai_base_url_https_and_loopback_http() {
+        assert!(validate_openai_base_url("https://api.openai.com/v1").is_ok());
+        assert!(validate_openai_base_url("http://localhost:8080/v1").is_ok());
+        assert!(validate_openai_base_url("http://127.0.0.1:11434/v1").is_ok());
+        assert!(validate_openai_base_url("http://[::1]:11434/v1").is_ok());
+    }
+
+    #[test]
+    fn test_validate_openai_base_url_rejects_remote_http_and_schemes() {
+        for bad in [
+            "http://example.com/v1",
+            "http://192.168.1.10:11434/v1",
+            "file:///etc/passwd",
+            "ftp://x",
+            "",
+            "api.openai.com/v1",
+        ] {
+            assert!(
+                validate_openai_base_url(bad).is_err(),
+                "should reject {bad}"
+            );
+        }
+    }
 }
