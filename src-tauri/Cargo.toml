@@ -50,7 +50,7 @@ cpal = "0.15"
 hound = "3.5"
 uuid = { version = "1", features = ["v4"] }
 xcap = "0.9"
-base64 = "0.22"
+base64 = "0.23"
 toml = "0.8"
 image = { version = "0.25", default-features = false, features = ["jpeg"] }
 actix-cors = "0.7"
