@@ -4,6 +4,8 @@ All notable changes to ClickyX are documented here.
 
 ## [Unreleased]
 
+## [0.2.3] - 2026-09-28
+
 ### Added — Jev decision provider + Jarvis co-pilot (Track 1 + 2)
 - **TypeSafe Jev provider** (`ai/jev.rs`): `JevClient` over OpenRouter / TypeSafe-direct /
   Bocha (CN, residency warning) / Vercel / Zen / custom triples; `choice`/`noul`/`score`
@@ -248,7 +250,9 @@ All notable changes to ClickyX are documented here.
 - NVIDIA NIM API support via configurable `openai_base_url`
 - Cross-platform CI/CD (Linux, Windows, macOS)
 
-[Unreleased]: https://github.com/unn-Known1/clickyX/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/unn-Known1/clickyX/compare/v0.2.3...HEAD
+[0.2.3]: https://github.com/unn-Known1/clickyX/compare/v0.2.2...v0.2.3
+[0.2.2]: https://github.com/unn-Known1/clickyX/compare/v0.2.0...v0.2.2
 [0.2.0]: https://github.com/unn-Known1/clickyX/compare/v0.1.3...v0.2.0
 [0.1.3]: https://github.com/unn-Known1/clickyX/compare/v0.1.2...v0.1.3
 [0.1.2]: https://github.com/unn-Known1/clickyX/compare/v0.1.1...v0.1.2

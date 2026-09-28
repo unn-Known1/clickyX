@@ -5,11 +5,11 @@
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![Tauri v2](https://img.shields.io/badge/Tauri-v2-orange)](https://tauri.app)
 [![Rust](https://img.shields.io/badge/rust-stable-blueviolet)](https://www.rust-lang.org)
-[![Version 0.2.0](https://img.shields.io/badge/version-0.2.0-informational)](https://github.com/unn-Known1/clickyX/releases/tag/v0.2.0)
+[![Version 0.2.3](https://img.shields.io/badge/version-0.2.3-informational)](https://github.com/unn-Known1/clickyX/releases/tag/v0.2.3)
 [![Local-First](https://img.shields.io/badge/local--first-yes-success)]()
 [![Telemetry](https://img.shields.io/badge/telemetry-none-success)]()
 
-> Cross-platform AI desktop companion — voice, screen context, cursor overlay, background agents, computer use, and a local HTTP bridge. Runs on Windows, Linux, and macOS. Zero cloud dependency.
+> Cross-platform AI desktop companion — voice, screen context, cursor overlay, background agents, computer use, chat co-pilot, and a local HTTP bridge. Runs on Windows, Linux, and macOS. Free, open-source, offline-capable. Zero cloud dependency, zero telemetry.
 
 ---
 
@@ -18,6 +18,8 @@
 ClickyX is a **Rust + Tauri + React** reimplementation of [HeyClicky](https://github.com/farzaa/clicky) (the leading macOS-only AI desktop companion by Farza Majeed, YC W26) — built from scratch to run natively on all three major desktop platforms with no subscription, no telemetry, and no hosted services.
 
 It is not a chatbot. It is a **runtime**: system-tray UI, transparent per-screen overlay, `localhost:32123` HTTP bridge, Codex agent runtime, computer-use engine, automation scheduler, and a full skill system — all user-owned and locally operated.
+
+**New in 0.2.3 — Jarvis chat co-pilot + TypeSafe Jev decisions:** the focused window is judged by the Jev System-One decision model (intent, danger 1–9, should-reply), your chat model drafts 3 replies, Jev ranks them, and the winner is pasted **fill-only — never auto-sent**. WeChat/banking windows are hard-blocked, and every run shows exactly what was read plus its judge cost. See [docs/JEV_JARVIS_IMPLEMENTATION_REPORT.md](docs/JEV_JARVIS_IMPLEMENTATION_REPORT.md) and [docs/PRIVACY.md](docs/PRIVACY.md).
 
 ---
 
@@ -49,8 +51,10 @@ Artifacts land in `src-tauri/target/release/bundle/`:
 | **Agents** | Codex Node.js sidecar, session lifecycle, floating HUD window, 64 bundled skills, voice-agent handoff, file drag-drop onto cards |
 | **Computer Use** | `enigo`-based click/double-click/scroll/type/key on all platforms; background mode (no cursor warp); app-specific CUA context injection |
 | **Chat** | react-markdown + syntax highlighting, conversation sidebar, per-session stream scoping, draft persistence, stop/cancel, drag-drop images, model selector filtered to configured providers |
+| **Jarvis co-pilot** ✨ | Judge → draft-3 → rank → fill-only paste for any chat app; danger/intent badges, what-was-read + cost, blocklist, encrypted local KB, `Ctrl+Shift+J`, opt-in auto-trigger |
+| **Decisions (Jev)** | TypeSafe System-One `choice`/`noul`/`score` over OpenRouter, TypeSafe-direct, Bocha, Vercel, or Zen; presets + connectivity test in Settings |
 | **Connections** | Google Workspace (status shown, OAuth2 setup required), MCP CRUD (real stdio JSON-RPC), automation cron/interval + run history, app usage log |
-| **Bridge API** | 25+ endpoints on `localhost:32123` — REST + SSE, token auth, CORS, Anthropic/OpenAI proxy, MCP tool routing (full reference: `docs/BRIDGE_API.md`) |
+| **Bridge API** | 29+ endpoints on `localhost:32123` — REST + SSE, token auth, CORS, Anthropic/OpenAI proxy, MCP tool routing, `/jarvis/*` co-pilot tier (full reference: `docs/BRIDGE_API.md`) |
 | **Automations** | Cron + interval scheduling, JSON persistence, agent binding, run history |
 | **3D Generation** | Tripo3D API + Three.js GLB orbit viewer |
 | **Theming** | 6 named accent variants, system/light/dark, semantic CSS tokens |
@@ -68,12 +72,13 @@ Artifacts land in `src-tauri/target/release/bundle/`:
 ├───────────────────────────────────────────────────────┤
 │  Rust Backend (src-tauri/src/)                        │
 │  audio/   VAD · STT · TTS · wake word · handoff        │
-│  ai/      Anthropic · OpenAI · guidance tag parser    │
+│  ai/      Anthropic · OpenAI · Jev decisions · guidance tag parser │
+│  jarvis/   blocklist · extract · judge · kb.enc · fill-only paste  │
 │  agent/   Codex · sessions · 64 skills · dock         │
 │  screen/  xcap · auto-capture · coordinates           │
 │  overlay/ cursors · glow · lifecycle · screen router  │
 │  cua.rs   enigo input (native + background mode)      │
-│  bridge.rs  HTTP API 127.0.0.1:32123                  │
+│  bridge.rs  HTTP API 127.0.0.1:32123 (+ /jarvis/* tier)        │
 │  permissions  real TCC/registry/pactl checks          │
 │  automation/  cron + interval scheduler               │
 ├───────────────────────────────────────────────────────┤
@@ -113,6 +118,7 @@ Configure keys in **Settings → AI Providers**:
 | Deepgram | `dg-...` | STT WebSocket |
 | AssemblyAI | — | STT HTTP |
 | NVIDIA / OpenRouter | any | Set custom Base URL under OpenAI section |
+| TypeSafe Jev | Jev / OpenRouter / Gateway key | Decision models (`choice`/`noul`/`score`) — configured in **Settings → Jev Jarvis**, never used for chat |
 
 ---
 
@@ -135,6 +141,20 @@ curl -X POST http://localhost:32123/cursor \
 ```
 
 Full endpoint reference: [docs/BRIDGE_API.md](docs/BRIDGE_API.md)
+
+The `/jarvis/*` tier (`analyze`/`fill`/`status`/`test`) exposes the co-pilot over HTTP and is always token-gated — same tier as clicks and screenshots.
+
+---
+
+## Why ClickyX?
+
+- **HeyClicky alternative for Windows and Linux** — the macOS-only companion, reimplemented natively for all three desktop OSes.
+- **Free and open-source (MIT)** — no subscription, no seat limits, no hosted OAuth.
+- **Private by design** — local-first, no telemetry, keychain-backed keys, encrypted stores; read [docs/PRIVACY.md](docs/PRIVACY.md) and [SECURITY.md](SECURITY.md).
+- **Offline-capable** — System TTS, local skills, and file-backed config work with no network; only your chosen AI endpoints are ever contacted.
+- **Scriptable** — 29+ bridge endpoints plus MCP stdio routing automate the whole runtime from any local process.
+
+Keywords: AI desktop assistant, voice assistant, computer use agent, screen-aware chatbot, chat co-pilot, auto-reply drafts, Windows AI companion, Linux AI assistant, macOS productivity app, open-source, self-hosted, privacy-first, Tauri, Rust.
 
 ---
 
@@ -161,6 +181,8 @@ npm run tauri build              # full production binary
 | [docs/PROJECT_SPEC.md](docs/PROJECT_SPEC.md) | Full feature specification, architecture, implementation details |
 | [docs/CONFIGURATION.md](docs/CONFIGURATION.md) | Complete config schema reference |
 | [docs/BRIDGE_API.md](docs/BRIDGE_API.md) | `localhost:32123` endpoint reference |
+| [docs/JEV_JARVIS_IMPLEMENTATION_REPORT.md](docs/JEV_JARVIS_IMPLEMENTATION_REPORT.md) | Jev + Jarvis design, API surfaces, phased plan |
+| [docs/PRIVACY.md](docs/PRIVACY.md) | What Jarvis reads, where it goes, how to wipe it |
 | [docs/SETUP.md](docs/SETUP.md) | Developer environment setup |
 | [AGENTS.md](AGENTS.md) | AI coding agent instructions for this codebase |
 | [CHANGELOG.md](CHANGELOG.md) | Version history |
@@ -192,6 +214,8 @@ Pull requests, bug reports, and feature requests are welcome. See [CONTRIBUTING.
 - **Jason Kneen** — for [OpenClicky](https://github.com/jasonkneen/openclicky), which defined the `localhost:32123` bridge contract
 - **OpenAI Codex team** — for the cross-platform Node.js agent runtime
 - **Tauri team** — for making cross-platform native desktop apps in Rust practical
+- **TypeSafe AI** — for the Jev System-One decision model (user key, user endpoint)
+- **[jev-chat-jarvis](https://github.com/jev-chat/jev-chat-jarvis)** (MIT) — the chat co-pilot pattern that inspired Jarvis mode; see `LICENSE`/`NOTICE`
 
 ---
 

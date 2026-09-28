@@ -1,7 +1,25 @@
 {
   "name": "clickyx",
   "private": true,
-  "version": "0.2.2",
+  "version": "0.2.3",
+  "description": "ClickyX — cross-platform AI desktop companion (voice, screen context, computer use, local-first, no telemetry)",
+  "keywords": [
+    "ai",
+    "assistant",
+    "desktop",
+    "tauri",
+    "computer-use",
+    "voice",
+    "local-first",
+    "open-source"
+  ],
+  "author": "ClickyX Contributors",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/unn-Known1/clickyX.git"
+  },
+  "homepage": "https://github.com/unn-Known1/clickyX#readme",
   "type": "module",
   "scripts": {
     "dev": "vite",

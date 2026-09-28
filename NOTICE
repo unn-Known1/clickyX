@@ -1,0 +1,31 @@
+# Third-Party Notices — ClickyX
+
+ClickyX is MIT-licensed (see `LICENSE`). This file records third-party
+inspiration and compatible-licensed references used by the project.
+
+## Chat co-pilot pattern (inspiration, no vendored code)
+
+Jarvis mode's judge → draft-3 → rank → fill-only interaction pattern was
+inspired by:
+
+- **jev-chat-jarvis** — https://github.com/jev-chat/jev-chat-jarvis (MIT License)
+
+No source from that project is vendored in this repository: judge questions,
+prompts, thresholds, and all Rust/TypeScript code were re-derived for ClickyX
+(see `docs/JEV_JARVIS_IMPLEMENTATION_REPORT.md`). If upstream code is vendored
+in the future, its full MIT text and copyright notice will be reproduced here
+at the pinned revision.
+
+## Decision backend (user-configured service, not distributed)
+
+- **TypeSafe Jev** — https://typesafe.ai — proprietary API accessed with the
+  user's own key at their configured endpoint. No TypeSafe code is distributed
+  with ClickyX.
+
+## Design references (no code)
+
+- **HeyClicky** by Farza Majeed (https://github.com/farzaa/clicky) — macOS-only
+  AI desktop companion; feature/design reference for the cross-platform
+  reimplementation.
+- **OpenClicky** by Jason Kneen (https://github.com/jasonkneen/openclicky) —
+  defined the `localhost:32123` bridge contract ClickyX stays compatible with.

@@ -187,7 +187,7 @@ python3 -c "import yaml; yaml.safe_load(open('.github/workflows/ci.yml'))"  # va
 - `npm run build` — passes (TypeScript + Vite)
 - `npm test` — 18 test files, 126 cases passing
 - CI: Check (ubuntu: build + unit + clippy `-D warnings` + `cargo fmt --check`) + Build (ubuntu/windows/macos) + E2E (ubuntu, Playwright incl. `e2e/jarvis.spec.ts` mocked) — **PASSING**
-- Release: v0.2.0 tagged; GitHub releases ship as **drafts** until manually published (the updater only sees published releases)
+- Release: v0.2.3 tagged (Jev + Jarvis); GitHub releases ship as **drafts** until manually published (the updater only sees published releases)
 - Flatpak: Build passing
 - macOS: `--bundles dmg,app` + `macOSPrivateApi: true` for overlay transparency
 - Windows `cargo test`: tauri embeds the comctl32 v6 manifest into bins only, so the lib test harness loads comctl32 v5 and dies at startup with `STATUS_ENTRYPOINT_NOT_FOUND` (tao/rfd import v6-only `TaskDialogIndirect`, `*Subclass`). `src-tauri/build.rs` links a manifest-only resource into every artifact AND delay-loads comctl32. `CARGO_BUILD_WARNINGS=deny` is set: linker warnings fail the build, so benign ones need surgical `/IGNORE:<n>`

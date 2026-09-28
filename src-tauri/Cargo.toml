@@ -1,10 +1,11 @@
 [package]
 name = "clickyx"
-version = "0.2.2"
+version = "0.2.3"
 description = "ClickyX - Cross-platform AI companion"
 authors = ["ClickyX Contributors"]
 repository = "https://github.com/unn-Known1/clickyX"
 homepage = "https://clickyx.ai"
+keywords = ["ai", "desktop", "assistant", "tauri", "computer-use"]
 edition = "2021"
 default-run = "clickyx"
 
