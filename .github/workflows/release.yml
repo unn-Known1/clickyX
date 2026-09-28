@@ -3,6 +3,14 @@ on:
   push:
     tags:
       - "v*"
+  # Manual re-trigger (tag delete+recreate races the startup loader and yields
+  # instant "workflow file issue" failures with zero jobs — dispatch instead).
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag to release (must exist)"
+        required: true
+        default: "v0.2.3"
 
 permissions:
   contents: write
@@ -53,7 +61,7 @@ jobs:
       - name: Install system deps (Linux)
         run: |
           sudo apt-get update -y
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libxdo-dev libasound2-dev libspeechd-dev libpipewire-0.3-dev libdrm-dev libgbm-dev libclang-dev libclang-dev
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libxdo-dev libasound2-dev libspeechd-dev libpipewire-0.3-dev libdrm-dev libgbm-dev libclang-dev
 
       - name: Check Rust compilation
         working-directory: src-tauri
@@ -176,10 +184,14 @@ jobs:
     name: Create Release
     needs: build
     runs-on: ubuntu-latest
+    # Tag push and manual dispatch both land here; prefer the explicit input.
+    env:
+      RELEASE_TAG: ${{ github.event.inputs.tag || github.ref_name }}
     steps:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
+          ref: ${{ env.RELEASE_TAG }}
 
       - name: Download all artifacts
         uses: actions/download-artifact@v7
@@ -189,7 +201,7 @@ jobs:
       - name: Check if pre-release tag
         id: check
         run: |
-          TAG="${{ github.ref_name }}"
+          TAG="${{ env.RELEASE_TAG }}"
           if echo "$TAG" | grep -Eq '\-(alpha|beta|rc|pre|dev|test)'; then
             echo "prerelease=true" >> "$GITHUB_OUTPUT"
           else
@@ -204,7 +216,7 @@ jobs:
       - name: Generate changelog
         id: changelog
         run: |
-          git cliff --unreleased --tag "${{ github.ref_name }}" --output CHANGELOG.md 2>/dev/null || true
+          git cliff --unreleased --tag "${{ env.RELEASE_TAG }}" --output CHANGELOG.md 2>/dev/null || true
           if [ ! -f CHANGELOG.md ] || [ ! -s CHANGELOG.md ]; then
             echo "## What's Changed" > CHANGELOG.md
           fi
@@ -247,8 +259,8 @@ jobs:
       - name: Create Release
         uses: softprops/action-gh-release@v3
         with:
-          tag_name: ${{ github.ref_name }}
-          name: ClickyX ${{ github.ref_name }}
+          tag_name: ${{ env.RELEASE_TAG }}
+          name: ClickyX ${{ env.RELEASE_TAG }}
           body_path: release-notes.md
           # P0-T3: releases publish immediately — drafts are invisible to the
           # updater and to users (the old `draft: true` is why "v0.2.0
