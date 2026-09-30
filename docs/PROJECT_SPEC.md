@@ -191,7 +191,7 @@ Per-screen transparent `WebviewWindow` (always-on-top, click-through), `macOSPri
 ### 3.7 Permissions
 
 Real OS-level checks and requests — no stubs:
-- **macOS:** sqlite3 TCC database, `screencapture` probe for screen, `osascript` for accessibility; `open x-apple.systempreferences:...` to request
+- **macOS:** AVFoundation `AVCaptureDevice` status + in-process `requestAccess` prompt for mic/camera (`audio/mic_permission.rs`), `screencapture` probe for screen, `osascript` for accessibility; `open x-apple.systempreferences:...` as manual-grant fallback
 - **Windows:** PowerShell `CapabilityAccessManager` registry; `ms-settings:privacy-*` URIs to request via `powershell -WindowStyle Hidden` (no blank terminal flash)
 - **Linux:** `pactl info` (mic), `systemctl --user is-active pipewire` (screen), `busctl --user list` (notifications), `pgrep at-spi-bus-laun` (accessibility)
 

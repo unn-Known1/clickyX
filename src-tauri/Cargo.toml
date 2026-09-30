@@ -68,6 +68,13 @@ minisign-verify = "0.2.5"
 keyring = "4.2.0"
 arboard = "3"
 
+# #113: in-process TCC microphone/camera prompt on macOS. AVFoundation-only,
+# macOS-gated so Linux/Windows builds and lockfiles are unaffected.
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2 = "0.6"
+block2 = "0.6"
+objc2-av-foundation = "0.3"
+
 [dev-dependencies]
 actix-http = "3.13.6"
 tempfile = "3"

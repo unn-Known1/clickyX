@@ -47,11 +47,10 @@ pub struct PermissionStatus {
 fn check_os_permission(perm: &Permission) -> PermissionStatus {
     match perm {
         Permission::Microphone => {
-            // Query the TCC database for microphone access.
-            // The system TCC DB lives at /Library/Application Support/com.apple.TCC/TCC.db
-            // and the user-level at ~/Library/Application Support/com.apple.TCC/TCC.db.
-            // We check both with sqlite3. A "granted" row has auth_value=2.
-            let granted = check_tcc_permission("kTCCServiceMicrophone");
+            // #113: read the real TCC authorization state via AVFoundation.
+            // The old sqlite3 TCC.db probe needed Full Disk Access to read
+            // and could never *request* access, so the app never prompted.
+            let granted = crate::audio::mic_permission::microphone_access_granted();
             PermissionStatus {
                 permission: perm.name().into(),
                 granted,
@@ -88,7 +87,8 @@ fn check_os_permission(perm: &Permission) -> PermissionStatus {
             }
         }
         Permission::Camera => {
-            let granted = check_tcc_permission("kTCCServiceCamera");
+            // Same AVFoundation status read as microphone (see above).
+            let granted = crate::audio::mic_permission::camera_access_granted();
             PermissionStatus {
                 permission: perm.name().into(),
                 granted,
@@ -123,49 +123,6 @@ fn check_os_permission(perm: &Permission) -> PermissionStatus {
             }
         }
     }
-}
-
-/// Read the TCC SQLite database via `sqlite3` shell command.
-/// Returns true only when OUR bundle (`com.clickyx.app`) has `auth_value=2`
-/// (allowed) for the given service. Checks both user and system TCC databases.
-///
-/// P1 (H-13) fixes vs the old version:
-/// - scoped to our client (the old query returned true when ANY app was
-///   allowed, e.g. Safari's microphone grant counted as ours);
-/// - dropped the `COUNT(*)` fallback (any row — including denials — granted);
-/// - fail-CLOSED on unreadable DB (the old comment claimed fallback-true while
-///   the code returned false; now comment and code agree: denied).
-/// Our own bundle ID. Must match `identifier` in tauri.conf.json.
-#[cfg(target_os = "macos")]
-const CLICKYX_BUNDLE_ID: &str = "com.clickyx.app";
-
-#[cfg(target_os = "macos")]
-fn check_tcc_permission(service: &str) -> bool {
-    let home = std::env::var("HOME").unwrap_or_else(|_| "/root".into());
-    let user_db = format!("{}/Library/Application Support/com.apple.TCC/TCC.db", home);
-    let system_db = "/Library/Application Support/com.apple.TCC/TCC.db";
-
-    // Strict schema: auth_value=2 means allowed. No COUNT(*) fallback.
-    let query = format!(
-        "SELECT auth_value FROM access WHERE service='{}' AND client='{}' AND auth_value=2 LIMIT 1;",
-        service, CLICKYX_BUNDLE_ID
-    );
-
-    for db in [user_db.as_str(), system_db] {
-        let out = Command::new("sqlite3").args([db, query.as_str()]).output();
-        if let Ok(o) = out {
-            if o.status.success() && String::from_utf8_lossy(&o.stdout).trim() == "2" {
-                return true;
-            }
-        }
-    }
-
-    log::warn!(
-        "TCC permission check for '{}' found no grant for {} — treating as denied.",
-        service,
-        CLICKYX_BUNDLE_ID
-    );
-    false
 }
 
 /// Attempt a test screen capture to a temp file and check if it succeeds.
@@ -234,6 +191,43 @@ fn permission_settings_url(perm: &Permission) -> String {
 #[cfg(target_os = "macos")]
 fn request_os_permission(perm: &Permission) -> Result<bool, String> {
     log::info!("Requesting permission: {:?} (macOS)", perm);
+
+    // #113: AV-media permissions must be requested in-process via
+    // AVFoundation — merely opening System Settings never prompts, so the
+    // app would never appear in the Microphone/Camera pane.
+    let prompt_result = match perm {
+        Permission::Microphone => {
+            Some(crate::audio::mic_permission::ensure_microphone_access())
+        }
+        Permission::Camera => Some(crate::audio::mic_permission::ensure_camera_access()),
+        _ => None,
+    };
+    if let Some(result) = prompt_result {
+        match result {
+            Ok(()) => {
+                log::info!("In-process {:?} prompt granted", perm);
+                return Ok(true);
+            }
+            Err(e) => {
+                // Fall through to the Settings pane so a previously-denied
+                // user can flip it manually; the error carries the cause.
+                log::info!(
+                    "In-process {:?} prompt did not grant access ({e}); opening System Settings",
+                    perm
+                );
+                let _ = open_permission_settings(perm);
+                return Err(e);
+            }
+        }
+    }
+
+    open_permission_settings(perm)
+}
+
+/// Open the System Settings privacy pane for `perm`. Returns `Ok(false)`
+/// — the user still needs to grant; we only opened the dialog.
+#[cfg(target_os = "macos")]
+fn open_permission_settings(perm: &Permission) -> Result<bool, String> {
     let url = permission_settings_url(perm);
 
     let result = Command::new("open")
@@ -243,7 +237,7 @@ fn request_os_permission(perm: &Permission) -> Result<bool, String> {
 
     if result.status.success() {
         log::info!("Opened System Settings for permission: {:?}", perm);
-        Ok(false) // User still needs to grant; we just opened the dialog
+        Ok(false)
     } else {
         let stderr = String::from_utf8_lossy(&result.stderr);
         Err(format!("Failed to open settings: {}", stderr))

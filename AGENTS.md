@@ -93,7 +93,7 @@ python3 -c "import yaml; yaml.safe_load(open('.github/workflows/ci.yml'))"  # va
 | `overlay/lifecycle.rs` | Annotation lifecycle (armed → completed → missed) |
 | `overlay/manager.rs` | Annotation manager + sweep task |
 | `cua.rs` | `InputSimulator` — click, scroll, type, background mode |
-| `permissions.rs` | Real OS checks — TCC sqlite3 (macOS), registry (Windows), pactl (Linux) |
+| `permissions.rs` | Real OS checks — AVFoundation status/prompt for mic/camera + `screencapture`/`osascript` probes (macOS), registry (Windows), pactl (Linux) |
 | `automation/mod.rs` | Cron + interval scheduler with JSON persistence |
 | `gen3d.rs` | Tripo3D API |
 | `updater.rs` | Platform-aware updater with streaming progress events |

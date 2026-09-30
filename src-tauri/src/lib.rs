@@ -330,18 +330,24 @@ pub fn run() {
             // Start always-on voice mode if enabled
             if config.audio.activation_mode == "always_on" {
                 let ao_handle = handle.clone();
-                if pipeline.start_always_on().is_ok() {
-                    let _ = pipeline.run_always_on_vad_loop(Box::new(move |text| {
-                        let payload = serde_json::json!({
-                            "type": "auto_transcript",
-                            "text": text
-                        });
-                        let _ = ao_handle.emit("voice-transcript", payload);
-                        log::info!("Always-on transcript: {}", text);
-                    }));
-                    log::info!("Voice pipeline: always-on mode started from setup");
-                } else {
-                    log::warn!("Voice pipeline: always-on mode failed to start");
+                match pipeline.start_always_on() {
+                    Ok(()) => {
+                        let _ = pipeline.run_always_on_vad_loop(Box::new(move |text| {
+                            let payload = serde_json::json!({
+                                "type": "auto_transcript",
+                                "text": text
+                            });
+                            let _ = ao_handle.emit("voice-transcript", payload);
+                            log::info!("Always-on transcript: {}", text);
+                        }));
+                        log::info!("Voice pipeline: always-on mode started from setup");
+                    }
+                    // #113: surface the underlying cause (e.g. microphone
+                    // denied — the message names the remediation) instead of
+                    // a generic warning that hides why voice never starts.
+                    Err(e) => {
+                        log::warn!("Voice pipeline: always-on mode failed to start: {e}");
+                    }
                 }
             }
 

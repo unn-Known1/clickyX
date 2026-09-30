@@ -195,6 +195,13 @@ impl AudioCapture {
             return Err("Already recording".into());
         }
 
+        // #113 (macOS): cpal opens CoreAudio directly and never triggers
+        // the TCC microphone prompt — request access in-process first so
+        // the user gets a consent dialog instead of silent failure. All
+        // voice paths (PTT, always-on, wake word) funnel through here.
+        #[cfg(target_os = "macos")]
+        super::mic_permission::ensure_microphone_access()?;
+
         use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 
         #[cfg(target_os = "windows")]

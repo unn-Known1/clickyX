@@ -1,6 +1,7 @@
 mod capture;
 mod capture_thread;
 pub mod handoff;
+pub mod mic_permission;
 mod pipeline;
 mod stt;
 mod tts;
