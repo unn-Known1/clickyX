@@ -196,9 +196,7 @@ fn request_os_permission(perm: &Permission) -> Result<bool, String> {
     // AVFoundation — merely opening System Settings never prompts, so the
     // app would never appear in the Microphone/Camera pane.
     let prompt_result = match perm {
-        Permission::Microphone => {
-            Some(crate::audio::mic_permission::ensure_microphone_access())
-        }
+        Permission::Microphone => Some(crate::audio::mic_permission::ensure_microphone_access()),
         Permission::Camera => Some(crate::audio::mic_permission::ensure_camera_access()),
         _ => None,
     };
