@@ -131,21 +131,25 @@ pub fn ensure_camera_access() -> Result<(), String> {
 // ────────────────────────────────────────────────────────────────────────────
 
 #[cfg(not(target_os = "macos"))]
+#[allow(dead_code)]
 pub fn microphone_access_granted() -> bool {
     true
 }
 
 #[cfg(not(target_os = "macos"))]
+#[allow(dead_code)]
 pub fn camera_access_granted() -> bool {
     true
 }
 
 #[cfg(not(target_os = "macos"))]
+#[allow(dead_code)]
 pub fn ensure_microphone_access() -> Result<(), String> {
     Ok(())
 }
 
 #[cfg(not(target_os = "macos"))]
+#[allow(dead_code)]
 pub fn ensure_camera_access() -> Result<(), String> {
     Ok(())
 }
