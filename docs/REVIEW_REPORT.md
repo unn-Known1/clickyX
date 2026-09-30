@@ -475,7 +475,7 @@ Also: `check_for_update_with_delta` appears **dead**; dual update paths.
 
 **CRITICAL — split-brain query keys:** `useAiConfig.ts:7` → `["ai_config"]` vs `ChatTab.tsx:178` + `ModelSelector.tsx:17` → `["ai-config"]` → stale provider state.
 
-**Bindings compliance:** letter ✅ (no raw invoke outside bindings) but Appearance/OverlayPrefs import `invoke` directly bypassing wrappers and re-declare local `AppConfig`.
+**Bindings compliance:** letter ✅ (no raw invoke outside bindings) but Appearance/OverlayPrefs import `invoke` directly bypassing wrappers and redeclare local `AppConfig`.
 
 **Globals:** `window.__paletteSection` used; `__deepLinkPending` dead; `sessionStorage deep_link_agent_slug` **never read**; `AgentHUD` `(window as any).__AGENT_SLUG` undeclared.
 

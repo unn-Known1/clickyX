@@ -56,13 +56,13 @@ pub fn update_signing_pubkey() -> &'static str {
 }
 
 /// Parse `1.2.3` / `v1.2.3` into a semver Version. Returns None when the
-/// string is not valid semver (caller treats unparseable as "no update").
+/// string is not valid semver (caller treats unparsable as "no update").
 fn parse_version(v: &str) -> Option<semver::Version> {
     semver::Version::parse(v.trim().trim_start_matches(['v', 'V'])).ok()
 }
 
 /// True only when `latest` is strictly NEWER than `current` (semver order).
-/// Equal, older, or unparseable versions never report an update — this also
+/// Equal, older, or unparsable versions never report an update — this also
 /// refuses downgrades/replays (C-2).
 fn is_newer_version(latest: &str, current: &str) -> bool {
     match (parse_version(latest), parse_version(current)) {
@@ -142,7 +142,7 @@ async fn check_hosted_for_updates(current_version: &str) -> Result<UpdateInfo, S
         return Ok(no_update(Some(data.version), data.notes));
     };
 
-    // P0-T3: semver-aware — never offer equal/older/unparseable versions.
+    // P0-T3: semver-aware — never offer equal/older/unparsable versions.
     if !is_newer_version(&data.version, current_version) {
         log::info!(
             "updater: remote v{} is not newer than current v{current_version}; no update",
@@ -538,7 +538,7 @@ pub async fn check_github_for_updates(current_version: &str) -> Result<UpdateInf
         .await
         .map_err(|e| format!("failed to parse github release: {e}"))?;
 
-    // P0-T3: semver-aware — equal/older/unparseable never offer an update.
+    // P0-T3: semver-aware — equal/older/unparsable never offer an update.
     if !is_newer_version(&release.tag_name, current_version) {
         log::info!(
             "updater: github release {} is not newer than current v{current_version}; no update",

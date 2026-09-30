@@ -137,9 +137,11 @@ jobs:
       - name: Audit npm dependencies
         run: npm audit --audit-level=high
       # Inline --skip flags (no dotfiles): generated deps, snapshots, lockfiles.
+      # --ignore-words-list: identifiers (ans/currentY/pres/te/afterAll,
+      # intentional fuzzy-query settin) + correct ES/FR locale words.
       - name: Check spelling (codespell)
         run: |
-          pipx run codespell --skip="./node_modules,./src-tauri/target,./target,./e2e/*snapshots*,./package-lock.json,./src-tauri/Cargo.lock,./.git" --ignore-words-list="crate,tauri,webview"
+          pipx run codespell --skip="./node_modules,./src-tauri/target,./target,./e2e/*snapshots*,./package-lock.json,./src-tauri/Cargo.lock,./.git" --ignore-words-list="crate,tauri,webview,ans,settin,currentY,pres,te,afterAll,Comando,Argumentos,Historial,historial,comandos,requiere,accesible,profesional,Controles,Variante,Apparence,Trafic,classe,juge,Juge,collecter,copie,Copie,Pont,pont,processus,reste,rouge"
 
   # Resolves the build matrix so manual runs can drop the already-green
   # ubuntu leg (skip-linux). `matrix` can't be read in a job-level `if`,
