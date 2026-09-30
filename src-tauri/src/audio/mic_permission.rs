@@ -64,8 +64,7 @@ fn access_granted(kind: MediaKind) -> bool {
     kind.media_type()
         .map(|mt| {
             // SAFETY: pure class-method status query, no callbacks.
-            unsafe { AVCaptureDevice::authorizationStatusForMediaType(mt) }
-                == AVAuthorizationStatus::Authorized
+            unsafe { AVCaptureDevice::authorizationStatusForMediaType(mt) == AVAuthorizationStatus::Authorized }
         })
         .unwrap_or(false)
 }
