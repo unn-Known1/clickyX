@@ -139,7 +139,7 @@ jobs:
           rm -f /tmp/update.key
 
       - name: Delete older nightly releases (keep last 5)
-        uses: dev-drprasad/delete-older-releases@v0.3.3
+        uses: dev-drprasad/delete-older-releases@v0.3.4
         continue-on-error: true
         with:
           keep_latest: 5
