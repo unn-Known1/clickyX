@@ -106,9 +106,9 @@ Type mode:
 
 **STT providers:** Deepgram (WebSocket), OpenAI Whisper (HTTP), AssemblyAI (HTTP)
 
-**TTS providers:** ElevenLabs, Cartesia, Microsoft Edge TTS (no key), Deepgram Aura, OpenAI Realtime, **System TTS** (SAPI on Windows, AVFoundation on macOS, Speech Dispatcher on Linux — no key, fully offline)
+**TTS providers:** ElevenLabs, 60db (BYOK, workspace voice discovery), Cartesia, Microsoft Edge TTS (no key), Deepgram Aura, OpenAI Realtime, **System TTS** (SAPI on Windows, AVFoundation on macOS, Speech Dispatcher on Linux — no key, fully offline)
 
-**Voice discovery:** Drag-to-rotate orbit picker, 5-provider voice catalog, click-to-select with per-voice accent color auto-applied to overlay
+**Voice discovery:** Drag-to-rotate orbit picker with static catalogs and authenticated 60db Quality/Fast workspace catalogs; selecting a voice saves its provider and immediately updates the running pipeline, with per-voice accent color auto-applied to overlay
 
 ### 3.3 Screen Context & Vision
 

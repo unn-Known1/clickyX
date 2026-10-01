@@ -135,6 +135,7 @@ function VoiceSettings() {
         >
           <option value="elevenlabs">ElevenLabs</option>
           <option value="cartesia">Cartesia</option>
+          <option value="sixtydb">60db</option>
           <option value="aura">Deepgram (Aura)</option>
           <option value="system">{t("voice.systemOffline")}</option>
         </select>

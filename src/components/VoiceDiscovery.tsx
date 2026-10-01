@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { useTranslation } from "react-i18next";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { commands } from "../bindings";
 import type { VoiceInfo, VoiceProvider } from "../bindings";
 
@@ -72,6 +72,8 @@ function VoiceOrbitNode({
 
 export default function VoiceDiscovery({ audioConfig, onSelected }: VoiceDiscoveryProps) {
   const { t } = useTranslation();
+  const queryClient = useQueryClient();
+  const [selectionError, setSelectionError] = useState("");
   const [selectedProvider, setSelectedProvider] = useState<string>(audioConfig.tts_provider);
   const [hovered, setHovered] = useState<VoiceInfo | null>(null);
   const [selected, setSelected] = useState<string>(audioConfig.selected_voice_id);
@@ -85,12 +87,21 @@ export default function VoiceDiscovery({ audioConfig, onSelected }: VoiceDiscove
     queryFn: () => commands.getVoiceProviders(),
     staleTime: 300_000,
   });
-  const { data: voices = [] } = useQuery<VoiceInfo[]>({
+  const { data: voices = [], error: voiceError, isLoading: voicesLoading } = useQuery<VoiceInfo[], Error>({
     queryKey: ["voices", selectedProvider],
-    queryFn: () => commands.getVoices(selectedProvider),
+    queryFn: async () => {
+      try { return await commands.getVoices(selectedProvider); }
+      catch (error) { throw new Error(error instanceof Error ? error.message : String(error), { cause: error }); }
+    },
     staleTime: 300_000,
     enabled: !!selectedProvider,
+    retry: false,
   });
+
+  useEffect(() => {
+    setSelectedProvider(audioConfig.tts_provider);
+    setSelected(audioConfig.selected_voice_id);
+  }, [audioConfig.tts_provider, audioConfig.selected_voice_id]);
 
   // Use refs so drag callbacks always see the latest values without re-creating
   const voicesRef = useRef<VoiceInfo[]>([]);
@@ -111,14 +122,16 @@ export default function VoiceDiscovery({ audioConfig, onSelected }: VoiceDiscove
   }, [providers, selectedProvider]);
 
   const onSelect = useCallback(async (v: VoiceInfo) => {
-    setSelected(v.id);
+    setSelectionError("");
     try {
-      await commands.selectVoice(v.id, v.accent_color);
+      await commands.selectVoice(v.id, v.accent_color, v.provider);
+      setSelected(v.id);
+      await queryClient.invalidateQueries({ queryKey: ["audio_config"] });
       onSelected?.(v.id, v.accent_color);
     } catch (e) {
-      console.error("Failed to select voice:", e);
+      setSelectionError(String(e));
     }
-  }, [onSelected]);
+  }, [onSelected, queryClient]);
 
   const onPointerDown = useCallback((e: React.PointerEvent) => {
     setDragging(true);
@@ -179,6 +192,10 @@ export default function VoiceDiscovery({ audioConfig, onSelected }: VoiceDiscove
         </span>
       </div>
 
+      {(voiceError || selectionError) && (
+        <div className="settings-error" role="alert">{voiceError?.message || selectionError}</div>
+      )}
+      {voicesLoading && <div className="skeleton-loader" role="status" />}
       <div
         className="voice-orbit"
         onPointerDown={onPointerDown}

@@ -3,6 +3,7 @@ mod capture_thread;
 pub mod handoff;
 pub mod mic_permission;
 mod pipeline;
+pub mod sixtydb;
 mod stt;
 mod tts;
 mod voices;

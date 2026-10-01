@@ -378,6 +378,7 @@ const KNOWN_LEGACY_PROVIDERS: &[&str] = &[
     "whisper",
     "assemblyai",
     "elevenlabs",
+    "sixtydb",
     "cartesia",
     "edge",
     "microsoftedge",
