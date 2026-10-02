@@ -16,6 +16,33 @@ pub fn get_config(app: AppHandle) -> Result<AppConfig, String> {
     config::load_config(&app)
 }
 
+/// S-MIN-6: secrets-omitting config getter for UI display paths.
+///
+/// Same shape as [`get_config`], but every secret value is blanked
+/// unconditionally — `api_keys` values, AI provider keys, the Jev key, the
+/// agent encryption key, and the bridge token. Provider names and all
+/// non-secret settings are preserved so UI renders normally (including
+/// "saved" indicators). Key management (`AiProviderSettings`) keeps using
+/// [`get_config`]; everything else must use this.
+#[tauri::command]
+pub fn get_public_config(app: AppHandle) -> Result<AppConfig, String> {
+    let mut config = config::load_config(&app)?;
+    redact_config_secrets(&mut config);
+    Ok(config)
+}
+
+/// Blank every secret field in place; non-secret settings are untouched.
+pub fn redact_config_secrets(config: &mut AppConfig) {
+    for entry in &mut config.api_keys {
+        entry.key.clear();
+    }
+    config.ai.anthropic_api_key = None;
+    config.ai.openai_api_key = None;
+    config.jev.api_key = None;
+    config.agent.encryption_key.clear();
+    config.bridge_token = None;
+}
+
 #[tauri::command]
 pub fn update_config(app: AppHandle, partial: serde_json::Value) -> Result<AppConfig, String> {
     let mut config = config::load_config(&app)?;
@@ -376,7 +403,7 @@ pub fn reset_config(app: AppHandle) -> Result<AppConfig, String> {
 
 #[cfg(test)]
 mod tests {
-    use super::validate_openai_base_url;
+    use super::{redact_config_secrets, validate_openai_base_url};
 
     #[test]
     fn test_validate_openai_base_url_https_and_loopback_http() {
@@ -384,6 +411,47 @@ mod tests {
         assert!(validate_openai_base_url("http://localhost:8080/v1").is_ok());
         assert!(validate_openai_base_url("http://127.0.0.1:11434/v1").is_ok());
         assert!(validate_openai_base_url("http://[::1]:11434/v1").is_ok());
+    }
+
+    #[test]
+    fn test_redact_config_secrets_blanks_values_keeps_shape() {
+        let mut config = crate::config::AppConfig {
+            bridge_token: Some("bridge-secret".into()),
+            ..crate::config::AppConfig::default()
+        };
+        config.agent.encryption_key = "enc-secret".into();
+        config.ai.anthropic_api_key = Some("sk-ant-test".into());
+        config.ai.openai_api_key = Some("sk-openai-test".into());
+        config.jev.api_key = Some("jev-test".into());
+        config.theme = "dark".into();
+        config.api_keys = vec![
+            crate::config::ApiKey {
+                provider: "deepgram".into(),
+                key: "dg-test".into(),
+            },
+            crate::config::ApiKey {
+                provider: "sixtydb".into(),
+                key: "db-test".into(),
+            },
+        ];
+
+        redact_config_secrets(&mut config);
+
+        assert!(config.bridge_token.is_none());
+        assert!(config.agent.encryption_key.is_empty());
+        assert!(config.ai.anthropic_api_key.is_none());
+        assert!(config.ai.openai_api_key.is_none());
+        assert!(config.jev.api_key.is_none());
+        assert!(config.api_keys.iter().all(|entry| entry.key.is_empty()));
+        // Provider names survive so UI can render "saved" indicators.
+        let providers: Vec<_> = config
+            .api_keys
+            .iter()
+            .map(|entry| entry.provider.as_str())
+            .collect();
+        assert_eq!(providers, ["deepgram", "sixtydb"]);
+        // Non-secret settings are untouched.
+        assert_eq!(config.theme, "dark");
     }
 
     #[test]

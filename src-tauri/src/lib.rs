@@ -578,6 +578,7 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             commands::get_config,
+            commands::get_public_config,
             commands::update_config,
             commands::toggle_panel,
             commands::toggle_panel_pin,

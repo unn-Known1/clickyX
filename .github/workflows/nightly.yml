@@ -166,8 +166,10 @@ jobs:
             artifacts/**/*.sig
 
   # NOTE: job-level `permissions` REPLACES the workflow-level block, so this
-  # job gets ONLY `issues: write` (least privilege). No checkout step on
-  # purpose — `gh` API calls need no repo read; `gh` CLI is preinstalled.
+  # job gets ONLY `issues: write` (least privilege). A sparse checkout is
+  # still required: without a git repo the `gh` CLI fails every API call
+  # with "not a git repository" (observed 2026-10-02), so failure reports
+  # silently never file.
   report-failures:
     name: Report failures
     needs: [build, release]
@@ -175,9 +177,14 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       issues: write
+      contents: read
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
+      - name: Check out repository (gh CLI needs repo context)
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 1
       - name: File or update nightly-failure issue
         run: |
           FAILED=""

@@ -184,7 +184,10 @@ CI Build legs run it as gate.
 
 ### Deferred (breaking or needs a product decision — NOT forgotten)
 - R-MIN-1 deep-link scheme `openclicky` rename; W-MIN-8 identifier `com.clickyx.app` rename.
-- S-MIN-6 secrets-omitting config getter (renderer is same-origin trusted; needs API design).
+- S-MIN-6 secrets-omitting config getter — IMPLEMENTED: `get_public_config` command
+  (`config_cmds.rs`) blanks all secret values; display paths use the new
+  `usePublicConfig` hook, key management keeps `get_config`. Renderer only
+  sees live secrets on the AI Providers page.
 - S-MIN-9 autostart/login-item (needs per-OS plugin decision).
 - R-MIN-6 local `targets: all` vs CI-pinned bundles (accepted skew, CI is source of truth).
 
@@ -192,7 +195,10 @@ CI Build legs run it as gate.
 - R-CRIT-4 Apple signing secrets; Windows PFX secrets (guard fixed, cert itself is owner-side).
 - F-MAJ-3 six `.mp3` in `public/sounds/`; F-MAJ-4 `intro.mp4` in `public/onboarding/`.
 - W-MIN-11 publishing hosted `releases.clickyx.app` metadata (code now falls back correctly).
-- W-MAJ-8 pre-fix nightly failure heals on next schedule.
+- W-MAJ-8 nightly still red AFTER the pre-fix window: `Create Pre-release` fails because
+  the stored `UPDATE_SIGNING_KEY_B64` is a password-encrypted minisign key
+  (`Wrong password for that key`, run `37005334126`) — replace with an unencrypted
+  key. Report-failures job fixed (was missing checkout, so reports never filed).
 
 ## 6. Suggested fix order (ship-blockers first)
 

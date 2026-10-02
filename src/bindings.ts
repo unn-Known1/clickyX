@@ -22,6 +22,10 @@ export function invoke<T>(cmd: string, args?: any): Promise<T> {
   if (!isTauri) {
     console.warn(`[Tauri Mock] invoke("${cmd}") called in browser.`);
     // Provide safe defaults for critical commands to avoid UI breakage
+    // S-MIN-6: the public getter shares the no-secrets mock shape.
+    if (cmd === "get_public_config") {
+      return invoke("get_config") as any;
+    }
     if (cmd === "get_config") {
       return Promise.resolve({
         hotkeys: [],
@@ -714,6 +718,8 @@ export interface AudioLevelResponse {
 export const commands = {
   // Config
   getConfig: () => invoke<AppConfig>("get_config"),
+  // S-MIN-6: secrets-omitting getter for UI display paths (key values blanked).
+  getPublicConfig: () => invoke<AppConfig>("get_public_config"),
   updateConfig: (partial: Partial<AppConfig>) => invoke<AppConfig>("update_config", { partial }),
   exportConfig: (includeSecrets: boolean) => invoke<string>("export_config", { include_secrets: includeSecrets }),
   importConfig: (json: string) => invoke<unknown>("import_config", { json }),
