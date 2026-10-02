@@ -180,7 +180,7 @@ Array of provider API keys. Each provider looks for its entry here.
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `provider` | string | Provider identifier: `"anthropic"`, `"openai"`, `"deepgram"`, `"elevenlabs"`. |
+| `provider` | string | Provider identifier: `"anthropic"`, `"openai"`, `"deepgram"`, `"elevenlabs"`, `"sixtydb"`. |
 | `key` | string | API key value. Stored in plaintext — keep the config file permissions restricted. |
 
 **Alternatively**, AI provider keys can be set in the `ai` object directly.
@@ -233,14 +233,18 @@ Controls voice input/output pipeline.
 |-------|------|---------|-------------|
 | `ptt_hotkey` | string | `"Ctrl+Shift+V"` | Push-to-talk hotkey. See `hotkeys[]` for key format. |
 | `stt_provider` | string | `"deepgram"` | Speech-to-text provider. Options: `"deepgram"`, `"whisper"`. |
-| `tts_provider` | string | `"elevenlabs"` | Text-to-speech provider. Options: `"elevenlabs"`, `"system"`. |
+| `tts_provider` | string | `"elevenlabs"` | Text-to-speech provider. Options include `"elevenlabs"`, `"cartesia"`, `"aura"`, `"edge"`, `"openai_realtime"`, `"sixtydb"`, `"system"`. |
 | `activation_mode` | string | `"ptt"` | Voice activation mode. Options: `"ptt"` (push-to-talk), `"always_on"`. |
 | `auto_submit` | boolean | `true` | Automatically submit the transcribed text when PTT is released. |
 | `sample_rate` | integer | `16000` | Audio sample rate in Hz. Supported: `8000`, `16000`, `44100`. |
 | `buffer_size` | integer | `1024` | Audio input buffer size in frames. |
 | `volume` | float | `1.0` | TTS playback volume. Range: 0.0–1.0. |
-| `selected_voice_id` | string | `"21m00Tcm4TlvDq8ikWAM"` | ElevenLabs voice ID used for TTS responses. |
+| `selected_voice_id` | string | `"21m00Tcm4TlvDq8ikWAM"` | Voice ID used by the selected TTS provider. For 60db, select a workspace voice UUID from Voice Discovery. |
 | `vad_sensitivity` | float | `0.5` | Voice Activity Detection threshold. Range: 0.0 (least sensitive) – 1.0 (most sensitive). Higher values require louder speech to trigger. |
+
+#### 60db text-to-speech
+
+60db provides a hosted speech synthesis API. Add your API key under Settings → AI Providers → 60db, then choose 60db under Voice & Audio. Voice Discovery retrieves both Quality and Fast workspace voices from the authenticated catalog; select a voice before speaking. Text is sent to `https://api.60db.ai/tts-synthesize` and LINEAR16 output is converted to a mono 24 kHz WAV for the existing audio path. Requests accept up to 5000 characters. No voice UUID or credential is bundled with the app.
 
 #### `audio.always_on_config`
 

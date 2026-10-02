@@ -73,6 +73,7 @@ python3 -c "import yaml; yaml.safe_load(open('.github/workflows/ci.yml'))"  # va
 | `audio/pipeline.rs` | VAD loop, audio ducking, voice-agent handoff, always-on mode |
 | `audio/handoff.rs` | `VoiceAgentHandoff` — phrase detection → `voice-agent-handoff` event |
 | `audio/tts.rs` | TTS providers (ElevenLabs, Cartesia, Edge, Deepgram Aura, OpenAI Realtime, System TTS) |
+| `audio/sixtydb.rs` | 60db BYOK TTS, authenticated workspace catalogs, bounded audio decoding and WAV conversion |
 | `audio/stt.rs` | STT providers (Deepgram, Whisper, AssemblyAI) |
 | `audio/voices.rs` | 6-provider voice catalog (includes System TTS) |
 | `ai/guidance.rs` | Annotation tag parser — POINT, RECT, SCRIBBLE, OFFER, HIGHLIGHT, SHAPE |

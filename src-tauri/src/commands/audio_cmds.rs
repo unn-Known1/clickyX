@@ -364,8 +364,21 @@ pub fn set_cursor_accent(app: AppHandle, color: String) -> Result<(), String> {
 // --- Voice Discovery Commands ---
 
 #[tauri::command]
-pub fn get_voices(provider: String) -> Vec<crate::audio::VoiceInfo> {
-    crate::audio::get_voices_for_provider(&provider)
+pub async fn get_voices(
+    app: AppHandle,
+    provider: String,
+) -> Result<Vec<crate::audio::VoiceInfo>, String> {
+    if provider == "sixtydb" {
+        let config = config::load_config(&app)?;
+        let key = config
+            .api_keys
+            .iter()
+            .find(|key| key.provider == "sixtydb")
+            .map(|key| key.key.as_str())
+            .unwrap_or("");
+        return crate::audio::sixtydb::voices(key).await;
+    }
+    Ok(crate::audio::get_voices_for_provider(&provider))
 }
 
 #[tauri::command]
@@ -376,18 +389,30 @@ pub fn get_voice(voice_id: String) -> Option<crate::audio::VoiceInfo> {
 #[tauri::command]
 pub fn select_voice(
     app: AppHandle,
+    pipeline: State<'_, Mutex<VoicePipeline>>,
     voice_id: String,
     accent_color: Option<String>,
+    provider: Option<String>,
 ) -> Result<(), String> {
     let mut config = config::load_config(&app)?;
+    if provider.as_deref() == Some("sixtydb") {
+        uuid::Uuid::parse_str(&voice_id).map_err(|_| "Invalid 60db voice ID")?;
+        config.audio.tts_provider = "sixtydb".into();
+    }
     config.audio.selected_voice_id = voice_id.clone();
-    if let Some(voice_info) = crate::audio::get_voice_by_id(&voice_id) {
-        config.audio.tts_provider = voice_info.provider;
+    if provider.as_deref() != Some("sixtydb") {
+        if let Some(voice_info) = crate::audio::get_voice_by_id(&voice_id) {
+            config.audio.tts_provider = voice_info.provider;
+        }
     }
     if let Some(ac) = accent_color.clone() {
         config.overlay.cursor_accent = ac;
     }
     config::save_config(&app, &config)?;
+    pipeline
+        .lock()
+        .map_err(|e| format!("lock error: {e}"))?
+        .update_config(&config.audio, &config.api_keys)?;
     if let Some(ac) = accent_color {
         let _ = app.emit("accent-changed", ac);
     }
@@ -400,6 +425,7 @@ pub fn get_voice_providers() -> Vec<serde_json::Value> {
     vec![
         serde_json::json!({ "id": "elevenlabs", "name": "ElevenLabs", "tier": "premium", "requires_key": true }),
         serde_json::json!({ "id": "cartesia", "name": "Cartesia", "tier": "premium", "requires_key": true }),
+        serde_json::json!({ "id": "sixtydb", "name": "60db", "tier": "premium", "requires_key": true }),
         serde_json::json!({ "id": "aura", "name": "Deepgram Aura", "tier": "premium", "requires_key": true }),
         serde_json::json!({ "id": "openai_realtime", "name": "OpenAI Realtime", "tier": "premium", "requires_key": true }),
         serde_json::json!({ "id": "edge", "name": "Microsoft Edge", "tier": "free", "requires_key": false }),

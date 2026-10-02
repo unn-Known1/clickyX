@@ -251,12 +251,14 @@ export function invoke<T>(cmd: string, args?: any): Promise<T> {
       return Promise.resolve([
         { id: "elevenlabs", name: "ElevenLabs", tier: "premium", requires_key: true },
         { id: "cartesia", name: "Cartesia", tier: "premium", requires_key: true },
+        { id: "sixtydb", name: "60db", tier: "premium", requires_key: true },
         { id: "openai_realtime", name: "OpenAI Realtime", tier: "premium", requires_key: true },
         { id: "system", name: "System (Offline)", tier: "free", requires_key: false }
       ]) as any;
     }
     if (cmd === "get_voices") {
       const provider = args?.provider || "elevenlabs";
+      if (provider === "sixtydb") return Promise.resolve([]) as any;
       if (provider === "system") {
         return Promise.resolve([
           { id: "system_default", provider: "system", name: "System Voice", description: "Built-in operating system voice", accent_color: "#66bb6a", gender: "neutral", style: "default", language: "en-US", tier: "free" }
@@ -788,7 +790,7 @@ export const commands = {
   // Voice
   getVoiceProviders: () => invoke<VoiceProvider[]>("get_voice_providers"),
   getVoices: (provider: string) => invoke<VoiceInfo[]>("get_voices", { provider }),
-  selectVoice: (voiceId: string, accentColor: string) => invoke<void>("select_voice", { voiceId, accentColor }),
+  selectVoice: (voiceId: string, accentColor: string, provider?: string) => invoke<void>("select_voice", { voiceId, accentColor, provider }),
   setAccentPreset: (color: string) => invoke<string>("set_accent_preset", { color }),
   toggleTutorMode: () => invoke<boolean>("toggle_tutor_mode"),
 

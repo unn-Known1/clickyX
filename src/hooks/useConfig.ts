@@ -22,6 +22,7 @@ export function useConfig() {
     mutationFn: (partial) => commands.updateConfig(partial),
     onSuccess: (updated) => {
       queryClient.setQueryData(["config"], updated);
+      void queryClient.invalidateQueries({ queryKey: ["voices", "sixtydb"] });
     },
   });
 

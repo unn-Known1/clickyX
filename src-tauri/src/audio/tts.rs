@@ -1,6 +1,7 @@
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum TtsProvider {
     ElevenLabs,
+    SixtyDb,
     Cartesia,
     MicrosoftEdge,
     DeepgramAura,
@@ -12,6 +13,7 @@ impl TtsProvider {
     pub fn from_name(name: &str) -> Option<Self> {
         match name.to_lowercase().as_str() {
             "elevenlabs" => Some(Self::ElevenLabs),
+            "sixtydb" | "60db" => Some(Self::SixtyDb),
             "cartesia" => Some(Self::Cartesia),
             "edge" | "microsoftedge" => Some(Self::MicrosoftEdge),
             "aura" | "deepgramaura" => Some(Self::DeepgramAura),
@@ -24,6 +26,7 @@ impl TtsProvider {
     pub fn name(&self) -> &'static str {
         match self {
             Self::ElevenLabs => "elevenlabs",
+            Self::SixtyDb => "sixtydb",
             Self::Cartesia => "cartesia",
             Self::MicrosoftEdge => "edge",
             Self::DeepgramAura => "aura",
@@ -69,6 +72,7 @@ pub async fn speak(text: &str, config: &TtsConfig) -> Result<Vec<u8>, String> {
 
     match config.provider {
         TtsProvider::ElevenLabs => speak_elevenlabs(text, config).await,
+        TtsProvider::SixtyDb => super::sixtydb::speak(text, config).await,
         TtsProvider::Cartesia => speak_cartesia(text, config).await,
         TtsProvider::MicrosoftEdge => speak_edge(text, config).await,
         TtsProvider::DeepgramAura => speak_deepgram_aura(text, config).await,

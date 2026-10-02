@@ -4,6 +4,12 @@ All notable changes to ClickyX are documented here.
 
 ## [Unreleased]
 
+### Added
+- 60db text-to-speech with a user-configured API key and workspace voice discovery.
+
+### Fixed
+- Voice selection now updates the running speech pipeline without restarting the app.
+
 ## [0.2.3] - 2026-09-28
 
 ### Added — Jev decision provider + Jarvis co-pilot (Track 1 + 2)

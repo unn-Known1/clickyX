@@ -24,6 +24,7 @@ function AiProviderSettings() {
 
   const [elevenlabsKey, setElevenlabsKey] = useState("");
   const [cartesiaKey, setCartesiaKey] = useState("");
+  const [sixtydbKey, setSixtydbKey] = useState("");
   const [deepgramKey, setDeepgramKey] = useState("");
   const [assemblyaiKey, setAssemblyaiKey] = useState("");
 
@@ -50,6 +51,7 @@ function AiProviderSettings() {
       const getKey = (provider: string) => keys.find((k) => k.provider === provider)?.key || "";
       setElevenlabsKey(getKey("elevenlabs"));
       setCartesiaKey(getKey("cartesia"));
+      setSixtydbKey(getKey("sixtydb"));
       setDeepgramKey(getKey("deepgram"));
       setAssemblyaiKey(getKey("assemblyai"));
     }
@@ -76,7 +78,7 @@ function AiProviderSettings() {
 
       // Update App config keys — merge with existing keys so unrelated
       // providers (and previously saved voice keys) are never wiped.
-      const editedProviders = ["elevenlabs", "cartesia", "deepgram", "assemblyai"];
+      const editedProviders = ["elevenlabs", "cartesia", "deepgram", "assemblyai", "sixtydb"];
       const preservedKeys = (appConfig?.api_keys ?? []).filter(
         (k) => !editedProviders.includes(k.provider),
       );
@@ -84,6 +86,7 @@ function AiProviderSettings() {
         ...preservedKeys,
         elevenlabsKey && { provider: "elevenlabs", key: elevenlabsKey },
         cartesiaKey && { provider: "cartesia", key: cartesiaKey },
+        sixtydbKey && { provider: "sixtydb", key: sixtydbKey },
         deepgramKey && { provider: "deepgram", key: deepgramKey },
         assemblyaiKey && { provider: "assemblyai", key: assemblyaiKey },
       ].filter(Boolean) as { provider: string; key: string }[];
@@ -101,7 +104,7 @@ function AiProviderSettings() {
     }
   }, [
     anthropicKey, anthropicModel, openaiKey, openaiModel, openaiBaseUrl,
-    defaultProvider, systemPrompt, elevenlabsKey, cartesiaKey, deepgramKey, assemblyaiKey,
+    defaultProvider, systemPrompt, elevenlabsKey, cartesiaKey, deepgramKey, assemblyaiKey, sixtydbKey,
     appConfig, updateAiConfig, updateAppConfig, showToast, t
   ]);
 
@@ -205,6 +208,13 @@ function AiProviderSettings() {
             value={cartesiaKey}
             onChange={(e) => setCartesiaKey(e.target.value)}
           />
+        </div>
+        <div className="ai-provider-group">
+          <h4>60db</h4>
+          <input type="password" className="settings-input"
+            aria-label="60db API key" autoComplete="new-password"
+            placeholder={t("providers.apiKey")} value={sixtydbKey}
+            onChange={(e) => setSixtydbKey(e.target.value)} />
         </div>
         <div className="ai-provider-group">
           <h4>Deepgram</h4>

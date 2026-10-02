@@ -774,6 +774,8 @@ impl VoicePipeline {
                 .unwrap_or_default();
         }
 
+        tts_cfg.voice_id = config.selected_voice_id.clone();
+
         if let Ok(mut ao_cfg) = self.always_on_config.lock() {
             ao_cfg.enabled = config.activation_mode == "always_on";
         }
@@ -889,6 +891,25 @@ mod tests {
         let result = pipeline.check_wake_word();
         assert!(result.is_ok());
         assert!(!result.unwrap());
+    }
+
+    #[test]
+    fn updating_audio_config_applies_selected_voice_to_next_speech() {
+        let pipeline = VoicePipeline::new();
+        let config = AudioConfig {
+            tts_provider: "cartesia".into(),
+            selected_voice_id: "selected-catalog-voice".into(),
+            ..Default::default()
+        };
+        let keys = [crate::config::ApiKey {
+            provider: "cartesia".into(),
+            key: "test-key".into(),
+        }];
+        pipeline.update_config(&config, &keys).unwrap();
+        let tts = pipeline.tts_config.lock().unwrap();
+        assert_eq!(tts.provider, TtsProvider::Cartesia);
+        assert_eq!(tts.voice_id, config.selected_voice_id);
+        assert_eq!(tts.api_key, "test-key");
     }
 
     #[test]
