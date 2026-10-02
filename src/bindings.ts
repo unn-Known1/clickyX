@@ -24,7 +24,7 @@ export function invoke<T>(cmd: string, args?: any): Promise<T> {
     // Provide safe defaults for critical commands to avoid UI breakage
     // S-MIN-6: the public getter shares the no-secrets mock shape.
     if (cmd === "get_public_config") {
-      return invoke("get_config") as any;
+      return invoke<T>("get_config");
     }
     if (cmd === "get_config") {
       return Promise.resolve({

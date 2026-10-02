@@ -14,7 +14,6 @@ Related live state: Release run `36423206098` (v0.2.3 tag) failed all 3 OS legs 
 - [R-CRIT-1] `flatpak.yml:29` — build-binary omits pipewire/drm/gbm headers that CI installs; xcap 0.9 needs PipeWire 1.x → Build Rust Binary exit 101. Mirror `ci.yml:70` deps + libclang.
 - [R-CRIT-2] `src-tauri/src/updater.rs:55` — `CLICKYX_UPDATE_PUBKEY` empty in dev/forks → `verify_update_signature` fail-closed refuses ALL installs; ensure `UPDATE_SIGNING_PUBKEY`/`UPDATE_SIGNING_KEY_B64` secrets are set (`release.yml:182` warns on `.sig`-less ship).
 - [R-CRIT-3] `src-tauri/capabilities/default.json:4` — `windows: ["main","overlay",...]` does not match runtime labels `overlay-N` (`window_manager.rs:43`); only `agent-hud-*` has a wildcard → overlay IPC denied. Fix to `"overlay-*"`.
-- [R-CRIT-4] `src-tauri/tauri.conf.json:61` — `signingIdentity: null` + `release.yml:109` skips signing when secrets are empty → ships unsigned; entitlements (JIT/screen-capture/automation) inert despite `macOSPrivateApi: true`. Set Apple secrets or document unsigned limits.
 - [R-CRIT-5] `src-tauri/tauri.conf.json:67` — deb `depends` ships `libxdo3` (lib) but code shells `xdotool`/`ydotool`/`wtype`/`xclip` CLI binaries (`cua.rs:339,450`, `type_mode.rs:165`, `SETUP.md:25`) → fresh .deb breaks CUA/fill/type. Add CLI Recommends or portal-only design.
 
 ### Major
@@ -35,12 +34,10 @@ Related live state: Release run `36423206098` (v0.2.3 tag) failed all 3 OS legs 
 - [R-MAJ-15] `src-tauri/tauri.conf.json:80` — `plugins.updater` is dead config (`endpoints: [], pubkey: ""`) while real path is custom `updater.rs`. Remove or migrate to official plugin to avoid confusion.
 
 ### Minor
-- [R-MIN-1] `src-tauri/tauri.conf.json:87` — deep-link scheme `openclicky` (legacy fork name) vs `productName ClickyX` / `com.clickyx.app`, no Linux `.desktop MimeType`. Rename to `clickyx` or document alias (`lib.rs:42` validates `openclicky://`).
 - [R-MIN-2] `src-tauri/Cargo.toml:30` — `tauri` feature `macos-private-api` enabled globally, mac-only effect. Harmless but document as intentional.
 - [R-MIN-3] `src-tauri/src/main.rs:9` — panic hook shows `MessageBoxA` on Windows only, stderr elsewhere; no equivalent user-visible dialog on Linux/macOS. Note or unify.
 - [R-MIN-4] `src-tauri/src/screen/capture.rs:30` — `with_capture_guide` PipeWire/portal hints are Linux-only; Win/macOS return raw errors. Add per-OS hints.
 - [R-MIN-5] `src-tauri/src/overlay/mod.rs:18` — Wayland compositor allowlist (GNOME/KDE/Unity/Budgie/POP) warns on valid wlroots/Sway. Relax or make informational.
-- [R-MIN-6] `.github/workflows/ci.yml:264` — macOS builds override `--bundles dmg,app` in CI/release but local `npm run tauri build` uses `targets: all`. Pin explicit bundles to avoid untested artifact skew.
 - [R-MIN-7] `.github/workflows/release.yml:75` — macOS `.app.zip` fallback dropped into `dmg/` is never picked by scorer (`updater.rs:560` only matches `.dmg`). Dead artifact; drop or score `.zip`.
 - [R-MIN-8] `src-tauri/src/updater.rs:40` — `current_platform_key` falls back to bare `x86` for non-x86_64/aarch64; no ARM Linux/Windows CI leg. Document tier or add matrix leg.
 
@@ -57,8 +54,6 @@ Verified OK: version `0.2.3` in sync (`Cargo.toml`, `tauri.conf.json`, `package.
 ### Major
 - [F-MAJ-1] `src/i18n/locales/fr.json:1` — fr + ja each miss ~400 keys (12 vs 29 top-level namespaces; only `jarvis/jev/jpanel/jkb` are complete) — non-EN UI silently renders EN fallback. Complete the locales or drop the 4-language claim.
 - [F-MAJ-2] `src/hooks/useConversations.ts:63` — raw `useState`+`useEffect`+`invoke(loadConversations)` violates the react-query-only rule (`AGENTS.md:19`). Migrate to `useQuery`/`useMutation` or record a deliberate exception.
-- [F-MAJ-3] `src/utils/sounds.ts:16` — `public/sounds/` contains only `README.md`; all 6 referenced `.mp3` are absent so every `Sounds.*` call 404s-and-swallows. Add assets per `public/sounds/README.md:7`.
-- [F-MAJ-4] `src/components/OnboardingMedia.tsx:30` — `/onboarding/intro.mp4` absent (`public/onboarding/` has only `README.md`); wizard always renders SVG fallback. Add `intro.mp4` per `public/onboarding/README.md:7`.
 - [F-MAJ-5] `src/hooks/useChat.ts:120` — `send_chat_message_stream` unmocked (void fall-through) so no `stream-event` ever fires in browser — `streaming:true` hangs forever on web/E2E. Resolve a synthetic `Done` event or no-op the streaming state when `!isTauri`.
 - [F-MAJ-6] `src/context/AppContext.tsx:60` — `setActiveTab` defers the state switch via `setTimeout(…,100)`, making deep-link/palette/tray navigation async and racy. Set state synchronously, keep the transition flag cosmetic.
 - [F-MAJ-7] `src/components/AboutDialog.tsx:15` — `get_app_version` has no browser mock so version is `undefined` on web/E2E. Add a mock returning the `0.2.3` package version.
@@ -94,7 +89,6 @@ Verified OK: `chat_with_vision` browser mock present (`src/bindings.ts:169`, fix
 - [W-MAJ-5] tag `v0.2.3` / run `36423206098` — the failed tag release cannot self-heal: fix `6b04f98` is committed but untagged, and `gh run rerun` would re-run the old SHA. Move/recreate the `v0.2.3` tag onto the fixed commit (or cut v0.2.4); separately re-run Flatpak.
 - [W-MAJ-6] `ci.yml:81-105` / run `36423204364` — E2E runs before Rust gates, so the 2 jarvis failures skipped all Rust steps and masked the same 6 warnings Release later exposed. Run `cargo check/clippy/fmt` before Playwright, or split frontend/Rust into parallel jobs. Other E2E specs passed (6 passed, 1 self-skipped settings card).
 - [W-MAJ-7] `release.yml` + `flatpak.yml` (no `concurrency:`) — tag pushes race release creation and Flatpak rebuilds; only ci (`ci-v2`) and nightly (`nightly-build`) are guarded. Add `concurrency: group: release-${{ github.ref }}` (and flatpak) with `cancel-in-progress: false`.
-- [W-MAJ-8] run `36428531354` Nightly — `completed/failure` on all 3 legs with the identical pre-fix 6 warnings (schedule ran pre-fix code; `6b04f98` landed after). Heals on next schedule.
 - [W-MAJ-9] `nightly.yml:71-72` — nightly bakes empty `CLICKYX_UPDATE_PUBKEY` and publishes no `.sig`, so `verify_update_signature` refuses every nightly install by design (`updater.rs:230-237`). Bake `UPDATE_SIGNING_PUBKEY` + minisign nightlies, or document nightlies as manual-download-only.
 - [W-MAJ-10] `flatpak.yml:3-5` + `release.yml:205-213` — Flatpak rebuilds the full release binary on every `v*` tag yet the `.flatpak` bundle is never attached to the GitHub release (globs lack `*.flatpak`). Add `artifacts/**/*.flatpak` to release files, or decouple Flatpak from version tags.
 
@@ -106,10 +100,8 @@ Verified OK: `chat_with_vision` browser mock present (`src/bindings.ts:169`, fix
 - [W-MIN-5] `flatpak.yml:26-30` — system deps lag CI and the job sets no sccache/mold env. Sync the dep list and `RUSTC_WRAPPER: sccache` env.
 - [W-MIN-6] `release.yml:97` — signtool timestamps over plaintext `http://timestamp.digicert.com`. Use `https://`.
 - [W-MIN-7] `release.yml:75-80` / `ci.yml:298-303` — macOS zip fallback chains `|| true`, so a missing `.app` ships a release silently lacking the zip. Fail loudly or delete the fallback.
-- [W-MIN-8] `tauri.conf.json:6` — identifier `com.clickyx.app` ends in `.app`; Tauri warns in the release log. Rename (breaking — coordinate with deep-link) or record as accepted.
 - [W-MIN-9] `ci.yml:92-94` + `:180-182` — `cargo test --all-features` runs twice on ubuntu (Check job and Build leg). Drop the Check-leg run once Build covers all three OSes.
 - [W-MIN-10] `package.json:42` + `tauri.conf.json:80-84` — dead `@tauri-apps/plugin-updater` frontend dep and empty `plugins.updater` stub while the real path is custom `updater.rs`. Remove dep + stub, or document why the stub must stay.
-- [W-MIN-11] `updater.rs:99-120` — hosted primary `releases.clickyx.app` is unpublished by every workflow (connection fails → fast GitHub fallback today), but a future HTTP 404 returns `Ok(no_update)` and would permanently suppress the GitHub fallback. Treat 404 as `Err` or publish hosted metadata.
 - [W-MIN-12] `nightly.yml:99-113` — nightly notes enumerate every file with no extension allowlist, unlike `release.yml:166-169`. Reuse the release filter.
 - [W-MIN-13] `ci.yml` + `flatpak.yml` (no `permissions:`) — default broad tokens while release/nightly declare `contents: write`. Add least-privilege `permissions:`.
 - [W-MIN-14] `ci.yml:84` vs `test:e2e` — CI pins 4 spec files while `npm run test:e2e` runs everything including visual (exclusion documented in `ci.yml:87-88` but drift-prone). Derive from shared config or gate `visual.spec.ts` on baseline presence.
@@ -138,10 +130,8 @@ Verified OK: YAML `safe_load` passes on all 4 workflows; workflow commands match
 - [S-MIN-3] `src-tauri/src/audio/capture.rs:186` — `RingBuffer::new(buffer_size as usize)` with user-settable `audio.buffer_size` (`capture.rs:91` does `% capacity`) has no validation (`validate_hotkeys` is the only config validator, `config.rs:504`); `0` = divide-by-zero panic in the audio thread. Clamp/validate `buffer_size >= 64`.
 - [S-MIN-4] `src-tauri/src/overlay/mod.rs:18` — compositor guard only warns on non-GNOME/KDE Wayland; bare X11 without xcompmgr/picom gets no check while fullscreen `always_on_top` transparent windows (`overlay/window_manager.rs:47`) render opaque and cover screens. Detect X11 compositor and degrade/warn.
 - [S-MIN-5] `src-tauri/src/overlay/mod.rs:128` — `show_overlay` calls `show()` on focusable fullscreen overlay windows with no focus control, risking focus-steal right before a fill-paste lands in the "focused" window. Set `focusable(false)`/skip-focus on overlay windows.
-- [S-MIN-6] `src-tauri/src/commands/config_cmds.rs:15` — `get_config`/`update_config` hand plaintext secrets to the renderer (memory/react-query); any renderer XSS exfiltrates keys despite keychain-at-rest. Add a secrets-omitting getter for UI display paths.
 - [S-MIN-7] `src-tauri/src/secret_store.rs:373` — `wipe_secrets` deletes 5 keys but not legacy `apikey.<provider>` entries; provider keys linger in the keychain after reset/wipe. Enumerate/delete `legacy_api_key(*)` too.
 - [S-MIN-8] `src-tauri/src/bridge.rs:1215` — `GET /agents` and `/agent/{slug}/status` return full transcripts and are read-only-open when auth is disabled, which the docs never flag as sensitive. Document or move transcripts to the dangerous tier.
-- [S-MIN-9] `src-tauri/src/lib.rs:359` — automations only tick while the app runs; no autostart/login-item exists (no autostart dep in `Cargo.toml`), so schedules silently never fire when closed. Document or ship per-OS login-item.
 - [S-MIN-10] `src-tauri/src/lib.rs:355` — corrupt `automations.json` is swallowed by `unwrap_or_default()`, silently deleting all user schedules. Log + back up the corrupt file before resetting.
 - [S-MIN-11] `src-tauri/src/config.rs:489` — `0600` hardening is `#[cfg(unix)]`-only; Windows `config.json` (keychain-fallback secrets) gets no explicit ACL. Set user-only ACL on Windows or warn.
 - [S-MIN-12] `src-tauri/src/ai/jev.rs:414` — `declassify_jev_error` only strips `sk-ant-/sk-/xox/Bearer` shapes; non-`sk` Jev key formats can echo into bridge/UI errors. Redact `api_key`-adjacent values generically.

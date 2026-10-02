@@ -1,7 +1,7 @@
 import { useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { useQueryClient } from "@tanstack/react-query";
-import { useConfig } from "../../hooks/useConfig";
+import { usePublicConfig } from "../../hooks/usePublicConfig";
 import type { AppConfig } from "../../bindings";
 import { AppearanceSettings } from "./AppearanceSettings";
 import { OverlayPrefsSettings } from "./OverlayPrefsSettings";
@@ -10,7 +10,8 @@ import { SUPPORTED_LOCALES } from "../../i18n";
 
 function GeneralSettings() {
   const { t, i18n } = useTranslation();
-  const { config, updateConfig, loading, error } = useConfig();
+  // S-MIN-6: display path — secrets never enter this component.
+  const { config, updateConfig, loading, error } = usePublicConfig();
   const queryClient = useQueryClient();
 
   // P1 (H-3): SINGLE config write path. Children perform exactly one backend

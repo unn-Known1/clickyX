@@ -7,7 +7,7 @@ import React from "react";
 
 vi.mock("../bindings", () => ({
   commands: {
-    getConfig: vi.fn(),
+    getPublicConfig: vi.fn(),
     updateConfig: vi.fn(),
     jarvisStatus: vi.fn(),
   },
@@ -53,8 +53,8 @@ describe("useJarvis", () => {
     expect(JARVIS_CONFIG_KEY).toEqual(["jarvis_config"]);
   });
 
-  it("loads jarvis slice from getConfig", async () => {
-    vi.mocked(commands.getConfig).mockResolvedValueOnce({ jarvis: mockJarvis } as never);
+  it("loads jarvis slice from getPublicConfig", async () => {
+    vi.mocked(commands.getPublicConfig).mockResolvedValueOnce({ jarvis: mockJarvis } as never);
     const { result } = renderHook(() => useJarvis(), { wrapper });
     await waitFor(() => expect(result.current.loading).toBe(false));
     expect(result.current.config).toEqual(mockJarvis);
@@ -63,21 +63,21 @@ describe("useJarvis", () => {
   });
 
   it("handles missing jarvis slice as null", async () => {
-    vi.mocked(commands.getConfig).mockResolvedValueOnce({} as never);
+    vi.mocked(commands.getPublicConfig).mockResolvedValueOnce({} as never);
     const { result } = renderHook(() => useJarvis(), { wrapper });
     await waitFor(() => expect(result.current.loading).toBe(false));
     expect(result.current.config).toBeNull();
   });
 
   it("loads status alongside config", async () => {
-    vi.mocked(commands.getConfig).mockResolvedValueOnce({ jarvis: mockJarvis } as never);
+    vi.mocked(commands.getPublicConfig).mockResolvedValueOnce({ jarvis: mockJarvis } as never);
     const { result } = renderHook(() => useJarvis(), { wrapper });
     await waitFor(() => expect(result.current.loading).toBe(false));
     await waitFor(() => expect(result.current.status).toEqual(mockStatus));
   });
 
   it("updates via updateConfig jarvis arm", async () => {
-    vi.mocked(commands.getConfig).mockResolvedValueOnce({ jarvis: mockJarvis } as never);
+    vi.mocked(commands.getPublicConfig).mockResolvedValueOnce({ jarvis: mockJarvis } as never);
     vi.mocked(commands.updateConfig).mockResolvedValueOnce({} as never);
     const { result } = renderHook(() => useJarvis(), { wrapper });
     await waitFor(() => expect(result.current.loading).toBe(false));

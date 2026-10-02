@@ -1,12 +1,13 @@
 import { useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useAppContext } from "../../context/AppContext";
-import { useConfig } from "../../hooks/useConfig";
+import { usePublicConfig } from "../../hooks/usePublicConfig";
 
 function ComputerUseSettings() {
   const { t } = useTranslation();
   const { showToast } = useAppContext();
-  const { config, updateConfig, loading, error } = useConfig();
+  // S-MIN-6: display path — secrets never enter this component.
+  const { config, updateConfig, loading, error } = usePublicConfig();
   const [saving, setSaving] = useState(false);
 
   const updateField = useCallback(async (key: string, value: unknown) => {

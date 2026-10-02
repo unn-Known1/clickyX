@@ -19,7 +19,9 @@ export function useJarvis() {
     // P0-T2/M-7: presence booleans only — raw keys must NEVER land in cache keys.
     queryKey: JARVIS_CONFIG_KEY,
     queryFn: async () => {
-      const full = await commands.getConfig();
+      // S-MIN-6: the jarvis slice carries no secrets — use the public getter
+      // so key values never enter this cache.
+      const full = await commands.getPublicConfig();
       return full.jarvis ?? null;
     },
     staleTime: 30_000,
@@ -44,6 +46,7 @@ export function useJarvis() {
     queryClient.invalidateQueries({ queryKey: JARVIS_CONFIG_KEY });
     queryClient.invalidateQueries({ queryKey: JARVIS_STATUS_KEY });
     queryClient.invalidateQueries({ queryKey: ["config"] });
+    queryClient.invalidateQueries({ queryKey: ["public_config"] });
   });
 
   const updateMutation = useMutation<unknown, Error, Partial<JarvisConfig>>({
@@ -53,6 +56,7 @@ export function useJarvis() {
       queryClient.invalidateQueries({ queryKey: JARVIS_CONFIG_KEY });
       queryClient.invalidateQueries({ queryKey: JARVIS_STATUS_KEY });
       queryClient.invalidateQueries({ queryKey: ["config"] });
+      queryClient.invalidateQueries({ queryKey: ["public_config"] });
     },
   });
 

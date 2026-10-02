@@ -7,7 +7,7 @@ import AboutDialog from "./components/AboutDialog";
 import CommandPalette from "./components/CommandPalette";
 import StatusBar from "./components/StatusBar";
 import { Icon } from "./components/Icon";
-import { useConfig } from "./hooks/useConfig";
+import { usePublicConfig } from "./hooks/usePublicConfig";
 import { AppProvider, useAppContext } from "./context/AppContext";
 import type { Tab } from "./context/AppContext";
 import { useTranslation, Translation } from "react-i18next";
@@ -104,7 +104,8 @@ function AppInner() {
   const { t } = useTranslation();
   const { activeTab, tabTransition, setActiveTab, toasts, dismissToast, showToast, requestSection } =
     useAppContext();
-  const { config, updateConfig, isLoading: configLoading } = useConfig();
+  // S-MIN-6: display path — secrets never enter the app shell.
+  const { config, updateConfig, isLoading: configLoading } = usePublicConfig();
   const [animState, setAnimState] = useState<"enter" | "exit" | "">("");
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [showAbout, setShowAbout] = useState(false);
