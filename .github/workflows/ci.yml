@@ -18,9 +18,9 @@ on:
         default: false
 
 concurrency:
-  # v2: previous group wedged behind an unresponsive runner (sxstrace hang);
-  # bumped to let new runs initialize. Semantics unchanged.
-  group: ci-v2-${{ github.workflow }}-${{ github.ref }}
+  # v3: v2 group wedged behind an unresponsive runner (Rust test step ignoring
+  # cancellation); bumped to let new runs initialize. Semantics unchanged.
+  group: ci-v3-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 # W-MIN-13: least-privilege token (no releases created here).
