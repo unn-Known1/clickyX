@@ -12,7 +12,7 @@ export interface ToastMessage {
   type: ToastType;
 }
 
-export type Tab = "home" | "agents" | "settings";
+export type Tab = "home" | "agents" | "focus" | "settings";
 
 interface AppCtx {
   toasts: ToastMessage[];
@@ -25,6 +25,10 @@ interface AppCtx {
   pendingSection: string | null;
   requestSection: (section: string) => void;
   consumeSection: () => void;
+  /** Pending chat prompt handed to Home's chat surface (e.g. from Focus Mode). */
+  pendingPrompt: string | null;
+  requestPrompt: (prompt: string) => void;
+  consumePrompt: () => void;
 }
 
 // ── Context ───────────────────────────────────────────────────────────────────
@@ -43,6 +47,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [activeTab, setActiveTabState] = useState<Tab>("home");
   const [tabTransition, setTabTransition] = useState(false);
   const [pendingSection, setPendingSection] = useState<string | null>(null);
+  const [pendingPrompt, setPendingPrompt] = useState<string | null>(null);
   const toastCounterRef = useRef(0);
 
   const showToast = useCallback((text: string, type: ToastType = "info") => {
@@ -75,9 +80,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setPendingSection(null);
   }, []);
 
+  const requestPrompt = useCallback((prompt: string) => {
+    setPendingPrompt(prompt);
+  }, []);
+
+  const consumePrompt = useCallback(() => {
+    setPendingPrompt(null);
+  }, []);
+
   return (
     <AppContext.Provider
-      value={{ toasts, showToast, dismissToast, activeTab, tabTransition, setActiveTab, pendingSection, requestSection, consumeSection }}
+      value={{ toasts, showToast, dismissToast, activeTab, tabTransition, setActiveTab, pendingSection, requestSection, consumeSection, pendingPrompt, requestPrompt, consumePrompt }}
     >
       {children}
     </AppContext.Provider>

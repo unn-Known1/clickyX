@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import ChatTab from "./ChatTab";
 import { Icon } from "./Icon";
@@ -86,9 +86,17 @@ function HomeTab() {
   const [showChat, setShowChat] = useState(false);
   const [initialSuggestion, setInitialSuggestion] = useState<string | null>(null);
   const { agents, loading: agentsLoading } = useAgents();
-  const { setActiveTab } = useAppContext();
+  const { setActiveTab, pendingPrompt, consumePrompt } = useAppContext();
   const { i18n } = useTranslation();
   const queryClient = useQueryClient();
+
+  // Focus Mode (and other tabs) can hand a prepared prompt into the chat.
+  useEffect(() => {
+    if (!pendingPrompt) return;
+    setInitialSuggestion(pendingPrompt);
+    setShowChat(true);
+    consumePrompt();
+  }, [pendingPrompt, consumePrompt]);
 
   // F-003: invalidate today-stats cache when any agent completes/errors so the
   // home card reflects real-time results without waiting for the 30s poll.

@@ -4621,3 +4621,509 @@ html, body, #root {
 .model-link { text-decoration: underline; cursor: pointer; }
 .skeleton-stack { display: flex; flex-direction: column; gap: 8px; }
 .settings-hint-success { color: var(--color-success, #4caf50); }
+
+/* ── Focus Mode (deep-work session companion) ──────────────────────────────── */
+.focus-tab {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.focus-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.focus-title {
+  font-size: var(--text-xl);
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.focus-subtitle {
+  margin-top: 2px;
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  line-height: 1.4;
+}
+
+.focus-streak {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+  padding: 4px 9px;
+  border-radius: 999px;
+  font-size: var(--text-xs);
+  font-weight: 600;
+  color: var(--color-warning);
+  background: var(--color-warning-bg);
+  white-space: nowrap;
+}
+
+.focus-timer-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--card-bg);
+  box-shadow: var(--shadow-sm);
+  transition: border-color 0.25s ease, box-shadow 0.25s ease;
+}
+
+.focus-phase-work {
+  border-color: var(--accent-glow);
+  box-shadow: 0 0 0 1px var(--accent-glow), var(--shadow-sm);
+}
+
+.focus-phase-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: var(--text-xs);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.focus-phase-break .focus-phase-label {
+  color: var(--color-success);
+}
+
+.focus-dial {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 172px;
+  height: 172px;
+}
+
+.focus-ring {
+  width: 100%;
+  height: 100%;
+}
+
+.focus-ring-track {
+  fill: none;
+  stroke: var(--border);
+  stroke-width: 8;
+}
+
+.focus-ring-progress {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 8;
+  stroke-linecap: round;
+  transition: stroke-dashoffset 0.5s linear;
+}
+
+.focus-phase-break .focus-ring-progress {
+  stroke: var(--color-success);
+}
+
+.focus-dial-center {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 0 18px;
+  text-align: center;
+  max-width: 150px;
+}
+
+.focus-clock {
+  font-size: 30px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-primary);
+}
+
+.focus-dial-intention {
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 130px;
+}
+
+.focus-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  justify-content: center;
+}
+
+.focus-main-btn {
+  align-self: center;
+  min-width: 120px;
+}
+
+.focus-field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.focus-field-label {
+  font-size: var(--text-xs);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+
+.focus-input {
+  width: 100%;
+  padding: 9px 11px;
+  font-family: inherit;
+  font-size: var(--text-md);
+  color: var(--text-primary);
+  background: var(--input-bg);
+  border: 1px solid var(--input-border);
+  border-radius: var(--radius-sm);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.focus-input::placeholder {
+  color: var(--color-muted);
+}
+
+.focus-input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--focus-ring);
+}
+
+.focus-plan-btn {
+  width: 100%;
+  padding: 9px 12px;
+  font-size: var(--text-md);
+}
+
+.focus-stats-row {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
+.focus-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 10px 6px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--glass-bg);
+}
+
+.focus-stat-value {
+  font-size: var(--text-2xl);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-primary);
+}
+
+.focus-stat-label {
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+  text-align: center;
+}
+
+.focus-durations {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.focus-duration-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.focus-preset-row {
+  display: flex;
+  gap: 6px;
+}
+
+.focus-preset {
+  padding: 6px 12px;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--text-secondary);
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.focus-preset:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.focus-preset.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+.focus-dump {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--glass-bg);
+}
+
+.focus-dump-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.focus-dump-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--text-md);
+  font-weight: 600;
+}
+
+.focus-clear-btn {
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+  background: none;
+  border: none;
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.focus-clear-btn:hover {
+  color: var(--color-danger);
+}
+
+.focus-dump-hint {
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+  line-height: 1.4;
+}
+
+.focus-dump-form {
+  display: flex;
+  gap: 6px;
+}
+
+.focus-dump-add {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  flex-shrink: 0;
+  color: #fff;
+  background: var(--accent);
+  border: none;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.focus-dump-add:hover {
+  background: var(--accent-hover);
+}
+
+.focus-dump-add:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.focus-empty {
+  font-size: var(--text-xs);
+  color: var(--color-muted);
+  text-align: center;
+  padding: 4px 0;
+}
+
+.focus-dump-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  list-style: none;
+  max-height: 150px;
+  overflow-y: auto;
+}
+
+.focus-dump-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 7px 10px;
+  border-radius: var(--radius-sm);
+  background: var(--hover-bg);
+  font-size: var(--text-base);
+}
+
+.focus-dump-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.focus-dump-remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  color: var(--text-secondary);
+  background: none;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.focus-dump-remove:hover {
+  color: var(--color-danger);
+  background: var(--color-danger-bg);
+}
+
+/* ── AI provider setup: connection cards, presets, test action ────────────── */
+.ai-conn-card {
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--glass-bg);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.ai-conn-active {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent-glow);
+}
+
+.ai-conn-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.ai-conn-badge {
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: var(--text-xs);
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  color: var(--accent);
+  background: var(--accent-tint);
+  white-space: nowrap;
+}
+
+.ai-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.ai-field-label {
+  font-size: var(--text-xs);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+
+.ai-doc-link {
+  align-self: flex-start;
+  font-size: var(--text-sm);
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.ai-doc-link:hover {
+  text-decoration: underline;
+}
+
+.ai-advanced {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 10px 12px;
+  background: var(--glass-bg);
+}
+
+.ai-advanced > summary {
+  cursor: pointer;
+  font-size: var(--text-md);
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.ai-voice-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.ai-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.ai-test-btn {
+  padding: 8px 14px;
+  font-size: var(--text-md);
+}
+
+.settings-hint-warn {
+  color: var(--color-warning);
+}
+
+.ai-provider-choice {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.ai-choice-btn {
+  flex: 1 1 0;
+  min-width: 0;
+  padding: 8px 10px;
+  font-family: inherit;
+  font-size: var(--text-md);
+  font-weight: 500;
+  color: var(--text-secondary);
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.ai-choice-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.ai-choice-btn.active {
+  color: var(--accent);
+  background: var(--accent-tint);
+  border-color: var(--accent);
+}

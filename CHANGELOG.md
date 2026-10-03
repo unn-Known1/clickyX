@@ -5,6 +5,25 @@ All notable changes to ClickyX are documented here.
 ## [Unreleased]
 
 ### Added
+- **Direct OpenRouter support** — OpenRouter is now a first-class chat provider
+  alongside Anthropic and OpenAI-compatible: pick it in AI Providers, paste one
+  `sk-or-` key, and choose from a curated model list (Claude Sonnet 4, GPT-4o,
+  Gemini 2.5 Pro, DeepSeek V3, Llama 3.3 70B, Qwen 2.5 72B, Mistral Large). Any
+  other OpenRouter model id still works, and existing OpenRouter base URLs are
+  auto-detected on load.
+- **Any-provider AI setup** — the AI Providers settings now lead with a provider
+  preset picker covering OpenAI, OpenRouter, Groq, Together, DeepSeek, Mistral,
+  xAI, NVIDIA NIM, Fireworks, Perplexity, and local Ollama / LM Studio, plus a
+  Custom option for any other OpenAI-compatible endpoint. Choosing a preset
+  fills the base URL and a starting model; a base-URL/key validator blocks bad
+  configs, and "Save & detect models" persists then reports what the backend can
+  reach. Voice/speech keys moved into a collapsed section.
+- **Focus Mode** — a new top-level tab for deep work: a Pomodoro-style focus/break
+  timer with a circular dial, a per-session intention, a distraction "mind dump"
+  (park thoughts to handle after the session), and local streak/today stats.
+  State is user-owned and persisted in `localStorage` (`useFocus`); the "Plan this
+  session with ClickyX" action hands a prepared prompt into the chat. Strings in
+  EN/ES/FR/JA, a command-palette entry, and `openclicky://focus` deep-link handling.
 - 60db text-to-speech with a user-configured API key and workspace voice discovery.
 
 ### Fixed

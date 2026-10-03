@@ -18,6 +18,7 @@ import "./components/OnboardingWizard.css";
 // ── F-009: Lazy-load tabs ──────────────────────────────────────────────────────
 const HomeTab = lazy(() => import("./components/HomeTab"));
 const AgentsTab = lazy(() => import("./components/AgentsTab"));
+const FocusTab = lazy(() => import("./components/FocusTab"));
 
 const SettingsTab = lazy(() => import("./components/SettingsTab"));
 
@@ -82,7 +83,7 @@ function Toast({
 
 // ── Theme sync is variant-aware (see utils/theme) ─────────────────────────────
 
-const TAB_IDS: Tab[] = ["home", "agents", "settings"];
+const TAB_IDS: Tab[] = ["home", "agents", "focus", "settings"];
 
 // ── F-031: Splash Screen ───────────────────────────────────────────────────────
 function SplashScreen() {
@@ -228,6 +229,8 @@ function AppInner() {
         requestSection("connections");
       } else if (parts[0] === "home") {
         setActiveTab("home");
+      } else if (parts[0] === "focus") {
+        setActiveTab("focus");
       }
     } catch (err) {
       console.warn("[deep-link] Failed to parse URL:", url, err);
@@ -279,6 +282,12 @@ function AppInner() {
           return (
             <Suspense fallback={tabFallback}>
               <AgentsTab />
+            </Suspense>
+          );
+        case "focus":
+          return (
+            <Suspense fallback={tabFallback}>
+              <FocusTab />
             </Suspense>
           );
         case "settings":
