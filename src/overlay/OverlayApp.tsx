@@ -1,6 +1,14 @@
 import { useEffect, useRef, useState, useCallback, memo, Component, ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { listen } from "../bindings";
+import { useMouseFollowActions } from "../hooks/useMouseFollowActions";
+import {
+  BURST_SIZE_PX,
+  FOLLOW_EASE,
+  TRAIL_DOTS,
+  useMouseAnimationSettings,
+} from "../hooks/useMouseAnimationSettings";
+import { CursorActionLayer } from "./CursorActionLayer";
 import "./overlay.css";
 
 const DEFAULT_ACCENT = "#4fc3f7";
@@ -451,8 +459,22 @@ function OverlayAppInner() {
   // F-014: always-on voice indicator
   const [alwaysListening, setAlwaysListening] = useState(false);
 
+  // Dynamic mouse-follow animations (burst + sustained per overlay action).
+  const { settings: mouseSettings } = useMouseAnimationSettings();
+  const {
+    effects: mouseEffects,
+    sustained: mouseAuras,
+    pointerRef: mousePointerRef,
+    trigger: triggerMouseAction,
+    setSustained: setMouseAura,
+    clear: clearMouseActions,
+  } = useMouseFollowActions(mouseSettings);
+
   const animRefs = useRef<Record<string, () => void>>({});
   const streamTimers = useRef<Record<string, number>>({});
+  // Last cursor annotation coordinates — used to place the "click" burst, which
+  // arrives later via lifecycle-event without coordinates of its own.
+  const lastCursorRef = useRef<{ x: number; y: number } | null>(null);
 
   const startStreamingCaption = useCallback((cap: CaptionState) => {
     const id = `stream-${Date.now()}-${Math.random()}`;
@@ -490,7 +512,13 @@ function OverlayAppInner() {
       const u1 = await listen<CursorState>("show-cursor", (e) => {
         if (cancelled) return;
         const c = e.payload;
-        if (c.animation && c.animation !== "none" && c.fromX != null && c.fromY != null) {
+        const moving = !!c.animation && c.animation !== "none";
+        lastCursorRef.current = { x: c.x, y: c.y };
+        // Traveling cursors get the guide animation; a direct placement is a point.
+        // Anchor the burst to the annotation itself — the overlay window is
+        // click-through, so the real pointer may be unknown at spawn time.
+        triggerMouseAction(moving ? "guide" : "point", { x: c.x, y: c.y });
+        if (moving && c.fromX != null && c.fromY != null) {
           const id = c.id;
           if (animRefs.current[id]) animRefs.current[id]();
           setAnimatedCursors(prev => ({ ...prev, [id]: { ...c, currentX: c.fromX!, currentY: c.fromY! } }));
@@ -513,6 +541,7 @@ function OverlayAppInner() {
         setCaptions([]); setStreamingCaptions([]); setGlows([]);
         setHighlights([]); setShapes([]);
         setDock(null); setProcessing(false); setWaveformActive(false);
+        clearMouseActions();
         setCalibration({ active: false, x: 0, y: 0, w: 0, h: 0 });
         Object.values(streamTimers.current).forEach(clearTimeout);
         streamTimers.current = {};
@@ -524,14 +553,19 @@ function OverlayAppInner() {
       // show-rect
       const u3 = await listen<RectState>("show-rect", (e) => {
         if (cancelled) return;
-        setRects(prev => [...prev.filter(r => r.id !== e.payload.id), e.payload]);
+        const r = e.payload;
+        triggerMouseAction("select", { x: r.x + r.w / 2, y: r.y + r.h / 2 });
+        setRects(prev => [...prev.filter(r2 => r2.id !== r.id), r]);
       });
       if (!cancelled) unlisten.push(u3);
 
       // show-scribble
       const u4 = await listen<ScribbleState>("show-scribble", (e) => {
         if (cancelled) return;
-        setScribbles(prev => [...prev.slice(-50), e.payload]);
+        const s = e.payload;
+        const first = s.points?.[0];
+        triggerMouseAction("draw", first ? { x: first[0], y: first[1] } : undefined);
+        setScribbles(prev => [...prev.slice(-50), s]);
       });
       if (!cancelled) unlisten.push(u4);
 
@@ -539,6 +573,7 @@ function OverlayAppInner() {
       const u5 = await listen<CaptionState>("show-caption", (e) => {
         if (cancelled) return;
         const cap = e.payload;
+        triggerMouseAction("speak", { x: cap.x, y: cap.y });
         if (cap.text && cap.text.length > 10) startStreamingCaption(cap);
         else setCaptions(prev => [...prev.slice(-50), cap]);
       });
@@ -594,23 +629,27 @@ function OverlayAppInner() {
       if (!cancelled) unlisten.push(u12);
 
       // processing-start / processing-end
-      const u13 = await listen("processing-start", () => { if (!cancelled) setProcessing(true); });
+      const u13 = await listen("processing-start", () => { if (!cancelled) { setProcessing(true); setMouseAura("think", true); } });
       if (!cancelled) unlisten.push(u13);
 
-      const u14 = await listen("processing-end", () => { if (!cancelled) setProcessing(false); });
+      const u14 = await listen("processing-end", () => { if (!cancelled) { setProcessing(false); setMouseAura("think", false); } });
       if (!cancelled) unlisten.push(u14);
 
       // waveform-start / waveform-end
-      const u15 = await listen("waveform-start", () => { if (!cancelled) setWaveformActive(true); });
+      const u15 = await listen("waveform-start", () => { if (!cancelled) { setWaveformActive(true); setMouseAura("listen", true); } });
       if (!cancelled) unlisten.push(u15);
 
-      const u16 = await listen("waveform-end", () => { if (!cancelled) setWaveformActive(false); });
+      const u16 = await listen("waveform-end", () => { if (!cancelled) { setWaveformActive(false); setMouseAura("listen", false); } });
       if (!cancelled) unlisten.push(u16);
 
       // lifecycle-event
       const u17 = await listen("lifecycle-event", (e: { payload: { action: string; id: string; state: string } }) => {
         if (cancelled) return;
         const { id, state } = e.payload;
+        // A finished cursor annotation = a completed click/point action.
+        if (state === "completed" && id.startsWith("cursor")) {
+          triggerMouseAction("click", lastCursorRef.current ?? undefined);
+        }
         if (state === "completed" || state === "missed") {
           setCursors(prev => prev.filter(c => c.id !== id));
           setRects(prev => prev.filter(r => r.id !== id));
@@ -629,7 +668,9 @@ function OverlayAppInner() {
       // P-005: show-highlight
       const u19 = await listen<HighlightState>("show-highlight", (e) => {
         if (cancelled) return;
-        setHighlights(prev => [...prev.filter(h => h.id !== e.payload.id), e.payload]);
+        const hl = e.payload;
+        triggerMouseAction("highlight", { x: hl.x + hl.w / 2, y: hl.y + hl.h / 2 });
+        setHighlights(prev => [...prev.filter(h => h.id !== hl.id), hl]);
       });
       if (!cancelled) unlisten.push(u19);
 
@@ -643,7 +684,9 @@ function OverlayAppInner() {
       // P-005: show-shape
       const u21 = await listen<ShapeState>("show-shape", (e) => {
         if (cancelled) return;
-        setShapes(prev => [...prev.filter(s => s.id !== e.payload.id), e.payload]);
+        const sh = e.payload;
+        triggerMouseAction("guide", { x: sh.x1, y: sh.y1 });
+        setShapes(prev => [...prev.filter(s2 => s2.id !== sh.id), sh]);
       });
       if (!cancelled) unlisten.push(u21);
 
@@ -663,7 +706,7 @@ function OverlayAppInner() {
       animRefs.current = {};
       unlisten.forEach(fn => fn());
     };
-  }, []);
+  }, [startStreamingCaption, triggerMouseAction, setMouseAura, clearMouseActions]);
 
   return (
     <div
@@ -672,6 +715,19 @@ function OverlayAppInner() {
     >
       {/* F-014: Always-listening indicator — top-right corner */}
       {alwaysListening && <AlwaysListeningIndicator accent={accent} />}
+
+      {/* Dynamic mouse-follow animations (own RAF loop, animated from overlay events) */}
+      <CursorActionLayer
+        effects={mouseEffects}
+        sustained={mouseAuras}
+        pointerRef={mousePointerRef}
+        followEase={FOLLOW_EASE[mouseSettings.follow]}
+        trailDots={TRAIL_DOTS[mouseSettings.trail]}
+        burstSize={BURST_SIZE_PX[mouseSettings.burstScale]}
+        showHalo={mouseSettings.halo}
+        idlePulse={mouseSettings.idlePulse}
+        accent={mouseSettings.accent}
+      />
 
       {/* Pet layer — isolated (P3/U5): owns its RAF loop, never re-renders this tree.
           Shown during active AI operations, hidden during calibration or idle. */}

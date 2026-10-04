@@ -57,4 +57,6 @@ export const Sounds = {
   error: () => playSound("error", 0.4),
   /** Played for desktop notification sounds. */
   notification: () => playSound("notification", 0.5),
+  /** Played when an overlay mouse-action burst fires (when animation sounds are on). */
+  cursorAction: () => playSound("cursor-action", 0.25),
 };

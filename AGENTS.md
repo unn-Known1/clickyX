@@ -129,14 +129,18 @@ python3 -c "import yaml; yaml.safe_load(open('.github/workflows/ci.yml'))"  # va
 | `hooks/useJevConfig.ts` | react-query Jev triple + presets + test/decide mutations (`JEV_CONFIG_KEY`) |
 | `hooks/useJarvis.ts` | Jarvis slice + status + `jarvis-state-changed` invalidation |
 | `hooks/useJarvisAutoTrigger.ts` | Opt-in auto-analyze (engine frames + 60 s throttle + session change) |
+| `hooks/useMouseFollowActions.ts` | Pointer-tracking engine for overlay cursor animations — maps actions to timed bursts vs sustained auras; pointer kept in a ref (no per-move renders) |
+| `hooks/useGlobalCursor.ts` | Overlay pointer source — `mousemove` primary + fail-safe `cursorPosition()` polling (global physical → window-local CSS) so the follow works in the click-through overlay window |
+| `hooks/useMouseAnimationSettings.ts` | Local-first settings for the mouse animations (master switch, trail, follow easing, burst scale, per-action toggles, sounds, idle pulse, halo, burst cap, accent override) — `localStorage`-persisted, normalized on read |
 | `components/HomeTab.tsx` | Hero, dynamic suggestions, agent dock strip, empty-state CTA; consumes `pendingPrompt` to open chat pre-filled |
 | `components/FocusTab.tsx` | **Focus Mode**: focus/break timer + circular dial, session intention, distraction mind dump, streak/today stats |
 | `components/AgentsTab.tsx` | Agent CRUD, skill management, slug auto-derive, drag-drop, HUD pop-out |
 | `components/AgentHUD.tsx` | Floating HUD — transcript, diff, activity timeline |
 | `components/ConnectionsTab.tsx` | Google Workspace status (shows unavailable message, no gogcli), MCP CRUD, automations, app usage log |
-| `components/SettingsTab.tsx` | 7 sections with icon nav, group headers, scroll memory |
+| `components/SettingsTab.tsx` | 10 sections with icon nav, group headers, scroll memory |
 | `components/SettingsSections/JarvisSettings.tsx` | Jev triple + presets + test + mode + KB editor host |
 | `components/SettingsSections/AiProviderSettings.tsx` | Provider setup: Anthropic / OpenRouter (direct) / OpenAI-compatible choice, preset autofill, base-URL + key + model validation, save & model detection |
+| `components/SettingsSections/MouseAnimationsSettings.tsx` | Controls every mouse-animation feature (master switch, trail length, follow responsiveness, burst size, burst cap, halo, idle pulse, sounds, accent override, per-action toggles, reset) |
 | `components/JarvisPanel.tsx` | Chat-embedded co-pilot: extract → judge → draft-3 → rank → fill/copy |
 | `components/JarvisKnowledgeEditor.tsx` | KB notes/contacts CRUD + wipe (name locked) |
 | `components/SettingsSections/AppearanceSettings.tsx` | Theme, accent variants, color picker |
@@ -153,8 +157,9 @@ python3 -c "import yaml; yaml.safe_load(open('.github/workflows/ci.yml'))"  # va
 | `components/UpdateBanner.tsx` | Auto-updater notification |
 | `components/AboutDialog.tsx` | Version + links dialog |
 | `components/ModelSelector.tsx` | react-query chat-cap model list (`get_chat_models` allowlist; Jev excluded); shows setup prompt when no API key |
-| `overlay/OverlayApp.tsx` | Glow, calibration, waveform (real amplitude), cursors, captions, dock, HIGHLIGHT/SHAPE, AlwaysListeningIndicator; pet sprite shown while AI active or always-listening (deprecated — see REVIEW_REPORT P1) |
-| `overlay/overlay.css` | Overlay-specific styles |
+| `overlay/OverlayApp.tsx` | Glow, calibration, waveform (real amplitude), cursors, captions, dock, HIGHLIGHT/SHAPE, AlwaysListeningIndicator; pet sprite shown while AI active or always-listening (deprecated — see REVIEW_REPORT P1); drives the mouse-follow action layer from overlay events |
+| `overlay/CursorActionLayer.tsx` | Dynamic mouse-follow animations — burst effects (point/click/select/highlight/draw/speak/guide) + sustained listen/think auras + cursor trail, idle pulse and halo; owns its own RAF loop driven by the shared pointer ref from `useGlobalCursor`, so the follow never re-renders the overlay tree |
+| `overlay/overlay.css` | Overlay-specific styles (incl. cursor-action keyframes, cursor trail, idle pulse) |
 | `styles/theme.css` | All panel styles, semantic color tokens, 6 accent variants |
 
 ### Tests
@@ -174,6 +179,12 @@ python3 -c "import yaml; yaml.safe_load(open('.github/workflows/ci.yml'))"  # va
 | `src/hooks/useJarvisAutoTrigger.test.ts` | Auto-trigger gating, throttle, session change |
 | `src/hooks/useAudioConfig.test.ts` | Audio config load/update |
 | `src/hooks/useOverlay.test.ts` | Overlay commands + args |
+| `src/hooks/useMouseFollowActions.test.ts` | Action metadata, burst spawn/expiry, sustained auras, cap, clear/unmount, settings gating (master/per-action/cap/sounds) |
+| `src/hooks/useMouseAnimationSettings.test.ts` | Settings tables, normalization of bad persisted blobs, persistence, per-action toggle, reset |
+| `src/hooks/useGlobalCursor.test.ts` | mousemove primary path, inactive no-poll, `cursorPosition()` fallback conversion, poll-stop on failure |
+| `src/overlay/CursorActionLayer.test.tsx` | Idle render, burst positioning, auras, RAF pointer follow |
+| `src/overlay/OverlayApp.test.tsx` | All nine actions mapped through the real event bus, annotation-anchored bursts, burst expiry, aura persist/clear |
+| `src/components/SettingsSections/MouseAnimationsSettings.test.tsx` | Renders every feature control, per-action toggles, persistence, disabled-when-off state |
 | `src/hooks/useScreenCapture.test.ts` | Capture commands, error paths |
 | `src/hooks/useVision.test.ts` | Data-URL parsing, ordering, remove |
 | `src/components/CommandPalette.test.tsx` | Search, keyboard nav, click, backdrop |

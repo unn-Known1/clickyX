@@ -9,6 +9,7 @@ import ComputerUseSettings from "./SettingsSections/ComputerUseSettings";
 import PermissionsSettings from "./SettingsSections/PermissionsSettings";
 import SystemSettings from "./SettingsSections/SystemSettings";
 import ConnectionsSettings from "./SettingsSections/ConnectionsSettings";
+import MouseAnimationsSettings from "./SettingsSections/MouseAnimationsSettings";
 import { Icon } from "./Icon";
 import type { IconName } from "./Icon";
 
@@ -16,7 +17,7 @@ const ModelGeneratorTab = lazy(() => import("./ModelGeneratorTab"));
 
 type SettingsTabId =
   | "general" | "voice" | "providers" | "jarvis" | "computer_use"
-  | "permissions" | "system" | "3d_models" | "connections";
+  | "permissions" | "system" | "3d_models" | "connections" | "mouse_animations";
 
 interface NavItem {
   id: SettingsTabId;
@@ -26,6 +27,7 @@ interface NavItem {
 
 const SETTINGS_TABS: NavItem[] = [
   { id: "general",      label: "settings.sections.general",      icon: "settings" },
+  { id: "mouse_animations", label: "settings.sections.mouseAnimations", icon: "cursor" },
   { id: "providers",    label: "settings.sections.providers",    icon: "ai" },
   { id: "jarvis",       label: "settings.sections.jarvis",       icon: "sparkle" },
   { id: "voice",        label: "settings.sections.voice",        icon: "microphone" },
@@ -42,7 +44,7 @@ interface NavGroup {
 }
 
 const NAV_GROUPS: NavGroup[] = [
-  { label: "settings.groups.appearance",  items: ["general"] },
+  { label: "settings.groups.appearance",  items: ["general", "mouse_animations"] },
   { label: "settings.groups.aiVoice",  items: ["providers", "jarvis", "voice"] },
   { label: "settings.groups.automation",  items: ["computer_use", "connections"] },
   { label: "settings.groups.system",      items: ["permissions", "system", "3d_models"] },
@@ -122,6 +124,7 @@ function SettingsTab({ onOpenAbout }: Props) {
       <main className="settings-main-area" ref={contentRef}>
         <div className="settings-content-wrapper fade-in-up">
           {activeSection === "general"      && <GeneralSettings />}
+          {activeSection === "mouse_animations" && <MouseAnimationsSettings />}
           {activeSection === "voice"        && <VoiceSettings />}
           {activeSection === "providers"    && <AiProviderSettings />}
           {activeSection === "jarvis"       && <JarvisSettings />}

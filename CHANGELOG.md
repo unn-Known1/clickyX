@@ -24,10 +24,32 @@ All notable changes to ClickyX are documented here.
   State is user-owned and persisted in `localStorage` (`useFocus`); the "Plan this
   session with ClickyX" action hands a prepared prompt into the chat. Strings in
   EN/ES/FR/JA, a command-palette entry, and `openclicky://focus` deep-link handling.
+- **Dynamic mouse-follow animations** — the overlay now reacts to each action with
+  its own animation that tracks the real cursor: a pointer halo plus distinct
+  bursts for point, click, select, highlight, draw, speak, and guide actions,
+  and sustained auras while listening or thinking. Animations are driven by the
+  existing overlay event stream (`useMouseFollowActions` + `CursorActionLayer`)
+  and follow the pointer on their own RAF loop so they never re-render the
+  overlay tree; reduced-motion is respected.
+- **Mouse animation settings + 10 new features** — a new Settings › Appearance ›
+  Mouse Animations section drives the overlay cursor animations. Ten new
+  capabilities: (1) master enable switch, (2) cursor trail (off/short/medium/long),
+  (3) follow responsiveness (instant/smooth/lazy), (4) burst size (small/normal/large),
+  (5) per-action enable toggles for all nine actions, (6) action sound effects,
+  (7) ambient idle pulse, (8) pointer-halo toggle, (9) configurable simultaneous-burst
+  cap, and (10) a custom animation colour override. Settings are local-first
+  (`localStorage`, like Focus Mode) so the overlay window reads them at mount with no
+  backend round-trip, and invalid/stale values are normalized on read.
 - 60db text-to-speech with a user-configured API key and workspace voice discovery.
 
 ### Fixed
 - Voice selection now updates the running speech pipeline without restarting the app.
+- Mouse-follow animations now track the real cursor in the click-through overlay
+  window, which receives no native `mousemove` events: `useGlobalCursor` falls
+  back to Tauri's `cursorPosition()` (converted to window-local CSS) and is
+  fail-safe. Bursts are also anchored to their annotation coordinates, so each
+  action's animation appears where the action happened rather than at screen
+  centre.
 
 ## [0.2.3] - 2026-09-28
 

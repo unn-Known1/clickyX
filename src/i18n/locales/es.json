@@ -143,7 +143,8 @@
       "connections": "Conexiones",
       "agents": "Agentes",
       "automations": "Automatizaciones",
-      "system": "Sistema y logs"
+      "system": "Sistema y logs",
+      "mouseAnimations": "Animaciones del ratón"
     },
     "save": "Guardar",
     "saving": "Guardando…",
@@ -667,5 +668,44 @@
     "started": "Generación iniciada…",
     "failedToast": "Falló: {{err}}",
     "savedLocal": "Modelo guardado local — pulsa Descargar para guardar el GLB."
+  },
+  "mouseAnimations": {
+    "title": "Animaciones del ratón",
+    "hint": "Personaliza cómo reacciona la superposición a lo que ClickyX realiza en pantalla.",
+    "enabled": "Activar animaciones del ratón",
+    "trail": "Estela del cursor",
+    "trailOff": "Desactivada",
+    "trailShort": "Corta",
+    "trailMedium": "Media",
+    "trailLong": "Larga",
+    "dots": "{{n}} puntos",
+    "follow": "Respuesta del seguimiento",
+    "followInstant": "Instantánea",
+    "followSmooth": "Suave",
+    "followLazy": "Lenta",
+    "burstScale": "Tamaño de la explosión",
+    "scaleSmall": "Pequeño",
+    "scaleNormal": "Normal",
+    "scaleLarge": "Grande",
+    "maxEffects": "Máx. ráfagas simultáneas",
+    "halo": "Halo del puntero",
+    "idlePulse": "Pulso en reposo",
+    "sounds": "Sonidos de acción",
+    "accent": "Color de animación",
+    "accentReset": "Usar acento de la app",
+    "perAction": "Animaciones por acción",
+    "reset": "Restablecer valores predeterminados",
+    "resetDone": "Ajustes de animación del ratón restablecidos",
+    "actions": {
+      "point": "Señalar",
+      "click": "Clic",
+      "select": "Seleccionar",
+      "highlight": "Resaltar",
+      "draw": "Dibujar",
+      "speak": "Hablar",
+      "guide": "Guía",
+      "listen": "Escuchando",
+      "think": "Pensando"
+    }
   }
 }

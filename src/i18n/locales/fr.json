@@ -144,7 +144,8 @@
       "connections": "Connexions",
       "agents": "Agents",
       "automations": "Automatisations",
-      "system": "Système et journaux"
+      "system": "Système et journaux",
+      "mouseAnimations": "Animations de la souris"
     },
     "save": "Enregistrer",
     "saving": "Enregistrement…",
@@ -669,5 +670,44 @@
     "started": "Génération démarrée…",
     "failedToast": "Échec : {{err}}",
     "savedLocal": "Modèle enregistré localement — cliquez sur Télécharger pour sauver le GLB."
+  },
+  "mouseAnimations": {
+    "title": "Animations de la souris",
+    "hint": "Personnalisez la réaction de la surcouche aux actions de ClickyX à l'écran.",
+    "enabled": "Activer les animations de la souris",
+    "trail": "Traînée du curseur",
+    "trailOff": "Désactivée",
+    "trailShort": "Courte",
+    "trailMedium": "Moyenne",
+    "trailLong": "Longue",
+    "dots": "{{n}} points",
+    "follow": "Réactivité du suivi",
+    "followInstant": "Instantanée",
+    "followSmooth": "Douce",
+    "followLazy": "Lente",
+    "burstScale": "Taille de l'éclat",
+    "scaleSmall": "Petite",
+    "scaleNormal": "Standard",
+    "scaleLarge": "Grande",
+    "maxEffects": "Éclats simultanés max",
+    "halo": "Halo du curseur",
+    "idlePulse": "Pulse au repos",
+    "sounds": "Sons d'action",
+    "accent": "Couleur des animations",
+    "accentReset": "Utiliser la couleur de l'app",
+    "perAction": "Animations par action",
+    "reset": "Réinitialiser les valeurs par défaut",
+    "resetDone": "Paramètres d'animation de la souris réinitialisés",
+    "actions": {
+      "point": "Pointer",
+      "click": "Clic",
+      "select": "Sélection",
+      "highlight": "Surlignage",
+      "draw": "Dessiner",
+      "speak": "Parler",
+      "guide": "Guidage",
+      "listen": "Écoute",
+      "think": "Réflexion"
+    }
   }
 }

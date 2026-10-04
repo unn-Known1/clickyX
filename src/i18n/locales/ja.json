@@ -144,7 +144,8 @@
       "connections": "接続",
       "agents": "エージェント",
       "automations": "自動化",
-      "system": "システムとログ"
+      "system": "システムとログ",
+      "mouseAnimations": "マウスアニメーション"
     },
     "save": "保存",
     "saving": "保存中…",
@@ -669,5 +670,44 @@
     "started": "生成を開始しました…",
     "failedToast": "失敗: {{err}}",
     "savedLocal": "モデルをローカルに保存しました — ダウンロードをクリックしてGLBを保存。"
+  },
+  "mouseAnimations": {
+    "title": "マウスアニメーション",
+    "hint": "ClickyX の画面上の操作に対するオーバーレイの反応をカスタマイズします。",
+    "enabled": "マウスアニメーションを有効にする",
+    "trail": "カーソルトレイル",
+    "trailOff": "オフ",
+    "trailShort": "短",
+    "trailMedium": "中",
+    "trailLong": "長",
+    "dots": "{{n}} 個のドット",
+    "follow": "追従の応答性",
+    "followInstant": "即座",
+    "followSmooth": "スムーズ",
+    "followLazy": "ゆっくり",
+    "burstScale": "バーストサイズ",
+    "scaleSmall": "小",
+    "scaleNormal": "標準",
+    "scaleLarge": "大",
+    "maxEffects": "同時バースト数の上限",
+    "halo": "ポインタハロー",
+    "idlePulse": "アイドールパルス",
+    "sounds": "アクション音",
+    "accent": "アニメーションの色",
+    "accentReset": "アプリのアクセントを使う",
+    "perAction": "アクション別のアニメーション",
+    "reset": "既定値に戻す",
+    "resetDone": "マウスアニメーションの設定をリセットしました",
+    "actions": {
+      "point": "指示",
+      "click": "クリック",
+      "select": "選択",
+      "highlight": "ハイライト",
+      "draw": "描画",
+      "speak": "発話",
+      "guide": "ガイド",
+      "listen": "音声入力",
+      "think": "思考"
+    }
   }
 }

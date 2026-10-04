@@ -143,7 +143,8 @@
       "connections": "Connections",
       "agents": "Agents",
       "automations": "Automations",
-      "system": "System & Logs"
+      "system": "System & Logs",
+      "mouseAnimations": "Mouse Animations"
     },
     "save": "Save",
     "saving": "Saving…",
@@ -667,5 +668,44 @@
     "started": "Generation started…",
     "failedToast": "Failed: {{err}}",
     "savedLocal": "Model saved locally — click Download to save the GLB file."
+  },
+  "mouseAnimations": {
+    "title": "Mouse Animations",
+    "hint": "Customize how the overlay reacts to what ClickyX is doing on screen.",
+    "enabled": "Enable mouse animations",
+    "trail": "Cursor trail",
+    "trailOff": "Off",
+    "trailShort": "Short",
+    "trailMedium": "Medium",
+    "trailLong": "Long",
+    "dots": "{{n}} dots",
+    "follow": "Follow responsiveness",
+    "followInstant": "Instant",
+    "followSmooth": "Smooth",
+    "followLazy": "Lazy",
+    "burstScale": "Burst size",
+    "scaleSmall": "Small",
+    "scaleNormal": "Normal",
+    "scaleLarge": "Large",
+    "maxEffects": "Max simultaneous bursts",
+    "halo": "Pointer halo",
+    "idlePulse": "Idle pulse",
+    "sounds": "Action sounds",
+    "accent": "Animation color",
+    "accentReset": "Use app accent",
+    "perAction": "Per-action animations",
+    "reset": "Reset to defaults",
+    "resetDone": "Mouse animation settings reset",
+    "actions": {
+      "point": "Point",
+      "click": "Click",
+      "select": "Select",
+      "highlight": "Highlight",
+      "draw": "Draw",
+      "speak": "Speak",
+      "guide": "Guide",
+      "listen": "Listening",
+      "think": "Thinking"
+    }
   }
 }
