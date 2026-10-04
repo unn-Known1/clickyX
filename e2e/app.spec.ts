@@ -3,7 +3,7 @@ import { test, expect } from "@playwright/test";
 test.describe("App shell", () => {
   test("loads and shows tab bar", async ({ page }) => {
     await page.goto("/");
-    await expect(page.locator('[role="tab"]')).toHaveCount(3);
+    await expect(page.locator('[role="tab"]')).toHaveCount(4);
   });
 
   test("can switch to Agents tab", async ({ page }) => {
@@ -15,7 +15,7 @@ test.describe("App shell", () => {
   test("can open command palette with Ctrl+K", async ({ page }) => {
     await page.goto("/");
     // Wait for the app shell to hydrate (splash + lazy tabs) before sending keys.
-    await expect(page.locator('[role="tab"]')).toHaveCount(3);
+    await expect(page.locator('[role="tab"]')).toHaveCount(4);
     await page.keyboard.press("Control+k");
     await expect(page.locator(".palette-box")).toBeVisible();
   });

@@ -117,22 +117,26 @@ python3 -c "import yaml; yaml.safe_load(open('.github/workflows/ci.yml'))"  # va
 | `store/appStore.ts` | Zustand: agents, audio, today stats, attention items, status counts |
 | `i18n/index.ts` | i18next config — EN/ES/FR/JA |
 | `utils/agentStatus.ts` | `agentStatusColor()` / `agentStatusLabel()` — do not duplicate |
+| `utils/aiProviders.ts` | Provider preset catalog (base URL + protocol + suggested models), first-class OpenRouter model list, base-URL validation/matching helpers |
 | `utils/sounds.ts` | `Sounds.agentLaunch()` etc. — sound effect player |
 | `global.d.ts` | `window.__AGENT_SLUG` (agent-HUD slug only) |
 | `hooks/useConfig.ts` | react-query config CRUD |
 | `hooks/useAgents.ts` | react-query agents + mutations + `agent-state-changed` invalidation |
 | `hooks/useChat.ts` | Streaming chat with per-session `sessionIdRef` scoping |
 | `hooks/useConversations.ts` | Multi-thread conversation history |
+| `hooks/useFocus.ts` | Local-first focus sessions — timer (absolute clock), sessions, parked thoughts, streak; `localStorage` persistence |
 | `hooks/useAiConfig.ts` | react-query AI config (presence-boolean keys) |
 | `hooks/useJevConfig.ts` | react-query Jev triple + presets + test/decide mutations (`JEV_CONFIG_KEY`) |
 | `hooks/useJarvis.ts` | Jarvis slice + status + `jarvis-state-changed` invalidation |
 | `hooks/useJarvisAutoTrigger.ts` | Opt-in auto-analyze (engine frames + 60 s throttle + session change) |
-| `components/HomeTab.tsx` | Hero, dynamic suggestions, agent dock strip, empty-state CTA |
+| `components/HomeTab.tsx` | Hero, dynamic suggestions, agent dock strip, empty-state CTA; consumes `pendingPrompt` to open chat pre-filled |
+| `components/FocusTab.tsx` | **Focus Mode**: focus/break timer + circular dial, session intention, distraction mind dump, streak/today stats |
 | `components/AgentsTab.tsx` | Agent CRUD, skill management, slug auto-derive, drag-drop, HUD pop-out |
 | `components/AgentHUD.tsx` | Floating HUD — transcript, diff, activity timeline |
 | `components/ConnectionsTab.tsx` | Google Workspace status (shows unavailable message, no gogcli), MCP CRUD, automations, app usage log |
 | `components/SettingsTab.tsx` | 7 sections with icon nav, group headers, scroll memory |
 | `components/SettingsSections/JarvisSettings.tsx` | Jev triple + presets + test + mode + KB editor host |
+| `components/SettingsSections/AiProviderSettings.tsx` | Provider setup: Anthropic / OpenRouter (direct) / OpenAI-compatible choice, preset autofill, base-URL + key + model validation, save & model detection |
 | `components/JarvisPanel.tsx` | Chat-embedded co-pilot: extract → judge → draft-3 → rank → fill/copy |
 | `components/JarvisKnowledgeEditor.tsx` | KB notes/contacts CRUD + wipe (name locked) |
 | `components/SettingsSections/AppearanceSettings.tsx` | Theme, accent variants, color picker |
@@ -160,6 +164,8 @@ python3 -c "import yaml; yaml.safe_load(open('.github/workflows/ci.yml'))"  # va
 | `src/context/AppContext.test.tsx` | Toast add/dismiss/error, navigation |
 | `src/hooks/useChat.test.ts` | Empty state, streaming, cancel, clear |
 | `src/hooks/useConversations.test.ts` | Create/delete/update/persist/rename |
+| `src/hooks/useFocus.test.ts` | Focus timer, phase rollover, persistence, parked thoughts, streak/clock helpers |
+| `src/components/FocusTab.test.tsx` | Focus UI — timer display, start/pause, mind dump, duration presets |
 | `src/hooks/useAgents.test.ts` | Agent list, mutations, error paths |
 | `src/hooks/useConfig.test.ts` | Config load/update, error paths |
 | `src/hooks/useAiConfig.test.ts` | AI config load/update |
@@ -172,6 +178,8 @@ python3 -c "import yaml; yaml.safe_load(open('.github/workflows/ci.yml'))"  # va
 | `src/hooks/useVision.test.ts` | Data-URL parsing, ordering, remove |
 | `src/components/CommandPalette.test.tsx` | Search, keyboard nav, click, backdrop |
 | `src/utils/agentStatus.test.ts` | Status color/label, map completeness |
+| `src/utils/aiProviders.test.ts` | Preset catalog integrity, base-URL validation/normalization, preset resolution |
+| `src/components/SettingsSections/AiProviderSettings.test.tsx` | Provider setup UI — preset autofill, invalid-URL block, save + model detection |
 | `src/test-setup.ts` | Global Tauri mocks + react-i18next mock |
 | `e2e/app.spec.ts` | Tab bar, tab switching, Ctrl+K |
 | `e2e/chat.spec.ts` | Chat messages area, input focus |
