@@ -58,6 +58,7 @@
     "@testing-library/jest-dom": "^7",
     "@testing-library/react": "^16",
     "@testing-library/user-event": "^14",
+    "@types/node": "^26.6.4",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "@types/three": "^0.186",

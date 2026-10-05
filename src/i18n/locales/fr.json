@@ -674,6 +674,12 @@
   "mouseAnimations": {
     "title": "Animations de la souris",
     "hint": "Personnalisez la réaction de la surcouche aux actions de ClickyX à l'écran.",
+    "preset": "Préréglage",
+    "presetCustom": "Personnalisé",
+    "presetOff": "Désactivé",
+    "presetSubtle": "Sobre",
+    "presetBalanced": "Équilibré",
+    "presetExpressive": "Expressif",
     "enabled": "Activer les animations de la souris",
     "trail": "Traînée du curseur",
     "trailOff": "Désactivée",
@@ -707,7 +713,10 @@
       "speak": "Parler",
       "guide": "Guidage",
       "listen": "Écoute",
-      "think": "Réflexion"
+      "think": "Réflexion",
+      "typing": "Frappe",
+      "drag": "Glisser",
+      "scroll": "Défilement"
     }
   }
 }

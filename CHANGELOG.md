@@ -31,6 +31,24 @@ All notable changes to ClickyX are documented here.
   existing overlay event stream (`useMouseFollowActions` + `CursorActionLayer`)
   and follow the pointer on their own RAF loop so they never re-render the
   overlay tree; reduced-motion is respected.
+- **More cursor actions + animation presets** — three new mouse-follow actions
+  join the existing nine: **typing** (staggered keycaps rising from the pointer,
+  fired when double-tap Ctrl arms type mode), **drag** (a ghost pointer that lags
+  the real one on a dashed tether, so a held drag reads as "carrying" something),
+  and **scroll** (three concentric ripples travelling along the scroll axis, which
+  can point up, down, left, or right). Settings › Appearance › Mouse Animations
+  gains a **preset** picker — Subtle / Balanced / Expressive — that sets trail,
+  responsiveness, burst size, cap, sounds, halo and idle pulse in one click; the
+  label drops back to Custom as soon as you tweak an individual control. Presets
+  never touch your per-action toggles or accent.
+- **Sound assets are now shipped** — `public/sounds/` was empty, so every SFX call
+  (`agent-launch`, `agent-done`, `agent-close`, `wake`, `error`, `notification`,
+  `cursor-action`) was silently a no-op. The seven MP3s are now generated and
+  committed, including the cursor-burst tick that the animations setting enables.
+  `scripts/generate_sounds.py` synthesises them from oscillators — no third-party
+  samples, so no licensing constraints — and fails the run if any file fails to
+  decode back to its intended duration or peaks above -6 dBFS. Replace the files
+  with real recordings any time; the names are the contract.
 - **Mouse animation settings + 10 new features** — a new Settings › Appearance ›
   Mouse Animations section drives the overlay cursor animations. Ten new
   capabilities: (1) master enable switch, (2) cursor trail (off/short/medium/long),
@@ -50,6 +68,21 @@ All notable changes to ClickyX are documented here.
   fail-safe. Bursts are also anchored to their annotation coordinates, so each
   action's animation appears where the action happened rather than at screen
   centre.
+- The pet sprite had the same click-through gap and was left out of the first
+  pass: it followed only `mousemove`, which never arrives in the overlay window,
+  so it sat frozen at screen centre while the cursor layer worked correctly. The
+  overlay now owns a **single shared `useGlobalCursor` poller** and hands the
+  same pointer ref to both the cursor layer and the pet, so they always agree on
+  the position and only one IPC poller runs.
+- `isSustainedAction()` only matched `kind === "aura"`, so adding the drag ghost
+  (a third kind) made it disagree with `SUSTAINED_ACTIONS`. It now matches
+  anything that is not a self-expiring burst.
+- The typing burst named a CSS keyframe that did not exist, so the container kept
+  `opacity: 0` and the keycaps animated invisibly. A static CSS-wiring test now
+  catches that class of bug, since jsdom never evaluates CSS.
+- Selecting the "Off" animation preset made the picker immediately display
+  "Custom", because `matchPreset()` had no way to match a preset that only
+  disables the master switch.
 
 ## [0.2.3] - 2026-09-28
 

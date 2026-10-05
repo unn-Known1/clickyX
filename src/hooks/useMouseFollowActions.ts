@@ -19,17 +19,33 @@ export type MouseAction =
   | "draw" // a scribble path
   | "speak" // voice output / caption
   | "guide" // an arrow/curve guidance shape
+  | "typing" // keyboard input (type mode / injected text)
+  | "drag" // a drag gesture in progress
+  | "scroll" // a scroll gesture
   | "listen" // microphone capture (sustained)
   | "think"; // model processing (sustained)
 
-export type CursorEffectKind = "burst" | "aura";
+export type CursorEffectKind = "burst" | "aura" | "ghost";
 
 export interface ActionEffectMeta {
-  /** Aura actions stay pinned to the pointer while active; bursts self-expire. */
+  /**
+   * How the layer renders this action:
+   * - `burst` — a self-expiring one-shot at the spawn point
+   * - `aura` — a loop pinned to the pointer while active
+   * - `ghost` — a lagging copy of the pointer (a held gesture)
+   */
   kind: CursorEffectKind;
-  /** Lifetime of a burst in ms (0 for pure auras). */
+  /** Lifetime of a burst in ms (0 for auras and ghosts). */
   durationMs: number;
 }
+
+/**
+ * Direction carried by a directional effect. Lives on the effect rather than
+ * the action so one `scroll` action can ripple in all four directions.
+ */
+export type ScrollDirection = "up" | "down" | "left" | "right";
+
+export const SCROLL_DIRECTIONS: ScrollDirection[] = ["up", "down", "left", "right"];
 
 /** Per-action animation metadata — the single source of truth for the layer. */
 export const ACTION_EFFECT_META: Record<MouseAction, ActionEffectMeta> = {
@@ -40,15 +56,20 @@ export const ACTION_EFFECT_META: Record<MouseAction, ActionEffectMeta> = {
   draw: { kind: "burst", durationMs: 800 },
   speak: { kind: "burst", durationMs: 1200 },
   guide: { kind: "burst", durationMs: 900 },
+  typing: { kind: "burst", durationMs: 900 },
+  // A drag is a held gesture, so it renders as a ghost that trails the pointer
+  // rather than a self-expiring burst.
+  drag: { kind: "ghost", durationMs: 0 },
+  scroll: { kind: "burst", durationMs: 750 },
   listen: { kind: "aura", durationMs: 0 },
   think: { kind: "aura", durationMs: 0 },
 };
 
 export const MOUSE_ACTIONS = Object.keys(ACTION_EFFECT_META) as MouseAction[];
 
-/** Every sustained (aura) action, in a stable order. */
+/** Every sustained (aura or ghost) action, in a stable order. */
 export const SUSTAINED_ACTIONS: MouseAction[] = MOUSE_ACTIONS.filter(
-  (a) => ACTION_EFFECT_META[a].kind === "aura",
+  (a) => ACTION_EFFECT_META[a].kind !== "burst",
 );
 
 /** Upper bound on simultaneous burst effects, so a fast event stream can't grow unbounded. */
@@ -58,7 +79,8 @@ export const MAX_ACTIVE_EFFECTS = 24;
 export const AURA_TRIGGER_MS = 800;
 
 export function isSustainedAction(action: MouseAction): boolean {
-  return ACTION_EFFECT_META[action].kind === "aura";
+  // Matches SUSTAINED_ACTIONS: anything that is not a self-expiring burst.
+  return ACTION_EFFECT_META[action].kind !== "burst";
 }
 
 export interface CursorEffect {
@@ -68,6 +90,8 @@ export interface CursorEffect {
   x: number;
   y: number;
   durationMs: number;
+  /** Set for directional actions (scroll); defaults to "down". */
+  direction?: ScrollDirection;
 }
 
 export interface UseMouseFollowActionsResult {
@@ -78,7 +102,11 @@ export interface UseMouseFollowActionsResult {
   /** Live pointer position (shared with the render layer for the follow loop). */
   pointerRef: { current: PointerPosition };
   /** Spawn a burst; defaults to the current pointer position. */
-  trigger: (action: MouseAction, at?: PointerPosition) => void;
+  trigger: (
+    action: MouseAction,
+    at?: PointerPosition,
+    direction?: ScrollDirection,
+  ) => void;
   /** Toggle a sustained (aura) action on/off. */
   setSustained: (action: MouseAction, active: boolean) => void;
   /** Remove every effect and aura (used by clear-overlays). */
@@ -93,15 +121,25 @@ export interface UseMouseFollowActionsResult {
  *
  * `settings` is optional; when omitted every action is enabled with the
  * default burst cap and no sound, which is the pre-settings behaviour.
+ *
+ * `externalPointer` lets a caller share one cursor poller between several
+ * consumers (the overlay's cursor layer and the pet sprite both follow the
+ * pointer). Polling costs an IPC round-trip, so one shared ref is cheaper than
+ * one poller per consumer — and guarantees they agree on the position.
+ * When omitted, this hook owns a private poller as before.
  */
-export function useMouseFollowActions(settings?: MouseAnimationSettings): UseMouseFollowActionsResult {
+export function useMouseFollowActions(
+  settings?: MouseAnimationSettings,
+  externalPointer?: { current: PointerPosition },
+): UseMouseFollowActionsResult {
   const [effects, setEffects] = useState<CursorEffect[]>([]);
   const [sustained, setSustainedState] = useState<MouseAction[]>([]);
 
   // The layer is "active" whenever it has something to draw; only then do we pay
   // for cursor-position polling.
   const active = effects.length > 0 || sustained.length > 0;
-  const pointerRef = useGlobalCursor(active);
+  const ownPointer = useGlobalCursor(active && !externalPointer);
+  const pointerRef = externalPointer ?? ownPointer;
   const nextIdRef = useRef(1);
   const timersRef = useRef<Map<number, ReturnType<typeof setTimeout>>>(new Map());
 
@@ -116,13 +154,24 @@ export function useMouseFollowActions(settings?: MouseAnimationSettings): UseMou
   );
 
   const trigger = useCallback(
-    (action: MouseAction, at?: PointerPosition) => {
+    (
+      action: MouseAction,
+      at?: PointerPosition,
+      direction: ScrollDirection = "down",
+    ) => {
       if (!isEnabled(action)) return;
       const meta = ACTION_EFFECT_META[action];
       const pos = at ?? pointerRef.current;
-      const durationMs = meta.kind === "aura" ? AURA_TRIGGER_MS : meta.durationMs;
+      const durationMs = meta.kind === "burst" ? meta.durationMs : AURA_TRIGGER_MS;
       const id = nextIdRef.current++;
-      const effect: CursorEffect = { id, action, x: pos.x, y: pos.y, durationMs };
+      const effect: CursorEffect = {
+        id,
+        action,
+        x: pos.x,
+        y: pos.y,
+        durationMs,
+        ...(action === "scroll" ? { direction } : {}),
+      };
 
       setEffects((prev) => [...prev.slice(-(maxEffects - 1)), effect]);
 

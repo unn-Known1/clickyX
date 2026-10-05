@@ -32,15 +32,45 @@ describe("MouseAnimationsSettings", () => {
     expect(screen.getByLabelText("Animation color")).toBeInTheDocument();
   });
 
-  it("renders a toggle for each of the nine actions", () => {
+  it("renders a toggle for each of the twelve actions", () => {
     renderSection();
     const labels = [
       "Point", "Click", "Select", "Highlight", "Draw",
-      "Speak", "Guide", "Listening", "Thinking",
+      "Speak", "Guide", "Typing", "Drag", "Scroll",
+      "Listening", "Thinking",
     ];
     for (const label of labels) {
       expect(screen.getByLabelText(label)).toBeInTheDocument();
     }
+  });
+
+  it("renders the preset selector and applies a preset", async () => {
+    const user = userEvent.setup();
+    renderSection();
+
+    const preset = screen.getByLabelText("Preset") as HTMLSelectElement;
+    expect(preset).toHaveValue("custom");
+
+    await user.selectOptions(preset, "expressive");
+
+    // Preset values reach the individual controls...
+    expect(screen.getByLabelText("Cursor trail")).toHaveValue("long");
+    expect(screen.getByLabelText("Burst size")).toHaveValue("large");
+    // ...and the stored settings reflect them.
+    const stored = JSON.parse(window.localStorage.getItem(MOUSE_ANIMATION_STORAGE_KEY)!);
+    expect(stored.trail).toBe("long");
+    expect(stored.preset).toBe("expressive");
+  });
+
+  it("reports custom once an individual control is changed from a preset", async () => {
+    const user = userEvent.setup();
+    renderSection();
+
+    await user.selectOptions(screen.getByLabelText("Preset"), "balanced");
+    expect(screen.getByLabelText("Preset")).toHaveValue("balanced");
+
+    await user.selectOptions(screen.getByLabelText("Cursor trail"), "short");
+    expect(screen.getByLabelText("Preset")).toHaveValue("custom");
   });
 
   it("persists the master toggle to localStorage", async () => {

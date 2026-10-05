@@ -672,6 +672,12 @@
   "mouseAnimations": {
     "title": "Mouse Animations",
     "hint": "Customize how the overlay reacts to what ClickyX is doing on screen.",
+    "preset": "Preset",
+    "presetCustom": "Custom",
+    "presetOff": "Off",
+    "presetSubtle": "Subtle",
+    "presetBalanced": "Balanced",
+    "presetExpressive": "Expressive",
     "enabled": "Enable mouse animations",
     "trail": "Cursor trail",
     "trailOff": "Off",
@@ -705,7 +711,10 @@
       "speak": "Speak",
       "guide": "Guide",
       "listen": "Listening",
-      "think": "Thinking"
+      "think": "Thinking",
+      "typing": "Typing",
+      "drag": "Drag",
+      "scroll": "Scroll"
     }
   }
 }

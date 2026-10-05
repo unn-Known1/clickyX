@@ -16,6 +16,17 @@ vi.mock("../bindings", () => ({
   }),
 }));
 
+// The overlay window is click-through, so no `mousemove` ever reaches it in the
+// real app. useGlobalCursor falls back to Tauri's cursorPosition() polling.
+// Mock it here so the pet-follows-cursor test exercises that same fallback
+// rather than jsdom's synthetic mouse events (which would pass even without the fix).
+const cursorPosition = vi.fn(async () => ({ x: 0, y: 0 }));
+const outerPosition = vi.fn(async () => ({ x: 0, y: 0 }));
+vi.mock("@tauri-apps/api/window", () => ({
+  cursorPosition: () => cursorPosition(),
+  getCurrentWindow: () => ({ outerPosition: () => outerPosition() }),
+}));
+
 import OverlayApp from "./OverlayApp";
 
 function emit(event: string, payload: unknown = {}) {
@@ -30,6 +41,8 @@ async function readyFor(event: string) {
 
 beforeEach(() => {
   for (const k of Object.keys(handlers)) delete handlers[k];
+  cursorPosition.mockReset().mockResolvedValue({ x: 0, y: 0 });
+  outerPosition.mockReset().mockResolvedValue({ x: 0, y: 0 });
 });
 
 afterEach(() => {
@@ -130,5 +143,58 @@ describe("OverlayApp mouse-follow actions (real event surface)", () => {
     await waitFor(() => expect(container.querySelector(".cursor-action")).toBeNull());
     expect(container.querySelector(".cursor-aura-listen")).toBeNull();
     expect(container.querySelector(".cursor-follow-anchor")).toBeNull();
+  });
+
+  it("spawns typing bursts when type mode is armed", async () => {
+    const { container } = render(<OverlayApp />);
+    await readyFor("type-mode-changed");
+
+    emit("type-mode-changed", "active");
+    await waitFor(() => expect(container.querySelector(".cursor-action-typing")).not.toBeNull());
+  });
+
+  it("ignores type-mode payloads that are not 'active'", async () => {
+    const { container } = render(<OverlayApp />);
+    await readyFor("type-mode-changed");
+
+    emit("type-mode-changed", "Idle");
+    // Give the staggered timers a chance to fire before asserting nothing spawned.
+    await new Promise((r) => setTimeout(r, 350));
+    expect(container.querySelector(".cursor-action-typing")).toBeNull();
+  });
+
+  it("makes the pet chase the pointer via the OS cursor fallback", async () => {
+    // No mousemove is ever dispatched: in the real click-through overlay window
+    // none arrives. The pet must therefore move off the shared cursor ref that
+    // useGlobalCursor fills from cursorPosition() polling.
+    cursorPosition.mockResolvedValue({ x: 900, y: 700 });
+    outerPosition.mockResolvedValue({ x: 0, y: 0 });
+    const dpr = window.devicePixelRatio || 1;
+
+    const { container } = render(<OverlayApp />);
+    await readyFor("waveform-start");
+
+    emit("waveform-start");
+    await waitFor(() => expect(container.querySelector(".pet-sprite")).not.toBeNull());
+
+    const startLeft = parseFloat(container.querySelector<HTMLElement>(".pet-sprite")!.style.left);
+
+    // The pet must ease toward the polled cursor position, not sit at centre.
+    await waitFor(
+      () => {
+        const left = parseFloat(container.querySelector<HTMLElement>(".pet-sprite")!.style.left);
+        expect(left).toBeGreaterThan(startLeft);
+      },
+      { timeout: 3000 },
+    );
+
+    // And it should keep approaching the real polled position (~900/dpr).
+    await waitFor(
+      () => {
+        const left = parseFloat(container.querySelector<HTMLElement>(".pet-sprite")!.style.left);
+        expect(left).toBeGreaterThan(900 / dpr * 0.5);
+      },
+      { timeout: 5000 },
+    );
   });
 });

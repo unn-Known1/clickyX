@@ -672,6 +672,12 @@
   "mouseAnimations": {
     "title": "Animaciones del ratón",
     "hint": "Personaliza cómo reacciona la superposición a lo que ClickyX realiza en pantalla.",
+    "preset": "Preajuste",
+    "presetCustom": "Personalizado",
+    "presetOff": "Desactivado",
+    "presetSubtle": "Sutil",
+    "presetBalanced": "Equilibrado",
+    "presetExpressive": "Expresivo",
     "enabled": "Activar animaciones del ratón",
     "trail": "Estela del cursor",
     "trailOff": "Desactivada",
@@ -705,7 +711,10 @@
       "speak": "Hablar",
       "guide": "Guía",
       "listen": "Escuchando",
-      "think": "Pensando"
+      "think": "Pensando",
+      "typing": "Escribiendo",
+      "drag": "Arrastrar",
+      "scroll": "Desplazamiento"
     }
   }
 }

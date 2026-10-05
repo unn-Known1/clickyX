@@ -745,6 +745,113 @@
   100% { transform: translateX(18px) scale(1); opacity: 0; }
 }
 
+/* typing — a staggered ripple of keycaps rising from the pointer */
+.cursor-action-typing {
+  border: none;
+  background: none;
+  animation-name: action-typing;
+}
+
+.cursor-key {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 1.1em;
+  height: 1.1em;
+  margin: -0.55em 0 0 -0.55em;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font: 600 0.6rem/1 system-ui, sans-serif;
+  color: var(--accent, #4fc3f7);
+  border: 1.5px solid var(--accent, #4fc3f7);
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.35);
+  animation: key-rise 900ms ease-out forwards;
+}
+
+.cursor-key-1 { animation-delay: 0ms; }
+.cursor-key-2 { animation-delay: 140ms; }
+.cursor-key-3 { animation-delay: 280ms; }
+
+@keyframes key-rise {
+  0% { transform: translateY(6px) scale(0.6); opacity: 0; }
+  25% { opacity: 0.95; }
+  100% { transform: translateY(-22px) scale(1.05); opacity: 0; }
+}
+
+/* drag — a ghost pointer that lags the real one, tethered by a dashed line.
+   Rendered inside the follow anchor, so position comes from the RAF loop. */
+.cursor-drag-ghost {
+  position: absolute;
+  left: -11px;
+  top: -11px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 2px dashed var(--accent, #4fc3f7);
+  opacity: 0.7;
+  pointer-events: none;
+  will-change: transform;
+}
+
+.cursor-drag-tether {
+  position: absolute;
+  left: 0;
+  top: -1px;
+  height: 0;
+  width: 0;
+  border-top: 2px dotted var(--accent, #4fc3f7);
+  opacity: 0;
+  transform-origin: 0 0;
+  pointer-events: none;
+  will-change: transform, width, opacity;
+}
+
+/* scroll — concentric ripples travelling along the scroll axis.
+   `--scroll-dir` rotates the authored (downward) axis per direction. */
+.cursor-action-scroll {
+  border: none;
+  background: none;
+  --scroll-dir: 0deg;
+  animation-name: action-scroll;
+}
+
+.cursor-ripple {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: calc(var(--cursor-burst-size) * 0.5);
+  height: calc(var(--cursor-burst-size) * 0.22);
+  margin: calc(var(--cursor-burst-size) * -0.11) 0 0 calc(var(--cursor-burst-size) * -0.25);
+  border: 2px solid var(--accent, #4fc3f7);
+  border-radius: 50%;
+  animation: ripple-travel 750ms ease-out forwards;
+}
+
+.cursor-ripple-1 { animation-delay: 0ms; }
+.cursor-ripple-2 { animation-delay: 130ms; }
+.cursor-ripple-3 { animation-delay: 260ms; }
+
+/* The container itself must animate too: `.cursor-action` starts at opacity 0,
+   so without this the typing keycaps would run inside an invisible element. */
+@keyframes action-typing {
+  0% { opacity: 1; }
+  85% { opacity: 1; }
+  100% { opacity: 1; }
+}
+
+@keyframes ripple-travel {
+  0% { transform: translateY(0) scale(0.5); opacity: 0; }
+  30% { opacity: 0.85; }
+  100% { transform: translateY(26px) scale(1.3); opacity: 0; }
+}
+
+@keyframes action-scroll {
+  0% { transform: rotate(var(--scroll-dir, 0deg)) scale(1); opacity: 1; }
+  100% { transform: rotate(var(--scroll-dir, 0deg)) scale(1); opacity: 1; }
+}
+
 /* ── Reduced motion ─────────────────────────────────────────────────────────── */
 @media (prefers-reduced-motion: reduce) {
   .overlay-container *,

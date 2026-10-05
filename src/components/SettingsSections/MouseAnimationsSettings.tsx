@@ -6,7 +6,9 @@ import {
   BURST_SIZE_PX,
   MAX_EFFECT_OPTIONS,
   TRAIL_DOTS,
+  matchPreset,
   useMouseAnimationSettings,
+  type AnimationPreset,
   type BurstScale,
   type FollowSetting,
   type TrailSetting,
@@ -22,7 +24,7 @@ import {
 export function MouseAnimationsSettings() {
   const { t } = useTranslation();
   const { showToast } = useAppContext();
-  const { settings, update, setActionEnabled, reset } = useMouseAnimationSettings();
+  const { settings, update, setActionEnabled, applyPreset, reset } = useMouseAnimationSettings();
 
   const onReset = useCallback(() => {
     reset();
@@ -30,11 +32,34 @@ export function MouseAnimationsSettings() {
   }, [reset, showToast, t]);
 
   const disabled = !settings.enabled;
+  // `settings.preset` is the stored label; recompute so the row stays honest
+  // even if the user toggles the master switch straight after a preset.
+  const activePreset = matchPreset(settings);
 
   return (
     <section className="settings-section elevated-card">
       <h3>{t("mouseAnimations.title")}</h3>
       <p className="settings-hint">{t("mouseAnimations.hint")}</p>
+
+      <div className="setting-row">
+        <label htmlFor="ma-preset">{t("mouseAnimations.preset")}</label>
+        <select
+          id="ma-preset"
+          className="setting-select"
+          value={activePreset}
+          onChange={(e) => {
+            const next = e.target.value;
+            if (next === "custom") return;
+            applyPreset(next as AnimationPreset);
+          }}
+        >
+          <option value="custom">{t("mouseAnimations.presetCustom")}</option>
+          <option value="off">{t("mouseAnimations.presetOff")}</option>
+          <option value="subtle">{t("mouseAnimations.presetSubtle")}</option>
+          <option value="balanced">{t("mouseAnimations.presetBalanced")}</option>
+          <option value="expressive">{t("mouseAnimations.presetExpressive")}</option>
+        </select>
+      </div>
 
       <div className="setting-row">
         <label htmlFor="ma-enabled">{t("mouseAnimations.enabled")}</label>

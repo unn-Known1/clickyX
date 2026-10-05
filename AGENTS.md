@@ -131,7 +131,7 @@ python3 -c "import yaml; yaml.safe_load(open('.github/workflows/ci.yml'))"  # va
 | `hooks/useJarvisAutoTrigger.ts` | Opt-in auto-analyze (engine frames + 60 s throttle + session change) |
 | `hooks/useMouseFollowActions.ts` | Pointer-tracking engine for overlay cursor animations — maps actions to timed bursts vs sustained auras; pointer kept in a ref (no per-move renders) |
 | `hooks/useGlobalCursor.ts` | Overlay pointer source — `mousemove` primary + fail-safe `cursorPosition()` polling (global physical → window-local CSS) so the follow works in the click-through overlay window |
-| `hooks/useMouseAnimationSettings.ts` | Local-first settings for the mouse animations (master switch, trail, follow easing, burst scale, per-action toggles, sounds, idle pulse, halo, burst cap, accent override) — `localStorage`-persisted, normalized on read |
+| `hooks/useMouseAnimationSettings.ts` | Local-first settings for the mouse animations (master switch, trail, follow easing, burst scale, per-action toggles, sounds, idle pulse, halo, burst cap, accent override, named presets) — `localStorage`-persisted, normalized on read; `matchPreset()` reports when the live settings have drifted off the applied preset |
 | `components/HomeTab.tsx` | Hero, dynamic suggestions, agent dock strip, empty-state CTA; consumes `pendingPrompt` to open chat pre-filled |
 | `components/FocusTab.tsx` | **Focus Mode**: focus/break timer + circular dial, session intention, distraction mind dump, streak/today stats |
 | `components/AgentsTab.tsx` | Agent CRUD, skill management, slug auto-derive, drag-drop, HUD pop-out |
@@ -140,7 +140,7 @@ python3 -c "import yaml; yaml.safe_load(open('.github/workflows/ci.yml'))"  # va
 | `components/SettingsTab.tsx` | 10 sections with icon nav, group headers, scroll memory |
 | `components/SettingsSections/JarvisSettings.tsx` | Jev triple + presets + test + mode + KB editor host |
 | `components/SettingsSections/AiProviderSettings.tsx` | Provider setup: Anthropic / OpenRouter (direct) / OpenAI-compatible choice, preset autofill, base-URL + key + model validation, save & model detection |
-| `components/SettingsSections/MouseAnimationsSettings.tsx` | Controls every mouse-animation feature (master switch, trail length, follow responsiveness, burst size, burst cap, halo, idle pulse, sounds, accent override, per-action toggles, reset) |
+| `components/SettingsSections/MouseAnimationsSettings.tsx` | Controls every mouse-animation feature (preset picker, master switch, trail length, follow responsiveness, burst size, burst cap, halo, idle pulse, sounds, accent override, per-action toggles, reset) |
 | `components/JarvisPanel.tsx` | Chat-embedded co-pilot: extract → judge → draft-3 → rank → fill/copy |
 | `components/JarvisKnowledgeEditor.tsx` | KB notes/contacts CRUD + wipe (name locked) |
 | `components/SettingsSections/AppearanceSettings.tsx` | Theme, accent variants, color picker |
@@ -157,8 +157,8 @@ python3 -c "import yaml; yaml.safe_load(open('.github/workflows/ci.yml'))"  # va
 | `components/UpdateBanner.tsx` | Auto-updater notification |
 | `components/AboutDialog.tsx` | Version + links dialog |
 | `components/ModelSelector.tsx` | react-query chat-cap model list (`get_chat_models` allowlist; Jev excluded); shows setup prompt when no API key |
-| `overlay/OverlayApp.tsx` | Glow, calibration, waveform (real amplitude), cursors, captions, dock, HIGHLIGHT/SHAPE, AlwaysListeningIndicator; pet sprite shown while AI active or always-listening (deprecated — see REVIEW_REPORT P1); drives the mouse-follow action layer from overlay events |
-| `overlay/CursorActionLayer.tsx` | Dynamic mouse-follow animations — burst effects (point/click/select/highlight/draw/speak/guide) + sustained listen/think auras + cursor trail, idle pulse and halo; owns its own RAF loop driven by the shared pointer ref from `useGlobalCursor`, so the follow never re-renders the overlay tree |
+| `overlay/OverlayApp.tsx` | Glow, calibration, waveform (real amplitude), cursors, captions, dock, HIGHLIGHT/SHAPE, AlwaysListeningIndicator; pet sprite shown while AI active or always-listening (deprecated — see REVIEW_REPORT P1); drives the mouse-follow action layer from overlay events, and shares ONE `useGlobalCursor` poller between that layer and the pet sprite |
+| `overlay/CursorActionLayer.tsx` | Dynamic mouse-follow animations — burst effects (point/click/select/highlight/draw/speak/guide/typing/scroll) + sustained listen/think auras + a drag ghost that trails the pointer on a dashed tether + cursor trail, idle pulse and halo; owns its own RAF loop driven by the shared pointer ref from `useGlobalCursor`, so the follow never re-renders the overlay tree |
 | `overlay/overlay.css` | Overlay-specific styles (incl. cursor-action keyframes, cursor trail, idle pulse) |
 | `styles/theme.css` | All panel styles, semantic color tokens, 6 accent variants |
 
@@ -179,11 +179,13 @@ python3 -c "import yaml; yaml.safe_load(open('.github/workflows/ci.yml'))"  # va
 | `src/hooks/useJarvisAutoTrigger.test.ts` | Auto-trigger gating, throttle, session change |
 | `src/hooks/useAudioConfig.test.ts` | Audio config load/update |
 | `src/hooks/useOverlay.test.ts` | Overlay commands + args |
-| `src/hooks/useMouseFollowActions.test.ts` | Action metadata, burst spawn/expiry, sustained auras, cap, clear/unmount, settings gating (master/per-action/cap/sounds) |
-| `src/hooks/useMouseAnimationSettings.test.ts` | Settings tables, normalization of bad persisted blobs, persistence, per-action toggle, reset |
+| `src/hooks/useMouseFollowActions.test.ts` | Action metadata, burst spawn/expiry, sustained auras, cap, clear/unmount, settings gating (master/per-action/cap/sounds), scroll direction, shared pointer ref |
+| `src/hooks/useMouseAnimationSettings.test.ts` | Settings tables, normalization of bad persisted blobs, persistence, per-action toggle, preset apply/label-drift/reset |
 | `src/hooks/useGlobalCursor.test.ts` | mousemove primary path, inactive no-poll, `cursorPosition()` fallback conversion, poll-stop on failure |
+| `scripts/generate_sounds.py` | Synthesises `public/sounds/*.mp3`; verifies each encode decodes back to its intended duration and stays under -6 dBFS peak |
+| `src/overlay/overlayCss.test.ts` | Static CSS wiring — every `animation-name` resolves to a defined keyframe, every class the layer renders is styled, stagger delays actually differ, reduced-motion still covers the new effects |
 | `src/overlay/CursorActionLayer.test.tsx` | Idle render, burst positioning, auras, RAF pointer follow |
-| `src/overlay/OverlayApp.test.tsx` | All nine actions mapped through the real event bus, annotation-anchored bursts, burst expiry, aura persist/clear |
+| `src/overlay/OverlayApp.test.tsx` | Actions mapped through the real event bus, annotation-anchored bursts, burst expiry, aura persist/clear, typing bursts on type-mode, pet chase via the OS cursor fallback |
 | `src/components/SettingsSections/MouseAnimationsSettings.test.tsx` | Renders every feature control, per-action toggles, persistence, disabled-when-off state |
 | `src/hooks/useScreenCapture.test.ts` | Capture commands, error paths |
 | `src/hooks/useVision.test.ts` | Data-URL parsing, ordering, remove |
@@ -260,7 +262,7 @@ git config user.email "ptelgm.yt@gmail.com"
 | macOS signing | Set `APPLE_SIGNING_IDENTITY`, `APPLE_TEAM_ID`, `APPLE_NOTARIZATION_USERNAME`, `APPLE_NOTARIZATION_PASSWORD` as GitHub secrets (the only four `release.yml` reads; unsigned builds ship unsigned) |
 | Windows signing | Set `WINDOWS_SIGNING_CERT` (base64 PFX) and `WINDOWS_SIGNING_PASSWORD` as GitHub secrets |
 | Update signing (P0-T3) | Generate once (`minisign -G -p update.pub -s update.key`); set `UPDATE_SIGNING_KEY_B64` (base64 of the secret key file) and `UPDATE_SIGNING_PUBKEY` (pubkey string). Without these, release artifacts ship unsigned and the in-app updater refuses them |
-| Audio assets | Add `.mp3` files to `public/sounds/` (see `public/sounds/README.md`) |
+| Audio assets | `public/sounds/*.mp3` are now committed — regenerate with `pip install lameenc && python3 scripts/generate_sounds.py`, or drop in your own recordings (see `public/sounds/README.md`) |
 | Onboarding video | Add `intro.mp4` to `public/onboarding/` (SVG fallback already rendered) |
 
 ---

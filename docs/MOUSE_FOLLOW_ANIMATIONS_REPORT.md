@@ -306,3 +306,144 @@ listener effect is not re-subscribed. Reduced-motion still suppresses every anim
 | `npm run lint` (full) | exit 0 — 58 warnings / 0 errors (unchanged baseline) |
 | `node scripts/check-i18n.mjs` | exit 0 — 627 keys, full EN parity |
 | `codespell` (exact CI invocation) | exit 0 |
+
+---
+
+## 8. Further cursor animations, presets, and the pet-layer gap
+
+### 8.1 Three more actions
+
+The action set grew from nine to twelve. `ACTION_EFFECT_META` gained a third
+`kind`, `ghost`, for effects that follow the pointer for as long as they are
+active rather than self-expiring.
+
+| Action | Kind | Rendered as | Triggered by |
+| --- | --- | --- | --- |
+| `typing` | burst | Three keycaps rising and fading, staggered 140 ms apart | `type-mode-changed` → `"active"` |
+| `drag` | ghost | A dashed circle lagging the real pointer, joined to it by a dotted tether | `setSustained("drag", …)` |
+| `scroll` | burst | Three concentric ripples travelling along the scroll axis | `trigger("scroll", at, direction)` |
+
+**Typing.** Double-tap Ctrl arms type mode (`src-tauri/src/lib.rs`), which emits
+`type-mode-changed`. The overlay listens and spawns three staggered bursts, so a
+single keypress sequence reads as a short run of keystrokes rather than one pop.
+Payloads other than `"active"` (the state enum is formatted with `Debug`) are
+ignored, and the staggered timers are tracked so unmount cannot fire them.
+
+**Drag ghost.** A drag is a *held* gesture, so a self-expiring burst would be
+wrong — it would vanish while the user is still dragging. Instead the ghost is a
+second position inside the existing follow anchor, eased at a fixed `0.16` per
+frame, deliberately slower than the anchor's own `followEase`, so it always
+visibly lags. The tether between the two fades out as it shortens, so a fast
+yank does not draw a hard line across the screen.
+
+**Scroll ripple.** The direction lives on the *effect*, not the action, so one
+`scroll` action covers all four directions. The layer converts the direction to
+a `--scroll-dir` angle in degrees (`down: 0, up: 180, right: -90, left: 90`) and
+the CSS rotates the authored downward axis from there — no duplicated keyframes.
+
+### 8.2 Presets
+
+`ANIMATION_PRESETS` bundles Subtle / Balanced / Expressive. Two deliberate
+design decisions:
+
+1. **Presets never touch per-action toggles or the accent.** Applying a preset
+   is a starting point, not a reset; silently re-enabling an action the user
+   turned off would be a surprise.
+2. **The stored `preset` field is only a label.** `matchPreset()` recomputes it
+   from the live settings on every read, so the picker shows the truth even if
+   the user toggles the master switch straight after applying one. Accent and
+   per-action toggles are excluded from the comparison, so tweaking them does
+   not falsely knock the label to Custom.
+
+The `off` preset only sets `enabled: false` — it is the same knob as the master
+switch, offered where users look for it.
+
+### 8.3 The PetLayer cursor gap
+
+Section 6 fixed the cursor layer by adding the `cursorPosition()` fallback. The
+pet sprite was left behind, and it had the identical defect: it tracked only
+`mousemove` (`PetLayer`'s own listener), which never fires in a click-through
+overlay window, so the pet sat frozen at screen centre whenever the cursor layer
+worked correctly.
+
+The naive fix — give `PetLayer` its own `useGlobalCursor` — would have been
+wrong in a subtle way: two pollers means two independent IPC round-trips at
+40 ms, and the two consumers could briefly disagree about the position.
+Instead `useMouseFollowActions` accepts an optional external pointer ref, and
+the overlay owns a single `useGlobalCursor` poller whose active state is
+`petVisible || anyCursorEffect`, handing the same ref to both consumers.
+`PetLayer` reads that ref inside the frame loop it already owned, so its 60 fps
+chase still never re-renders the overlay tree.
+
+### 8.4 Sounds
+
+`public/sounds/` contained only a README, so all seven `Sounds.*` calls were
+silent no-ops — including `cursor-action`, which the animations setting toggles.
+They are now generated and committed.
+
+`scripts/generate_sounds.py` synthesises each sound from oscillators rather than
+sampling, which sidesteps the licensing problem the old README described. Two
+checks in the script matter more than the synthesis:
+
+- **Decode verification.** After encoding, the script walks the real MPEG frame
+  headers in the output file and fails if the decoded duration does not match the
+  source. An empty or truncated buffer that the encoder reports as success is
+  exactly the failure that would otherwise ship as a broken click.
+- **Peak assertion.** Each file is normalised to -6 dBFS and the peak is
+  re-checked after edge fades, so overlapping one-shots cannot clip.
+
+The first version of the frame walker mapped layer IDs backwards (Layer III is
+`1`, not `3`), which silently desynced the walk and reported a 0.38 s file as
+3.24 s. The script only "passed" after that was fixed — the check is genuinely
+load-bearing, not decorative.
+
+### 8.5 Two defects found during the completion audit
+
+Both were invisible to the test suite until the wiring was checked statically.
+
+1. **`.cursor-action-typing` named a keyframe that did not exist.** It declared
+   `animation-name: action-typing` with no matching `@keyframes`, so the burst
+   container never animated and kept `opacity: 0` from the base `.cursor-action`
+   rule — the three typing keycaps animated inside an invisible element. The
+   child animations worked, which is exactly why it looked plausible in code
+   review. `src/overlay/overlayCss.test.ts` now asserts every
+   `animation-name` / `animation` shorthand resolves to a defined keyframe, and
+   that each new burst container has its own keyframes. Verified to fail against
+   the broken CSS.
+
+2. **The `off` preset could never be shown.** `ANIMATION_PRESETS` holds only
+   value bundles, so `matchPreset()` had no way to return `off`: selecting it
+   set `enabled: false`, which matched nothing, so the picker immediately
+   displayed "Custom" instead of "Off". `matchPreset()` now checks the disabled
+   state first.
+
+### 8.6 Verification
+
+| Check | Result |
+| --- | --- |
+| `python3 scripts/generate_sounds.py` | 7/7 encoded and decoded back to intended duration, all 128 kbps, peak <= -6 dBFS |
+| `npx tsc -b --noEmit` | exit 0 |
+| `npx vitest run` | exit 0 — **258 passed / 31 files** (was 223/30) |
+| `npx eslint` (14 changed/new files) | exit 0 — no warnings |
+| `npm run lint` (full) | exit 0 — 58 warnings / 0 errors (unchanged baseline) |
+| `node scripts/check-i18n.mjs` | exit 0 — 636 keys, full EN parity |
+| `codespell` (exact CI invocation) | exit 0 |
+
+The pet-follows-cursor test was verified to **fail** against the pre-fix
+implementation (it dispatches no `mousemove`, relying on the mocked
+`cursorPosition()` path, exactly as the real click-through window behaves), so it
+guards the defect rather than just passing.
+
+### 8.7 Known limitations
+
+- `drag` and `scroll` are fully implemented and reachable through the hook API
+  and per-action settings, but nothing in the backend emits a drag/scroll event
+  yet, so in the shipped app only `typing` fires from a real event stream. Wiring
+  the other two means emitting from the CUA input path in `src-tauri/src/cua.rs`,
+  which is Rust and could not be compiled or tested in this environment.
+- The MP3s are synthesised tones, not recorded or designed sound. They are
+  functional and license-clean, not a sonic identity.
+- `@types/node` was added as a devDependency purely so `overlayCss.test.ts` can
+  read the stylesheet with `node:fs`. Vitest does not evaluate CSS in this
+  config, so no DOM or Vite-query alternative returns the real file contents;
+  reading the file is also the only way to catch defect 1 above.

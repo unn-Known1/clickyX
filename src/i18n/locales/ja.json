@@ -674,6 +674,12 @@
   "mouseAnimations": {
     "title": "マウスアニメーション",
     "hint": "ClickyX の画面上の操作に対するオーバーレイの反応をカスタマイズします。",
+    "preset": "プリセット",
+    "presetCustom": "カスタム",
+    "presetOff": "オフ",
+    "presetSubtle": "控えめ",
+    "presetBalanced": "バランス",
+    "presetExpressive": "Garantoso",
     "enabled": "マウスアニメーションを有効にする",
     "trail": "カーソルトレイル",
     "trailOff": "オフ",
@@ -707,7 +713,10 @@
       "speak": "発話",
       "guide": "ガイド",
       "listen": "音声入力",
-      "think": "思考"
+      "think": "思考",
+      "typing": "入力",
+      "drag": "ドラッグ",
+      "scroll": "スクロール"
     }
   }
 }

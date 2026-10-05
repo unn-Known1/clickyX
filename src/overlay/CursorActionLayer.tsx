@@ -1,10 +1,34 @@
 import { memo, useEffect, useRef } from "react";
-import type { CursorEffect, MouseAction, PointerPosition } from "../hooks/useMouseFollowActions";
+import type {
+  CursorEffect,
+  MouseAction,
+  PointerPosition,
+  ScrollDirection,
+} from "../hooks/useMouseFollowActions";
 
 /** Default per-frame catch-up factor when no follow setting is supplied. */
 const DEFAULT_FOLLOW_EASE = 0.35;
 /** Default burst diameter (px) when no burst scale setting is supplied. */
 const DEFAULT_BURST_SIZE = 44;
+/**
+ * Per-frame catch-up factor for the drag ghost. Deliberately lower than the
+ * aura ease: a ghost should visibly lag the pointer to read as "something is
+ * being carried", rather than tracking it exactly.
+ */
+const DRAG_GHOST_EASE = 0.16;
+/** Dashed tether drawn between the pointer and its drag ghost. */
+const DRAG_GHOST_MAX_LENGTH = 120;
+
+/**
+ * Degrees each scroll direction rotates the ripple axis by, injected as
+ * `--scroll-dir`. Ripples are authored pointing "down" and rotated from there.
+ */
+const SCROLL_ROTATION: Record<ScrollDirection, number> = {
+  down: 0,
+  up: 180,
+  right: -90,
+  left: 90,
+};
 
 function safeCenter(): PointerPosition {
   if (typeof window === "undefined") return { x: 400, y: 300 };
@@ -53,9 +77,13 @@ export const CursorActionLayer = memo(function CursorActionLayer({
 }: CursorActionLayerProps) {
   const anchorRef = useRef<HTMLDivElement>(null);
   const trailRef = useRef<HTMLDivElement>(null);
+  const ghostRef = useRef<HTMLDivElement>(null);
+  const tetherRef = useRef<HTMLDivElement>(null);
   const posRef = useRef<PointerPosition>(safeCenter());
+  const ghostPosRef = useRef<PointerPosition>(safeCenter());
   const bufferRef = useRef<PointerPosition[]>([]);
   const rafRef = useRef(0);
+  const hasGhost = sustained.includes("drag");
   const active = effects.length > 0 || sustained.length > 0;
 
   const ease = Math.min(Math.max(followEase, 0), 1);
@@ -67,6 +95,7 @@ export const CursorActionLayer = memo(function CursorActionLayer({
     if (!active) return;
     // Snap onto the pointer when the layer activates instead of sliding in from center.
     posRef.current = { ...pointerRef.current };
+    ghostPosRef.current = { ...pointerRef.current };
     bufferRef.current = [];
     let alive = true;
     const frame = () => {
@@ -77,6 +106,33 @@ export const CursorActionLayer = memo(function CursorActionLayer({
       p.y += (target.y - p.y) * ease;
       if (anchorRef.current) {
         anchorRef.current.style.transform = `translate3d(${p.x}px, ${p.y}px, 0)`;
+      }
+
+      // Drag ghost: a second, slower-following copy of the pointer, plus a
+      // dashed tether back to the real pointer so the lag reads as intentional.
+      if (hasGhost) {
+        const g = ghostPosRef.current;
+        g.x += (target.x - g.x) * DRAG_GHOST_EASE;
+        g.y += (target.y - g.y) * DRAG_GHOST_EASE;
+        const dx = g.x - p.x;
+        const dy = g.y - p.y;
+        const len = Math.hypot(dx, dy);
+        if (ghostRef.current) {
+          ghostRef.current.style.transform = `translate3d(${dx}px, ${dy}px, 0)`;
+        }
+        if (tetherRef.current) {
+          if (len < 6) {
+            tetherRef.current.style.opacity = "0";
+          } else {
+            const angle = (Math.atan2(dy, dx) * 180) / Math.PI;
+            // Fade the tether out over the tail of its length so a fast yank
+            // does not draw a hard line across the screen.
+            const reach = Math.min(len, DRAG_GHOST_MAX_LENGTH);
+            tetherRef.current.style.opacity = String(Math.min(0.5, reach / 240));
+            tetherRef.current.style.width = `${reach}px`;
+            tetherRef.current.style.transform = `rotate(${angle}deg)`;
+          }
+        }
       }
 
       // Trail: keep the last `dots` anchor positions and stagger them behind.
@@ -107,7 +163,7 @@ export const CursorActionLayer = memo(function CursorActionLayer({
       alive = false;
       cancelAnimationFrame(rafRef.current);
     };
-  }, [active, pointerRef, ease, dots]);
+  }, [active, pointerRef, ease, dots, hasGhost]);
 
   if (!active) return null;
 
@@ -128,9 +184,17 @@ export const CursorActionLayer = memo(function CursorActionLayer({
         )}
         {idlePulse && <div className="cursor-idle-pulse" />}
         {showHalo && <div className="cursor-pointer-halo" />}
-        {sustained.map((action) => (
-          <div key={action} className={`cursor-aura cursor-aura-${action}`} />
-        ))}
+        {sustained
+          .filter((action) => action !== "drag")
+          .map((action) => (
+            <div key={action} className={`cursor-aura cursor-aura-${action}`} />
+          ))}
+        {hasGhost && (
+          <>
+            <div ref={tetherRef} className="cursor-drag-tether" />
+            <div ref={ghostRef} className="cursor-drag-ghost" />
+          </>
+        )}
       </div>
       {effects.map((effect) => (
         <div
@@ -143,10 +207,28 @@ export const CursorActionLayer = memo(function CursorActionLayer({
               animationDuration: `${effect.durationMs}ms`,
               "--cursor-burst-size": `${burstSize}px`,
               ...(accent ? { ["--accent" as never]: accent } : {}),
+              ...(effect.action === "scroll"
+                ? { ["--scroll-dir" as never]: `${SCROLL_ROTATION[effect.direction ?? "down"]}deg` }
+                : {}),
             } as React.CSSProperties
           }
           aria-hidden="true"
-        />
+        >
+          {effect.action === "typing" && (
+            <>
+              <span className="cursor-key cursor-key-1">A</span>
+              <span className="cursor-key cursor-key-2">B</span>
+              <span className="cursor-key cursor-key-3">C</span>
+            </>
+          )}
+          {effect.action === "scroll" && (
+            <>
+              <span className="cursor-ripple cursor-ripple-1" />
+              <span className="cursor-ripple cursor-ripple-2" />
+              <span className="cursor-ripple cursor-ripple-3" />
+            </>
+          )}
+        </div>
       ))}
     </>
   );

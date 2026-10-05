@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, useCallback, memo, Component, ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { listen } from "../bindings";
+import { useGlobalCursor, type PointerPosition } from "../hooks/useGlobalCursor";
 import { useMouseFollowActions } from "../hooks/useMouseFollowActions";
 import {
   BURST_SIZE_PX,
@@ -118,11 +119,14 @@ const PetLayer = memo(function PetLayer({
   processing,
   waveformActive,
   accent,
+  pointer,
 }: {
   visible: boolean;
   processing: boolean;
   waveformActive: boolean;
   accent: string;
+  /** Shared global cursor ref (see useGlobalCursor in the parent). */
+  pointer: { current: PointerPosition };
 }) {
   const { w, h } = safeWindowSize();
   const [pos, setPos] = useState({ x: w / 2, y: h / 2 });
@@ -130,19 +134,12 @@ const PetLayer = memo(function PetLayer({
   const rafRef = useRef<number>(0);
 
   useEffect(() => {
-    const onMouseMove = (e: MouseEvent) => {
-      target.current = { x: e.clientX, y: e.clientY };
-    };
     const onResize = () => {
       const s = safeWindowSize();
       target.current = { x: s.w / 2, y: s.h / 2 };
     };
-    window.addEventListener("mousemove", onMouseMove);
     window.addEventListener("resize", onResize);
-    return () => {
-      window.removeEventListener("mousemove", onMouseMove);
-      window.removeEventListener("resize", onResize);
-    };
+    return () => window.removeEventListener("resize", onResize);
   }, []);
 
   useEffect(() => {
@@ -153,6 +150,11 @@ const PetLayer = memo(function PetLayer({
     let alive = true;
     const frame = () => {
       if (!alive) return;
+      // The overlay window is click-through (set_ignore_cursor_events(true)),
+      // so `mousemove` never fires here and the pet used to sit frozen at the
+      // centre. The shared cursor ref falls back to Tauri's cursorPosition()
+      // polling, so chase the real pointer instead.
+      target.current = { x: pointer.current.x, y: pointer.current.y };
       setPos((prev) => ({
         x: prev.x + (target.current.x - prev.x) * 0.08,
         y: prev.y + (target.current.y - prev.y) * 0.08,
@@ -165,15 +167,14 @@ const PetLayer = memo(function PetLayer({
       } else if (alive) {
         rafRef.current = requestAnimationFrame(frame);
       }
-    };
-    rafRef.current = requestAnimationFrame(frame);
-    document.addEventListener("visibilitychange", onVisibility);
-    return () => {
-      alive = false;
-      cancelAnimationFrame(rafRef.current);
-      document.removeEventListener("visibilitychange", onVisibility);
-    };
-  }, [visible]);
+    };rafRef.current = requestAnimationFrame(frame);
+      document.addEventListener("visibilitychange", onVisibility);
+      return () => {
+        alive = false;
+        cancelAnimationFrame(rafRef.current);
+        document.removeEventListener("visibilitychange", onVisibility);
+      };
+    }, [visible, pointer]);
 
   if (!visible) return null;
   return (
@@ -461,14 +462,25 @@ function OverlayAppInner() {
 
   // Dynamic mouse-follow animations (burst + sustained per overlay action).
   const { settings: mouseSettings } = useMouseAnimationSettings();
+  const typeTimers = useRef<number[]>([]);
+
+  // One shared cursor poller for the whole overlay: the cursor-action layer and
+  // the pet sprite both follow the pointer, and each poller would otherwise cost
+  // its own IPC round-trips. Polling is only active while something on screen is
+  // actually following the cursor.
   const {
     effects: mouseEffects,
     sustained: mouseAuras,
-    pointerRef: mousePointerRef,
     trigger: triggerMouseAction,
     setSustained: setMouseAura,
     clear: clearMouseActions,
   } = useMouseFollowActions(mouseSettings);
+  const petVisible =
+    !calibration.active &&
+    (processing || waveformActive || cursors.length > 0 || rects.length > 0 || alwaysListening);
+  const overlayPointer = useGlobalCursor(
+    petVisible || mouseEffects.length > 0 || mouseAuras.length > 0,
+  );
 
   const animRefs = useRef<Record<string, () => void>>({});
   const streamTimers = useRef<Record<string, number>>({});
@@ -696,12 +708,29 @@ function OverlayAppInner() {
         setShapes(prev => prev.filter(s => s.id !== e.payload.id));
       });
       if (!cancelled) unlisten.push(u22);
+
+      // type-mode-changed — double-tap Ctrl arms type mode, after which the
+      // user (or the agent) types into the focused window. Three staggered
+      // bursts read as a short run of keystrokes.
+      const u23 = await listen<string>("type-mode-changed", (e) => {
+        if (cancelled || e.payload !== "active") return;
+        [0, 140, 280].forEach((delay) => {
+          typeTimers.current.push(
+            window.setTimeout(() => {
+              if (!cancelled) triggerMouseAction("typing");
+            }, delay),
+          );
+        });
+      });
+      if (!cancelled) unlisten.push(u23);
     })().catch((err) => console.error("[OverlayApp] listen setup failed:", err));
 
     return () => {
       cancelled = true;
       Object.values(streamTimers.current).forEach(clearTimeout);
       streamTimers.current = {};
+      typeTimers.current.forEach(clearTimeout);
+      typeTimers.current = [];
       Object.values(animRefs.current).forEach(cancel => cancel());
       animRefs.current = {};
       unlisten.forEach(fn => fn());
@@ -720,7 +749,7 @@ function OverlayAppInner() {
       <CursorActionLayer
         effects={mouseEffects}
         sustained={mouseAuras}
-        pointerRef={mousePointerRef}
+        pointerRef={overlayPointer}
         followEase={FOLLOW_EASE[mouseSettings.follow]}
         trailDots={TRAIL_DOTS[mouseSettings.trail]}
         burstSize={BURST_SIZE_PX[mouseSettings.burstScale]}
@@ -732,10 +761,11 @@ function OverlayAppInner() {
       {/* Pet layer — isolated (P3/U5): owns its RAF loop, never re-renders this tree.
           Shown during active AI operations, hidden during calibration or idle. */}
       <PetLayer
-        visible={!calibration.active && (processing || waveformActive || cursors.length > 0 || rects.length > 0 || alwaysListening)}
+        visible={petVisible}
         processing={processing}
         waveformActive={waveformActive}
         accent={accent}
+        pointer={overlayPointer}
       />
 
       {/* Calibration box */}

@@ -7,6 +7,8 @@ export type TrailSetting = "off" | "short" | "medium" | "long";
 export type FollowSetting = "instant" | "smooth" | "lazy";
 /** Overall size of a burst effect. */
 export type BurstScale = "small" | "normal" | "large";
+/** Named bundle of animation settings, applied in one click. */
+export type AnimationPreset = "off" | "subtle" | "balanced" | "expressive";
 
 export interface MouseAnimationSettings {
   /** Feature 1 — master switch for every mouse animation. */
@@ -29,7 +31,57 @@ export interface MouseAnimationSettings {
   maxEffects: number;
   /** Feature 10 — accent override ("" inherits the app accent). */
   accent: string;
+  /**
+   * Feature 11 — which preset was last applied. Purely informational: the
+   * individual settings are the source of truth, so hand-editing any control
+   * after applying a preset is preserved. "custom" once the user deviates.
+   */
+  preset: AnimationPreset | "custom";
 }
+
+/** The tunable fields a preset controls (everything except `preset` itself). */
+export type MouseAnimationTunables = Omit<MouseAnimationSettings, "preset">;
+
+/**
+ * Named starting points. Each sets the presentation fields only — per-action
+ * toggles are left alone so applying a preset never silently re-enables an
+ * action the user deliberately turned off.
+ */
+export const ANIMATION_PRESETS: Record<
+  Exclude<AnimationPreset, "off">,
+  Partial<MouseAnimationTunables>
+> = {
+  subtle: {
+    enabled: true,
+    trail: "short",
+    follow: "instant",
+    burstScale: "small",
+    sounds: false,
+    idlePulse: false,
+    halo: false,
+    maxEffects: 8,
+  },
+  balanced: {
+    enabled: true,
+    trail: "medium",
+    follow: "smooth",
+    burstScale: "normal",
+    sounds: false,
+    idlePulse: false,
+    halo: true,
+    maxEffects: 16,
+  },
+  expressive: {
+    enabled: true,
+    trail: "long",
+    follow: "smooth",
+    burstScale: "large",
+    sounds: true,
+    idlePulse: true,
+    halo: true,
+    maxEffects: 24,
+  },
+};
 
 /** Trail dot counts per setting. */
 export const TRAIL_DOTS: Record<TrailSetting, number> = {
@@ -73,6 +125,7 @@ export const DEFAULT_MOUSE_ANIMATION_SETTINGS: MouseAnimationSettings = {
   halo: true,
   maxEffects: 24,
   accent: "",
+  preset: "custom",
 };
 
 export const MOUSE_ANIMATION_STORAGE_KEY = "clickyx.mouseAnimations.v1";
@@ -80,6 +133,13 @@ export const MOUSE_ANIMATION_STORAGE_KEY = "clickyx.mouseAnimations.v1";
 const TRAIL_VALUES: TrailSetting[] = ["off", "short", "medium", "long"];
 const FOLLOW_VALUES: FollowSetting[] = ["instant", "smooth", "lazy"];
 const SCALE_VALUES: BurstScale[] = ["small", "normal", "large"];
+const PRESET_VALUES: (AnimationPreset | "custom")[] = [
+  "off",
+  "subtle",
+  "balanced",
+  "expressive",
+  "custom",
+];
 
 function isHexColor(v: unknown): v is string {
   return typeof v === "string" && /^#[0-9a-f]{6}$/i.test(v);
@@ -118,7 +178,29 @@ export function normalizeMouseAnimationSettings(raw: unknown): MouseAnimationSet
       ? (o.maxEffects as number)
       : d.maxEffects,
     accent: isHexColor(o.accent) ? o.accent : "",
+    preset: PRESET_VALUES.includes(o.preset as AnimationPreset)
+      ? (o.preset as AnimationPreset | "custom")
+      : d.preset,
   };
+}
+
+/**
+ * Which preset the given settings match, or "custom" if they match none.
+ * Lets the settings UI show the active preset honestly as the user tweaks
+ * individual controls away from it.
+ */
+export function matchPreset(settings: MouseAnimationSettings): AnimationPreset | "custom" {
+  // "off" is not a bundle of values — it only disables the master switch — so
+  // match it first. Without this, disabling animations would immediately report
+  // "custom" and the picker would never show the option the user just chose.
+  if (!settings.enabled) return "off";
+  for (const [name, values] of Object.entries(ANIMATION_PRESETS)) {
+    const matches = Object.entries(values).every(
+      ([key, value]) => settings[key as keyof MouseAnimationSettings] === value,
+    );
+    if (matches) return name as AnimationPreset;
+  }
+  return "custom";
 }
 
 function readStored(): MouseAnimationSettings {
@@ -137,6 +219,8 @@ export interface UseMouseAnimationSettingsResult {
   update: (patch: Partial<MouseAnimationSettings>) => void;
   /** Toggle a single action's animation. */
   setActionEnabled: (action: MouseAction, enabled: boolean) => void;
+  /** Apply a named preset; "off" just disables everything. */
+  applyPreset: (preset: AnimationPreset) => void;
   /** Restore every setting to its default. */
   reset: () => void;
 }
@@ -165,18 +249,38 @@ export function useMouseAnimationSettings(): UseMouseAnimationSettingsResult {
   }, [settings]);
 
   const update = useCallback((patch: Partial<MouseAnimationSettings>) => {
-    setSettings((prev) => normalizeMouseAnimationSettings({ ...prev, ...patch }));
+    setSettings((prev) => {
+      const next = normalizeMouseAnimationSettings({ ...prev, ...patch });
+      // Any direct edit means the settings no longer match the named preset.
+      // "accent" and the per-action toggles are excluded from the comparison, so
+      // changing those does not falsely knock the preset label to "custom".
+      return { ...next, preset: matchPreset({ ...next, preset: "custom" }) };
+    });
   }, []);
 
   const setActionEnabled = useCallback((action: MouseAction, enabled: boolean) => {
+    // Per-action toggles are deliberately outside the preset comparison.
     setSettings((prev) =>
       normalizeMouseAnimationSettings({ ...prev, actions: { ...prev.actions, [action]: enabled } }),
     );
+  }, []);
+
+  const applyPreset = useCallback((preset: AnimationPreset) => {
+    setSettings((prev) => {
+      if (preset === "off") {
+        return normalizeMouseAnimationSettings({ ...prev, enabled: false, preset: "off" });
+      }
+      return normalizeMouseAnimationSettings({
+        ...prev,
+        ...ANIMATION_PRESETS[preset],
+        preset,
+      });
+    });
   }, []);
 
   const reset = useCallback(() => {
     setSettings(normalizeMouseAnimationSettings(null));
   }, []);
 
-  return { settings, update, setActionEnabled, reset };
+  return { settings, update, setActionEnabled, applyPreset, reset };
 }

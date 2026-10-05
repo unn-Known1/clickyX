@@ -16,12 +16,20 @@ vi.mock("../utils/sounds", () => ({
   Sounds: { cursorAction: () => cursorAction() },
 }));
 
+// useGlobalCursor falls back to this when no native mousemove arrives.
+const cursorPosition = vi.fn(async () => ({ x: 0, y: 0 }));
+vi.mock("@tauri-apps/api/window", () => ({
+  cursorPosition: () => cursorPosition(),
+  getCurrentWindow: () => ({ outerPosition: async () => ({ x: 0, y: 0 }) }),
+}));
+
 function moveMouse(x: number, y: number) {
   window.dispatchEvent(new MouseEvent("mousemove", { clientX: x, clientY: y }));
 }
 
 beforeEach(() => {
   vi.useFakeTimers();
+  cursorPosition.mockClear();
 });
 
 afterEach(() => {
@@ -32,7 +40,8 @@ afterEach(() => {
 
 describe("action metadata", () => {
   it("defines metadata for every action", () => {
-    expect(MOUSE_ACTIONS).toHaveLength(9);
+    // 12 actions: 9 bursts + drag (ghost) + listen/think (auras).
+    expect(MOUSE_ACTIONS).toHaveLength(12);
     for (const action of MOUSE_ACTIONS) {
       expect(ACTION_EFFECT_META[action]).toBeDefined();
       if (ACTION_EFFECT_META[action].kind === "burst") {
@@ -41,11 +50,23 @@ describe("action metadata", () => {
     }
   });
 
-  it("marks exactly listen and think as sustained", () => {
-    expect(SUSTAINED_ACTIONS.sort()).toEqual(["listen", "think"]);
+  it("treats listen, think and drag as sustained", () => {
+    expect(SUSTAINED_ACTIONS.sort()).toEqual(["drag", "listen", "think"]);
     expect(isSustainedAction("listen")).toBe(true);
     expect(isSustainedAction("think")).toBe(true);
+    // A drag is a held gesture, so it tracks the pointer like an aura does.
+    expect(isSustainedAction("drag")).toBe(true);
     expect(isSustainedAction("point")).toBe(false);
+    expect(isSustainedAction("typing")).toBe(false);
+    expect(isSustainedAction("scroll")).toBe(false);
+  });
+
+  it("renders typing and scroll as bursts and drag as a ghost", () => {
+    expect(ACTION_EFFECT_META.typing.kind).toBe("burst");
+    expect(ACTION_EFFECT_META.scroll.kind).toBe("burst");
+    expect(ACTION_EFFECT_META.drag.kind).toBe("ghost");
+    // Ghosts and auras have no self-expiring lifetime of their own.
+    expect(ACTION_EFFECT_META.drag.durationMs).toBe(0);
   });
 });
 
@@ -210,5 +231,47 @@ describe("settings-aware behaviour", () => {
     const loud = renderHook(() => useMouseFollowActions({ ...base, sounds: true }));
     act(() => loud.result.current.trigger("point"));
     expect(cursorAction).toHaveBeenCalledTimes(1);
+  });
+
+  it("carries the scroll direction on the effect, defaulting to down", () => {
+    const { result } = renderHook(() => useMouseFollowActions(base));
+
+    act(() => result.current.trigger("scroll"));
+    expect(result.current.effects[0].direction).toBe("down");
+
+    act(() => result.current.trigger("scroll", undefined, "left"));
+    expect(result.current.effects[1].direction).toBe("left");
+  });
+
+  it("does not attach a direction to non-directional actions", () => {
+    const { result } = renderHook(() => useMouseFollowActions(base));
+    act(() => result.current.trigger("typing"));
+    expect(result.current.effects[0].direction).toBeUndefined();
+  });
+
+  it("gates the new typing, drag and scroll actions on their toggles", () => {
+    const settings = {
+      ...base,
+      actions: { ...base.actions, typing: false, drag: false, scroll: false },
+    };
+    const { result } = renderHook(() => useMouseFollowActions(settings));
+
+    act(() => result.current.trigger("typing"));
+    act(() => result.current.trigger("scroll"));
+    act(() => result.current.setSustained("drag", true));
+    expect(result.current.effects).toEqual([]);
+    expect(result.current.sustained).toEqual([]);
+  });
+
+  it("uses a caller-supplied pointer ref instead of polling its own", () => {
+    cursorPosition.mockClear();
+    const shared = { current: { x: 42, y: 24 } };
+    const { result } = renderHook(() => useMouseFollowActions(base, shared));
+
+    // Spawning with no explicit position should use the shared ref verbatim.
+    act(() => result.current.trigger("point"));
+    expect(result.current.effects[0]).toMatchObject({ x: 42, y: 24 });
+    // The shared ref is returned as-is, so every consumer agrees on position.
+    expect(result.current.pointerRef).toBe(shared);
   });
 });

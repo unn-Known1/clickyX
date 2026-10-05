@@ -1,11 +1,13 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { renderHook, act } from "@testing-library/react";
 import {
+  ANIMATION_PRESETS,
   BURST_SIZE_PX,
   DEFAULT_MOUSE_ANIMATION_SETTINGS,
   FOLLOW_EASE,
   MOUSE_ANIMATION_STORAGE_KEY,
   TRAIL_DOTS,
+  matchPreset,
   normalizeMouseAnimationSettings,
   useMouseAnimationSettings,
 } from "./useMouseAnimationSettings";
@@ -33,7 +35,7 @@ describe("settings tables", () => {
 
   it("defaults every action to enabled", () => {
     const actions = DEFAULT_MOUSE_ANIMATION_SETTINGS.actions;
-    expect(Object.keys(actions)).toHaveLength(9);
+    expect(Object.keys(actions)).toHaveLength(12);
     expect(Object.values(actions).every(Boolean)).toBe(true);
   });
 });
@@ -110,5 +112,75 @@ describe("useMouseAnimationSettings", () => {
     act(() => result.current.update({ enabled: false, trail: "long" }));
     act(() => result.current.reset());
     expect(result.current.settings).toEqual(DEFAULT_MOUSE_ANIMATION_SETTINGS);
+  });
+});
+
+describe("animation presets", () => {
+  it("applies a preset's presentation values", () => {
+    const { result } = renderHook(() => useMouseAnimationSettings());
+    act(() => result.current.applyPreset("expressive"));
+
+    for (const [key, value] of Object.entries(ANIMATION_PRESETS.expressive)) {
+      expect(result.current.settings[key as "trail"]).toBe(value);
+    }
+    expect(result.current.settings.preset).toBe("expressive");
+    expect(matchPreset(result.current.settings)).toBe("expressive");
+  });
+
+  it("the 'off' preset disables animations without touching other settings", () => {
+    const { result } = renderHook(() => useMouseAnimationSettings());
+    act(() => result.current.update({ trail: "long", accent: "#abcdef" }));
+    act(() => result.current.applyPreset("off"));
+
+    expect(result.current.settings.enabled).toBe(false);
+    // A preset is a starting point, not a reset.
+    expect(result.current.settings.trail).toBe("long");
+    expect(result.current.settings.accent).toBe("#abcdef");
+  });
+
+  it("preserves per-action toggles when a preset is applied", () => {
+    const { result } = renderHook(() => useMouseAnimationSettings());
+    act(() => result.current.setActionEnabled("scroll", false));
+    act(() => result.current.applyPreset("balanced"));
+    expect(result.current.settings.actions.scroll).toBe(false);
+  });
+
+  it("knocks the label to custom once a tunable is edited away", () => {
+    const { result } = renderHook(() => useMouseAnimationSettings());
+    act(() => result.current.applyPreset("balanced"));
+    expect(result.current.settings.preset).toBe("balanced");
+
+    act(() => result.current.update({ trail: "long" }));
+    expect(result.current.settings.preset).toBe("custom");
+    expect(matchPreset(result.current.settings)).toBe("custom");
+  });
+
+  it("keeps the preset label when only excluded fields change", () => {
+    const { result } = renderHook(() => useMouseAnimationSettings());
+    act(() => result.current.applyPreset("balanced"));
+
+    // Neither the accent nor per-action toggles take part in the comparison,
+    // so tweaking them must not falsely report a custom configuration.
+    act(() => result.current.update({ accent: "#ff8800" }));
+    expect(matchPreset(result.current.settings)).toBe("balanced");
+    act(() => result.current.setActionEnabled("drag", false));
+    expect(matchPreset(result.current.settings)).toBe("balanced");
+  });
+
+  it("normalises a bogus persisted preset back to custom", () => {
+    const parsed = normalizeMouseAnimationSettings({ preset: "wildly-invalid" });
+    expect(parsed.preset).toBe("custom");
+  });
+
+  it("reports the off preset while animations are disabled", () => {
+    const { result } = renderHook(() => useMouseAnimationSettings());
+    act(() => result.current.applyPreset("off"));
+    // "off" is not a value bundle, so matchPreset must special-case it —
+    // otherwise the picker shows "Custom" the moment you choose Off.
+    expect(matchPreset(result.current.settings)).toBe("off");
+
+    // Re-enabling by hand is a genuine customisation, so it drops to Custom.
+    act(() => result.current.update({ enabled: true }));
+    expect(matchPreset(result.current.settings)).toBe("custom");
   });
 });

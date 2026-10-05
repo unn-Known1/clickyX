@@ -158,4 +158,86 @@ describe("CursorActionLayer", () => {
     const burst = container.querySelector<HTMLElement>(".cursor-action")!;
     expect(burst.style.getPropertyValue("--accent")).toBe("");
   });
+
+  it("renders staggered keycaps for a typing burst", () => {
+    const typing: CursorEffect = { id: 9, action: "typing", x: 10, y: 20, durationMs: 900 };
+    const { container } = render(
+      <CursorActionLayer effects={[typing]} sustained={[]} pointerRef={makePointerRef()} />,
+    );
+
+    const burst = container.querySelector(".cursor-action-typing")!;
+    expect(burst).not.toBeNull();
+    // Three keycaps, each with its own delay class so they stagger.
+    expect(burst.querySelectorAll(".cursor-key")).toHaveLength(3);
+    expect(burst.querySelector(".cursor-key-1")).not.toBeNull();
+    expect(burst.querySelector(".cursor-key-3")).not.toBeNull();
+  });
+
+  it("renders directional ripples for a scroll burst", () => {
+    const scroll: CursorEffect = {
+      id: 10,
+      action: "scroll",
+      x: 0,
+      y: 0,
+      durationMs: 750,
+      direction: "left",
+    };
+    const { container } = render(
+      <CursorActionLayer effects={[scroll]} sustained={[]} pointerRef={makePointerRef()} />,
+    );
+
+    const burst = container.querySelector<HTMLElement>(".cursor-action-scroll")!;
+    expect(burst.querySelectorAll(".cursor-ripple")).toHaveLength(3);
+    // "left" is +90deg from the authored (downward) axis.
+    expect(burst.style.getPropertyValue("--scroll-dir")).toBe("90deg");
+  });
+
+  it("defaults the scroll axis to down when no direction is given", () => {
+    const scroll: CursorEffect = { id: 11, action: "scroll", x: 0, y: 0, durationMs: 750 };
+    const { container } = render(
+      <CursorActionLayer effects={[scroll]} sustained={[]} pointerRef={makePointerRef()} />,
+    );
+    const burst = container.querySelector<HTMLElement>(".cursor-action-scroll")!;
+    expect(burst.style.getPropertyValue("--scroll-dir")).toBe("0deg");
+  });
+
+  it("renders a drag ghost and tether instead of an aura for a drag", () => {
+    const { container } = render(
+      <CursorActionLayer effects={[]} sustained={["drag"]} pointerRef={makePointerRef()} />,
+    );
+
+    expect(container.querySelector(".cursor-drag-ghost")).not.toBeNull();
+    expect(container.querySelector(".cursor-drag-tether")).not.toBeNull();
+    // drag is a ghost, not an aura ring.
+    expect(container.querySelector(".cursor-aura-drag")).toBeNull();
+  });
+
+  it("does not render a ghost when drag is not active", () => {
+    const { container } = render(
+      <CursorActionLayer effects={[]} sustained={["listen"]} pointerRef={makePointerRef()} />,
+    );
+    expect(container.querySelector(".cursor-drag-ghost")).toBeNull();
+    expect(container.querySelector(".cursor-aura-listen")).not.toBeNull();
+  });
+
+  it("makes the ghost lag behind the pointer across frames", () => {
+    const pointerRef = makePointerRef({ x: 0, y: 0 });
+    const { container } = render(
+      <CursorActionLayer effects={[]} sustained={["drag"]} pointerRef={pointerRef} />,
+    );
+
+    // First frame: the ghost is snapped to the pointer at activation.
+    act(() => rafCb?.(0));
+    const ghost = container.querySelector<HTMLElement>(".cursor-drag-ghost")!;
+    expect(ghost.style.transform).toContain("translate3d(0px, 0px");
+
+    // Move the pointer; the ghost eases toward it but stays behind it.
+    pointerRef.current = { x: 200, y: 0 };
+    act(() => rafCb?.(16));
+    const after = ghost.style.transform.match(/translate3d\(([-\d.]+)px/)?.[1];
+    // The anchor chases faster than the ghost, so the ghost sits behind —
+    // a negative offset — and has not yet covered the 200px gap.
+    expect(Number(after)).toBeLessThan(0);
+    expect(Number(after)).toBeGreaterThan(-200);
+  });
 });
