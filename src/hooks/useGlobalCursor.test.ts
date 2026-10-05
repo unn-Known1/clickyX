@@ -42,6 +42,22 @@ describe("useGlobalCursor", () => {
     expect(cursorPosition).not.toHaveBeenCalled();
   });
 
+  it("can refresh the OS cursor on demand while background polling is inactive", async () => {
+    cursorPosition.mockResolvedValue({ x: 450, y: 325 });
+    outerPosition.mockResolvedValue({ x: 50, y: 25 });
+    const dpr = window.devicePixelRatio || 1;
+    const { result } = renderHook(() => useGlobalCursor(false));
+
+    let point: Awaited<ReturnType<typeof result.current.refresh>> = null;
+    await act(async () => {
+      point = await result.current.refresh();
+    });
+
+    expect(point).toEqual({ x: 400 / dpr, y: 300 / dpr });
+    expect(result.current.current).toEqual(point);
+    expect(cursorPosition).toHaveBeenCalledTimes(1);
+  });
+
   it("falls back to cursorPosition() and converts global physical -> window-local CSS", async () => {
     // Global physical cursor 1000,500; window origin (physical) 100,200 → local 900,300 physical.
     cursorPosition.mockResolvedValue({ x: 1000, y: 500 });

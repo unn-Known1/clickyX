@@ -145,6 +145,24 @@ describe("OverlayApp mouse-follow actions (real event surface)", () => {
     expect(container.querySelector(".cursor-follow-anchor")).toBeNull();
   });
 
+  it("renders a directional scroll ripple from the CUA event at the fresh OS cursor", async () => {
+    cursorPosition.mockResolvedValue({ x: 240, y: 160 });
+    outerPosition.mockResolvedValue({ x: 40, y: 10 });
+    const dpr = window.devicePixelRatio || 1;
+    const { container } = render(<OverlayApp />);
+    await readyFor("cua-scroll");
+
+    emit("cua-scroll", "right");
+    await waitFor(() => expect(container.querySelector(".cursor-action-scroll")).not.toBeNull());
+    const scroll = container.querySelector(".cursor-action-scroll") as HTMLElement;
+    expect(scroll).toHaveStyle({ left: `${200 / dpr}px`, top: `${150 / dpr}px` });
+    expect(scroll.style.getPropertyValue("--scroll-dir")).toBe("-90deg");
+    expect(scroll.querySelectorAll(".cursor-ripple")).toHaveLength(3);
+
+    emit("cua-scroll", "diagonal");
+    expect(container.querySelectorAll(".cursor-action-scroll")).toHaveLength(1);
+  });
+
   it("spawns typing bursts when type mode is armed", async () => {
     const { container } = render(<OverlayApp />);
     await readyFor("type-mode-changed");

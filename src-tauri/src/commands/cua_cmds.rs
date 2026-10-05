@@ -19,5 +19,9 @@ pub async fn cua_scroll(
         crate::cua::CuaBackend::Background
     };
     let mut sim = crate::cua::InputSimulator::new(backend);
-    sim.scroll(x, y, delta_x, delta_y)
+    sim.scroll(x, y, delta_x, delta_y)?;
+    if let Err(e) = crate::cua::emit_scroll_event(&app, delta_x, delta_y) {
+        log::warn!("CUA scroll animation event failed: {e}");
+    }
+    Ok(())
 }

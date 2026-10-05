@@ -101,6 +101,8 @@ export interface UseMouseFollowActionsResult {
   sustained: MouseAction[];
   /** Live pointer position (shared with the render layer for the follow loop). */
   pointerRef: { current: PointerPosition };
+  /** Sample the OS cursor immediately, for effects triggered by input commands. */
+  refreshPointer: () => Promise<PointerPosition | null>;
   /** Spawn a burst; defaults to the current pointer position. */
   trigger: (
     action: MouseAction,
@@ -131,15 +133,21 @@ export interface UseMouseFollowActionsResult {
 export function useMouseFollowActions(
   settings?: MouseAnimationSettings,
   externalPointer?: { current: PointerPosition },
+  keepCursorActive = false,
 ): UseMouseFollowActionsResult {
   const [effects, setEffects] = useState<CursorEffect[]>([]);
   const [sustained, setSustainedState] = useState<MouseAction[]>([]);
 
   // The layer is "active" whenever it has something to draw; only then do we pay
   // for cursor-position polling.
-  const active = effects.length > 0 || sustained.length > 0;
+  const active = keepCursorActive || effects.length > 0 || sustained.length > 0;
   const ownPointer = useGlobalCursor(active && !externalPointer);
   const pointerRef = externalPointer ?? ownPointer;
+  const refreshPointer = useCallback(async () => {
+    const position = await ownPointer.refresh();
+    if (position && externalPointer) externalPointer.current = position;
+    return position;
+  }, [ownPointer, externalPointer]);
   const nextIdRef = useRef(1);
   const timersRef = useRef<Map<number, ReturnType<typeof setTimeout>>>(new Map());
 
@@ -216,5 +224,5 @@ export function useMouseFollowActions(
     [],
   );
 
-  return { effects, sustained, pointerRef, trigger, setSustained, clear };
+  return { effects, sustained, pointerRef, refreshPointer, trigger, setSustained, clear };
 }

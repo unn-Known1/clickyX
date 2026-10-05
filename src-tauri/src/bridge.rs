@@ -1463,6 +1463,9 @@ async fn scroll_handler(
     let mut sim = crate::cua::InputSimulator::new(backend);
     match sim.scroll(body.x, body.y, body.delta_x, body.delta_y) {
         Ok(()) => {
+            if let Err(e) = crate::cua::emit_scroll_event(app, body.delta_x, body.delta_y) {
+                log::warn!("bridge scroll animation event failed: {e}");
+            }
             emit_event(
                 &data,
                 "guidance_update",

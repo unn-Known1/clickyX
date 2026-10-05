@@ -1,5 +1,37 @@
 use enigo::{Coordinate, Direction, Enigo, Mouse, Settings};
 use serde::{Deserialize, Serialize};
+use tauri::Emitter;
+
+/// Choose the dominant scroll axis and its user-facing direction.
+/// Positive wheel deltas represent down/right movement.
+pub fn scroll_direction(delta_x: f64, delta_y: f64) -> Option<&'static str> {
+    if !delta_x.is_finite() || !delta_y.is_finite() {
+        return None;
+    }
+    if delta_x.abs() <= 0.1 && delta_y.abs() <= 0.1 {
+        return None;
+    }
+
+    if delta_y.abs() >= delta_x.abs() {
+        Some(if delta_y > 0.0 { "down" } else { "up" })
+    } else {
+        Some(if delta_x > 0.0 { "right" } else { "left" })
+    }
+}
+
+/// Notify overlay windows after a successful CUA scroll so they can render the
+/// directional ripple at their shared OS-cursor sample.
+pub fn emit_scroll_event<R: tauri::Runtime>(
+    app: &tauri::AppHandle<R>,
+    delta_x: f64,
+    delta_y: f64,
+) -> Result<(), String> {
+    let Some(direction) = scroll_direction(delta_x, delta_y) else {
+        return Ok(());
+    };
+    app.emit("cua-scroll", direction)
+        .map_err(|e| format!("emit cua-scroll: {e}"))
+}
 
 #[cfg(target_os = "linux")]
 use crate::platform::display_server;
@@ -471,6 +503,24 @@ fn ydotool_click(x: f64, y: f64) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn scroll_direction_uses_the_dominant_axis_and_wheel_sign() {
+        assert_eq!(scroll_direction(0.0, 120.0), Some("down"));
+        assert_eq!(scroll_direction(0.0, -120.0), Some("up"));
+        assert_eq!(scroll_direction(120.0, 0.0), Some("right"));
+        assert_eq!(scroll_direction(-120.0, 0.0), Some("left"));
+        assert_eq!(scroll_direction(50.0, -100.0), Some("up"));
+        assert_eq!(scroll_direction(-100.0, 50.0), Some("left"));
+    }
+
+    #[test]
+    fn scroll_direction_ignores_empty_or_non_finite_deltas() {
+        assert_eq!(scroll_direction(0.1, -0.1), None);
+        assert_eq!(scroll_direction(f64::NAN, 20.0), None);
+        assert_eq!(scroll_direction(20.0, f64::INFINITY), None);
+        assert_eq!(scroll_direction(100.0, 100.0), Some("down"));
+    }
 
     #[test]
     fn test_rate_limiting_blocks_fast_clicks() {

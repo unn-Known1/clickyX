@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, useCallback, memo, Component, ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { listen } from "../bindings";
-import { useGlobalCursor, type PointerPosition } from "../hooks/useGlobalCursor";
+import { type PointerPosition } from "../hooks/useGlobalCursor";
 import { useMouseFollowActions } from "../hooks/useMouseFollowActions";
 import {
   BURST_SIZE_PX,
@@ -464,23 +464,20 @@ function OverlayAppInner() {
   const { settings: mouseSettings } = useMouseAnimationSettings();
   const typeTimers = useRef<number[]>([]);
 
-  // One shared cursor poller for the whole overlay: the cursor-action layer and
-  // the pet sprite both follow the pointer, and each poller would otherwise cost
-  // its own IPC round-trips. Polling is only active while something on screen is
-  // actually following the cursor.
-  const {
-    effects: mouseEffects,
-    sustained: mouseAuras,
-    trigger: triggerMouseAction,
-    setSustained: setMouseAura,
-    clear: clearMouseActions,
-  } = useMouseFollowActions(mouseSettings);
   const petVisible =
     !calibration.active &&
     (processing || waveformActive || cursors.length > 0 || rects.length > 0 || alwaysListening);
-  const overlayPointer = useGlobalCursor(
-    petVisible || mouseEffects.length > 0 || mouseAuras.length > 0,
-  );
+  // One shared cursor poller for the whole overlay: the hook keeps its poller
+  // active for either mouse effects or the pet, and both consumers use its ref.
+  const {
+    effects: mouseEffects,
+    sustained: mouseAuras,
+    pointerRef: overlayPointer,
+    refreshPointer,
+    trigger: triggerMouseAction,
+    setSustained: setMouseAura,
+    clear: clearMouseActions,
+  } = useMouseFollowActions(mouseSettings, undefined, petVisible);
 
   const animRefs = useRef<Record<string, () => void>>({});
   const streamTimers = useRef<Record<string, number>>({});
@@ -723,6 +720,25 @@ function OverlayAppInner() {
         });
       });
       if (!cancelled) unlisten.push(u23);
+
+      // cua_scroll and the localhost bridge emit after a successful scroll.
+      // The direction-only payload lets every per-screen overlay use its own
+      // shared OS-cursor sample instead of depending on command coordinates.
+      const u24 = await listen<string>("cua-scroll", async (e) => {
+        if (cancelled) return;
+        const direction = e.payload;
+        if (
+          direction !== "up" &&
+          direction !== "down" &&
+          direction !== "left" &&
+          direction !== "right"
+        ) {
+          return;
+        }
+        const pointer = await refreshPointer();
+        if (!cancelled) triggerMouseAction("scroll", pointer ?? undefined, direction);
+      });
+      if (!cancelled) unlisten.push(u24);
     })().catch((err) => console.error("[OverlayApp] listen setup failed:", err));
 
     return () => {
@@ -735,7 +751,7 @@ function OverlayAppInner() {
       animRefs.current = {};
       unlisten.forEach(fn => fn());
     };
-  }, [startStreamingCaption, triggerMouseAction, setMouseAura, clearMouseActions]);
+  }, [startStreamingCaption, refreshPointer, triggerMouseAction, setMouseAura, clearMouseActions]);
 
   return (
     <div

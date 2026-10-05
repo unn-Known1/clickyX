@@ -320,8 +320,8 @@ active rather than self-expiring.
 | Action | Kind | Rendered as | Triggered by |
 | --- | --- | --- | --- |
 | `typing` | burst | Three keycaps rising and fading, staggered 140 ms apart | `type-mode-changed` → `"active"` |
-| `drag` | ghost | A dashed circle lagging the real pointer, joined to it by a dotted tether | `setSustained("drag", …)` |
-| `scroll` | burst | Three concentric ripples travelling along the scroll axis | `trigger("scroll", at, direction)` |
+| `drag` | ghost | A dashed circle lagging the real pointer, joined to it by a dotted tether | `setSustained("drag", …)` (no product emitter) |
+| `scroll` | burst | Three concentric ripples travelling along the scroll axis | Tauri CUA + localhost bridge emit `cua-scroll` after successful OS scrolling; the overlay refreshes its local cursor sample and renders the ripple |
 
 **Typing.** Double-tap Ctrl arms type mode (`src-tauri/src/lib.rs`), which emits
 `type-mode-changed`. The overlay listens and spawns three staggered bursts, so a
@@ -419,7 +419,9 @@ Both were invisible to the test suite until the wiring was checked statically.
 
 ### 8.6 Verification
 
-| Check | Result |
+The following checks were reported for the earlier frontend work, before the current scroll-emitter follow-up:
+
+| Check | Earlier result |
 | --- | --- |
 | `python3 scripts/generate_sounds.py` | 7/7 encoded and decoded back to intended duration, all 128 kbps, peak <= -6 dBFS |
 | `npx tsc -b --noEmit` | exit 0 |
@@ -429,6 +431,8 @@ Both were invisible to the test suite until the wiring was checked statically.
 | `node scripts/check-i18n.mjs` | exit 0 — 636 keys, full EN parity |
 | `codespell` (exact CI invocation) | exit 0 |
 
+For the current frontend follow-up, `npx tsc -b --noEmit`, the full `npm test` suite (**260 tests / 31 files**), ESLint on edited frontend files, and `git diff --check` all passed. Rust compile/unit checks are still needed and were not run.
+
 The pet-follows-cursor test was verified to **fail** against the pre-fix
 implementation (it dispatches no `mousemove`, relying on the mocked
 `cursorPosition()` path, exactly as the real click-through window behaves), so it
@@ -436,11 +440,10 @@ guards the defect rather than just passing.
 
 ### 8.7 Known limitations
 
-- `drag` and `scroll` are fully implemented and reachable through the hook API
-  and per-action settings, but nothing in the backend emits a drag/scroll event
-  yet, so in the shipped app only `typing` fires from a real event stream. Wiring
-  the other two means emitting from the CUA input path in `src-tauri/src/cua.rs`,
-  which is Rust and could not be compiled or tested in this environment.
+- `drag` is fully implemented and reachable through the hook API and per-action settings, but no
+  CUA drag operation currently emits a held-gesture start/end event. Scroll ripples are now wired
+  from both successful CUA and localhost bridge scrolls; the new Rust event path still needs compile
+  and unit-test verification in an environment with the Rust toolchain.
 - The MP3s are synthesised tones, not recorded or designed sound. They are
   functional and license-clean, not a sonic identity.
 - `@types/node` was added as a devDependency purely so `overlayCss.test.ts` can

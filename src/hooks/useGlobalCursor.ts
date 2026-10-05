@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import { cursorPosition, getCurrentWindow } from "@tauri-apps/api/window";
 
 /** A point in the overlay webview's local CSS-pixel space. */
@@ -31,13 +31,38 @@ function viewportCenter(): PointerPosition {
  * The fallback is entirely fail-safe: if the command is unavailable or denied we
  * keep the last known position (native mouse events, if any, still win).
  *
- * Polling only runs while `active` (the animation layer is showing something), so
- * an idle overlay costs zero IPC.
+ * Background polling only runs while `active` (the animation layer is showing
+ * something), so an idle overlay costs zero IPC. Callers may request a one-shot
+ * `refresh()` when a command-driven effect needs the cursor immediately.
  */
-export function useGlobalCursor(active: boolean): { current: PointerPosition } {
+export interface GlobalCursorRef {
+  /** Mutable window-local CSS coordinates for this overlay's cursor. */
+  current: PointerPosition;
+  /** Refreshes from the OS cursor even when background polling is inactive. */
+  refresh: () => Promise<PointerPosition | null>;
+}
+
+export function useGlobalCursor(active: boolean): GlobalCursorRef {
   const pointerRef = useRef<PointerPosition>(viewportCenter());
   const lastMoveRef = useRef(0);
   const originRef = useRef<PointerPosition | null>(null);
+
+  const refresh = useCallback(async (): Promise<PointerPosition | null> => {
+    try {
+      if (!originRef.current) {
+        const origin = await getCurrentWindow().outerPosition();
+        originRef.current = { x: origin.x, y: origin.y };
+      }
+      const p = await cursorPosition();
+      const origin = originRef.current;
+      const dpr = (typeof window !== "undefined" && window.devicePixelRatio) || 1;
+      const position = { x: (p.x - origin.x) / dpr, y: (p.y - origin.y) / dpr };
+      pointerRef.current = position;
+      return position;
+    } catch {
+      return null;
+    }
+  }, []);
 
   useEffect(() => {
     const onMove = (e: MouseEvent) => {
@@ -58,17 +83,9 @@ export function useGlobalCursor(active: boolean): { current: PointerPosition } {
       if (!alive) return;
       // Only reach for the OS when native mouse events aren't arriving.
       if (Date.now() - lastMoveRef.current > MOUSEMOVE_STALE_MS) {
-        try {
-          if (!originRef.current) {
-            const origin = await getCurrentWindow().outerPosition();
-            originRef.current = { x: origin.x, y: origin.y };
-          }
-          const p = await cursorPosition();
-          const origin = originRef.current;
-          const dpr = (typeof window !== "undefined" && window.devicePixelRatio) || 1;
-          pointerRef.current = { x: (p.x - origin.x) / dpr, y: (p.y - origin.y) / dpr };
+        if (await refresh()) {
           failures = 0;
-        } catch {
+        } else {
           // Command unavailable/denied — stop after a few tries and keep native input.
           if (++failures >= MAX_POLL_FAILURES) return;
         }
@@ -81,7 +98,7 @@ export function useGlobalCursor(active: boolean): { current: PointerPosition } {
       alive = false;
       window.clearTimeout(timer);
     };
-  }, [active]);
+  }, [active, refresh]);
 
-  return pointerRef;
+  return Object.assign(pointerRef, { refresh });
 }
