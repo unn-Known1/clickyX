@@ -44,7 +44,7 @@
     "i18next": "^23",
     "react": "^19",
     "react-dom": "^19",
-    "react-i18next": "^14",
+    "react-i18next": "^17",
     "react-markdown": "^10",
     "rehype-highlight": "^7",
     "remark-gfm": "^4",
