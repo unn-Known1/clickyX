@@ -64,7 +64,7 @@ aes-gcm = "0.11.1"
 rand = "0.8.5"
 hex = "0.4.3"
 semver = "1.0.28"
-minisign-verify = "0.2.5"
+minisign-verify = "0.3.0"
 keyring = "4.2.0"
 arboard = "3"
 
