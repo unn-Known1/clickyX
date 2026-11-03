@@ -36,7 +36,7 @@
   "dependencies": {
     "@tanstack/react-query": "^5",
     "@tauri-apps/api": "^2",
-    "@tauri-apps/plugin-dialog": "^2.7.3",
+    "@tauri-apps/plugin-dialog": "^2.8.4",
     "@tauri-apps/plugin-global-shortcut": "^2",
     "@tauri-apps/plugin-shell": "^2",
     "@tauri-apps/plugin-updater": "^2",
@@ -48,7 +48,7 @@
     "react-markdown": "^10",
     "rehype-highlight": "^7",
     "remark-gfm": "^4",
-    "three": "^0.186",
+    "three": "^0.187",
     "zustand": "^5"
   },
   "devDependencies": {
@@ -60,14 +60,14 @@
     "@testing-library/user-event": "^14",
     "@types/react": "^19",
     "@types/react-dom": "^19",
-    "@types/three": "^0.186",
+    "@types/three": "^0.187",
     "@vitejs/plugin-react": "^4",
-    "eslint": "^10.11.0",
+    "eslint": "^10.14.0",
     "eslint-plugin-react-hooks": "^7.1.1",
-    "globals": "^17.12.0",
+    "globals": "^17.13.0",
     "jsdom": "^30",
     "typescript": "^5",
-    "typescript-eslint": "^8.70.1",
+    "typescript-eslint": "^8.72.1",
     "vite": "^6",
     "vitest": "^4"
   },
