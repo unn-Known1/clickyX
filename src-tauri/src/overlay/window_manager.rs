@@ -62,6 +62,10 @@ impl<R: Runtime> OverlayWindowManager<R> {
             let window = builder
                 .build()
                 .map_err(|e| format!("create overlay window {label}: {e}"))?;
+            // On Linux the window is made click-through after it is shown instead
+            // (see `overlay::make_click_through`): it is still hidden here, so it
+            // has no GdkWindow yet and tao panics on `window().unwrap()`.
+            #[cfg(not(target_os = "linux"))]
             let _ = window.set_ignore_cursor_events(true);
             self.windows.insert(label, window);
             log::info!(
@@ -134,6 +138,8 @@ impl<R: Runtime> OverlayWindowManager<R> {
                 let window = builder
                     .build()
                     .map_err(|e| format!("refresh create {label}: {e}"))?;
+                // Linux: applied after show, see create_per_screen_windows.
+                #[cfg(not(target_os = "linux"))]
                 let _ = window.set_ignore_cursor_events(true);
                 self.windows.insert(label, window);
             }

@@ -28,6 +28,11 @@ All notable changes to ClickyX are documented here.
 
 ### Fixed
 - Voice selection now updates the running speech pipeline without restarting the app.
+- **Linux: no more crash on startup** (#131). Overlay windows start hidden, and
+  making them click-through before they had ever been shown made tao's event
+  loop panic (`event_loop.rs:457`, `Option::unwrap()` on `None`), aborting the
+  app on every launch. On Linux, click-through is now applied right after the
+  overlay is shown.
 
 ## [0.2.3] - 2026-09-28
 
