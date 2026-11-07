@@ -28,6 +28,8 @@ All notable changes to ClickyX are documented here.
 
 ### Fixed
 - Voice selection now updates the running speech pipeline without restarting the app.
+- `declassify_jev_error` could loop forever on any error containing `sk-` or `Bearer `, and missed
+  quoted `"api_key":"..."` values, which could then appear in bridge and UI errors.
 
 ## [0.2.3] - 2026-09-28
 
