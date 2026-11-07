@@ -144,21 +144,48 @@ async fn transcribe_deepgram(wav_data: &[u8], config: &SttConfig) -> Result<Stri
     Err(last_error)
 }
 
+/// Default OpenAI transcription model (the successor to `whisper-1`).
+pub const OPENAI_TRANSCRIBE_MODEL: &str = "gpt-transcribe";
+/// Legacy model, used only if the account can't see `gpt-transcribe`.
+pub const OPENAI_LEGACY_TRANSCRIBE_MODEL: &str = "whisper-1";
+
+/// Text fields of the multipart request for a transcription model.
+///
+/// `gpt-transcribe` takes a `languages` array in place of `language` ("don't
+/// send both"). OpenAI's reference doesn't specify how that array is encoded
+/// in multipart, so rather than guess (and risk a 400) no language hint is
+/// sent and the model detects the language itself; its reply carries the
+/// detected languages. `whisper-1` keeps the single `language` hint.
+fn transcription_fields(model: &str, language: &str) -> Vec<(&'static str, String)> {
+    let mut fields = vec![("model", model.to_string())];
+    if model == OPENAI_LEGACY_TRANSCRIBE_MODEL && !language.is_empty() {
+        fields.push(("language", language.to_string()));
+    }
+    fields
+}
+
+/// Both models answer `{"text": "..."}` for the default JSON format
+/// (gpt-transcribe adds a `languages` array, which is ignored here).
+fn parse_transcription(json: &serde_json::Value) -> String {
+    json["text"].as_str().unwrap_or("").to_string()
+}
+
 async fn transcribe_whisper(wav_data: &[u8], config: &SttConfig) -> Result<String, String> {
     let client = reqwest::Client::new();
+    let mut model = OPENAI_TRANSCRIBE_MODEL;
 
     let mut last_error = String::new();
     for attempt in 0..config.max_retries {
-        let form = reqwest::multipart::Form::new()
-            .part(
-                "file",
-                reqwest::multipart::Part::bytes(wav_data.to_vec())
-                    .file_name("audio.wav")
-                    .mime_str("audio/wav")
-                    .map_err(|e| format!("Mime error: {e}"))?,
-            )
-            .text("model", "whisper-1")
-            .text("language", config.language.clone());
+        let mut form = reqwest::multipart::Form::new().part(
+            "file",
+            reqwest::multipart::Part::bytes(wav_data.to_vec())
+                .file_name("audio.wav")
+                .mime_str("audio/wav")
+                .map_err(|e| format!("Mime error: {e}"))?,
+        );
+        for (name, value) in transcription_fields(model, &config.language) {
+            form = form.text(name, value);
+        }
 
         let result = client
             .post("https://api.openai.com/v1/audio/transcriptions")
@@ -174,6 +201,12 @@ async fn transcribe_whisper(wav_data: &[u8], config: &SttConfig) -> Result<Strin
                     let status = resp.status();
                     let body = resp.text().await.unwrap_or_default();
                     last_error = format!("Whisper HTTP {}: {}", status, body);
+                    // Account without gpt-transcribe: fall back to whisper-1 once.
+                    if status.as_u16() == 404 && model == OPENAI_TRANSCRIBE_MODEL {
+                        log::warn!("gpt-transcribe unavailable; falling back to whisper-1");
+                        model = OPENAI_LEGACY_TRANSCRIBE_MODEL;
+                        continue;
+                    }
                     if attempt + 1 < config.max_retries {
                         tokio::time::sleep(std::time::Duration::from_millis(500)).await;
                     }
@@ -183,8 +216,7 @@ async fn transcribe_whisper(wav_data: &[u8], config: &SttConfig) -> Result<Strin
                     .json()
                     .await
                     .map_err(|e| format!("Whisper parse error: {e}"))?;
-                let transcript = json["text"].as_str().unwrap_or("").to_string();
-                return Ok(transcript);
+                return Ok(parse_transcription(&json));
             }
             Err(e) => {
                 last_error = format!("Whisper request error: {e}");
@@ -314,4 +346,36 @@ async fn transcribe_assemblyai(wav_data: &[u8], config: &SttConfig) -> Result<St
         }
     }
     Err(last_error)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn gpt_transcribe_sends_no_language_field() {
+        let f = transcription_fields("gpt-transcribe", "en");
+        assert_eq!(f, vec![("model", "gpt-transcribe".to_string())]);
+    }
+
+    #[test]
+    fn legacy_whisper_keeps_the_language_hint() {
+        let f = transcription_fields("whisper-1", "fr");
+        assert_eq!(
+            f,
+            vec![
+                ("model", "whisper-1".to_string()),
+                ("language", "fr".to_string())
+            ]
+        );
+    }
+
+    #[test]
+    fn transcript_is_read_from_text_for_both_response_shapes() {
+        let whisper = serde_json::json!({"text": "hello"});
+        let gpt = serde_json::json!({"text": "bonjour", "languages": [{"code": "fr"}]});
+        assert_eq!(parse_transcription(&whisper), "hello");
+        assert_eq!(parse_transcription(&gpt), "bonjour");
+        assert_eq!(parse_transcription(&serde_json::json!({})), "");
+    }
 }

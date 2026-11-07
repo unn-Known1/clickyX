@@ -80,6 +80,8 @@ pub fn update_ai_config(
     config.ai = ai::merge_ai_config(&config.ai, &partial);
     // P0-T2/H-6: validate before persisting — this URL receives the API key.
     validate_openai_base_url(&config.ai.openai_base_url)?;
+    // The reasoning level must suit the model (`none` only on terra / luna).
+    ai::responses::validate_effort(&config.ai.openai_model, &config.ai.openai_effort)?;
     // P3/T2: new secrets go straight to the OS keychain when available.
     crate::secret_store::persist_config_secrets(&mut config);
     config::save_config(&app, &config)?;

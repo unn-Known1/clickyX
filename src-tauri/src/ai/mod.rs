@@ -3,7 +3,9 @@ pub mod app_contexts;
 pub mod catalog;
 pub mod guidance;
 pub mod jev;
+pub mod migrate;
 pub mod openai;
+pub mod responses;
 pub mod streaming;
 
 use serde::{Deserialize, Serialize};
@@ -25,8 +27,12 @@ pub struct ImageInput {
 pub struct AiConfig {
     pub anthropic_api_key: Option<String>,
     pub anthropic_model: String,
+    /// `output_config.effort` for Claude: low | medium | high | xhigh | max.
+    pub anthropic_effort: String,
     pub openai_api_key: Option<String>,
     pub openai_model: String,
+    /// `reasoning.effort` for OpenAI's own endpoint (none only on terra/luna).
+    pub openai_effort: String,
     pub openai_base_url: String,
     pub default_provider: String,
     pub system_prompt: String,
@@ -36,9 +42,11 @@ impl Default for AiConfig {
     fn default() -> Self {
         Self {
             anthropic_api_key: None,
-            anthropic_model: "claude-sonnet-4-20250514".into(),
+            anthropic_model: anthropic::DEFAULT_MODEL.into(),
+            anthropic_effort: anthropic::DEFAULT_EFFORT.into(),
             openai_api_key: None,
-            openai_model: "gpt-4o".into(),
+            openai_model: responses::DEFAULT_MODEL.into(),
+            openai_effort: responses::DEFAULT_EFFORT.into(),
             openai_base_url: "https://api.openai.com".into(),
             default_provider: "anthropic".into(),
             system_prompt: "You are ClickyX, a helpful AI assistant.".into(),
@@ -119,21 +127,20 @@ pub fn create_provider_for_model(
                 .anthropic_api_key
                 .clone()
                 .ok_or_else(|| AiError::Config("Anthropic API key not configured".into()))?;
-            Ok(Box::new(anthropic::AnthropicProvider::new(
-                api_key,
-                full_prompt,
-            )))
+            Ok(Box::new(
+                anthropic::AnthropicProvider::new(api_key, full_prompt)
+                    .with_effort(&config.anthropic_effort),
+            ))
         }
         "openai" => {
             let api_key = config
                 .openai_api_key
                 .clone()
                 .ok_or_else(|| AiError::Config("OpenAI API key not configured".into()))?;
-            Ok(Box::new(openai::OpenAIProvider::new(
-                api_key,
-                full_prompt,
-                config.openai_base_url.clone(),
-            )))
+            Ok(Box::new(
+                openai::OpenAIProvider::new(api_key, full_prompt, config.openai_base_url.clone())
+                    .with_effort(&config.openai_effort),
+            ))
         }
         p => Err(AiError::Config(format!("Unknown provider for model: {p}"))),
     }
@@ -163,6 +170,13 @@ pub fn merge_ai_config(current: &AiConfig, partial: &serde_json::Value) -> AiCon
                 config.anthropic_model = v.to_string();
             }
         }
+        if let Some(v) = obj.get("anthropic_effort").and_then(|v| v.as_str()) {
+            // Only the five documented levels are accepted; anything else is ignored.
+            let lower = v.trim().to_ascii_lowercase();
+            if anthropic::EFFORTS.contains(&lower.as_str()) {
+                config.anthropic_effort = lower;
+            }
+        }
         if let Some(v) = obj.get("openai_api_key").and_then(|v| v.as_str()) {
             if !v.is_empty() {
                 config.openai_api_key = Some(v.to_string());
@@ -171,6 +185,12 @@ pub fn merge_ai_config(current: &AiConfig, partial: &serde_json::Value) -> AiCon
         if let Some(v) = obj.get("openai_model").and_then(|v| v.as_str()) {
             if !v.is_empty() {
                 config.openai_model = v.to_string();
+            }
+        }
+        if let Some(v) = obj.get("openai_effort").and_then(|v| v.as_str()) {
+            let lower = v.trim().to_ascii_lowercase();
+            if responses::EFFORTS.contains(&lower.as_str()) {
+                config.openai_effort = lower;
             }
         }
         if let Some(v) = obj.get("openai_base_url").and_then(|v| v.as_str()) {

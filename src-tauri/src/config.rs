@@ -184,7 +184,7 @@ pub struct ComputerUseConfig {
 impl Default for ComputerUseConfig {
     fn default() -> Self {
         Self {
-            pointing_model: "claude-sonnet-4-20250514".into(),
+            pointing_model: crate::ai::anthropic::DEFAULT_MODEL.into(),
             cua_backend: "anthropic".into(),
             native_cua: false,
         }
@@ -383,6 +383,11 @@ fn load_config_uncached() -> Result<AppConfig, String> {
             if ensure_auth_secrets(&mut config) {
                 let _ = save_config_inner(&config);
             }
+            // Retired model ids -> current defaults (logged once: the fixed
+            // config is persisted, so the next load finds nothing to change).
+            if migrate_model_ids(&mut config) {
+                let _ = save_config_inner(&config);
+            }
             // P3/T2: move legacy file secrets into the OS keychain once, then
             // hydrate from the keychain on every load.
             sync_secrets_with_keychain(&mut config);
@@ -398,6 +403,17 @@ fn load_config_uncached() -> Result<AppConfig, String> {
             Ok(config)
         }
     }
+}
+
+/// Rewrite saved model ids that were retired or never existed. Returns true
+/// when anything changed (caller persists). Logs ids only.
+pub fn migrate_model_ids(config: &mut AppConfig) -> bool {
+    let changes =
+        crate::ai::migrate::migrate_config_models(&mut config.ai, &mut config.computer_use.pointing_model);
+    for change in &changes {
+        log::info!("Model migration: {change}");
+    }
+    !changes.is_empty()
 }
 
 /// P3/T2: keychain sync. First run with an available keychain migrates file
@@ -555,6 +571,51 @@ mod tests {
         assert_eq!(cfg.sample_rate, 16000);
         assert_eq!(cfg.buffer_size, 1024);
         assert!((cfg.volume - 1.0_f32).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn test_new_model_and_effort_defaults() {
+        let cfg = AppConfig::default();
+        assert_eq!(cfg.ai.anthropic_model, "claude-opus-5-5");
+        assert_eq!(cfg.ai.anthropic_effort, "medium");
+        assert_eq!(cfg.ai.openai_model, "gpt-6.1-sol");
+        assert_eq!(cfg.ai.openai_effort, "medium");
+        assert_eq!(cfg.computer_use.pointing_model, "claude-opus-5-5");
+    }
+
+    #[test]
+    fn test_legacy_config_migrates_retired_models_once() {
+        // A pre-refresh config.json: old ids, none of the new fields.
+        let legacy = r#"{
+            "ai": {
+                "anthropic_model": "claude-sonnet-4-20250514",
+                "openai_model": "gpt-4o",
+                "openai_base_url": "https://api.openai.com/v1"
+            },
+            "computer_use": { "pointing_model": "claude-opus-4-20250514" }
+        }"#;
+        let mut cfg: AppConfig = serde_json::from_str(legacy).expect("legacy config parses");
+        assert_eq!(cfg.ai.anthropic_effort, "medium", "new fields take defaults");
+        assert!(migrate_model_ids(&mut cfg));
+        assert_eq!(cfg.ai.anthropic_model, "claude-opus-5-5");
+        assert_eq!(cfg.ai.openai_model, "gpt-6.1-sol");
+        assert_eq!(cfg.computer_use.pointing_model, "claude-opus-5-5");
+        assert!(!migrate_model_ids(&mut cfg), "second pass changes nothing");
+    }
+
+    #[test]
+    fn test_migration_leaves_custom_ids_and_third_party_gpt_alone() {
+        let json = r#"{
+            "ai": {
+                "anthropic_model": "claude-opus-4-8",
+                "openai_model": "gpt-4o",
+                "openai_base_url": "https://openrouter.ai/api/v1"
+            }
+        }"#;
+        let mut cfg: AppConfig = serde_json::from_str(json).expect("parses");
+        assert!(!migrate_model_ids(&mut cfg));
+        assert_eq!(cfg.ai.anthropic_model, "claude-opus-4-8");
+        assert_eq!(cfg.ai.openai_model, "gpt-4o");
     }
 
     #[test]

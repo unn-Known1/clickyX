@@ -16,6 +16,8 @@ mod permissions;
 pub mod platform;
 mod screen;
 mod secret_store;
+#[cfg(test)]
+mod test_support;
 mod tray;
 mod type_mode;
 mod updater;
