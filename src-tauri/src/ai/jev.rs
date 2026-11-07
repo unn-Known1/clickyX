@@ -454,18 +454,19 @@ pub fn declassify_jev_error(msg: &str) -> String {
     // Never echo bearer tokens or sk-* fragments.
     let mut out = msg.to_string();
     for prefix in ["sk-ant-", "sk-", "xox", "Bearer "] {
-        while let Some(idx) = out.find(prefix) {
+        // Resume after each replacement: the replacement text itself starts
+        // with the prefix, so searching from 0 again never terminated.
+        let mut from = 0;
+        while let Some(rel) = out[from..].find(prefix) {
+            let idx = from + rel;
             let end = out[idx..]
                 .find(|c: char| c.is_whitespace() || c == '"' || c == '\'')
                 .map(|e| idx + e)
                 .unwrap_or(out.len());
             // Keep the prefix kind, drop the secret tail.
-            let keep = if prefix == "Bearer " {
-                "Bearer "
-            } else {
-                prefix
-            };
-            out.replace_range(idx..end.min(idx + 64), &format!("{keep}[redacted]"));
+            let replacement = format!("{prefix}[redacted]");
+            out.replace_range(idx..end.min(idx + 64), &replacement);
+            from = idx + replacement.len();
             if out.len() > 2048 {
                 break;
             }
@@ -478,7 +479,7 @@ pub fn declassify_jev_error(msg: &str) -> String {
     // otherwise echo into bridge/UI errors via `key=...` / `"api_key":"..."`).
     for (pat, rep) in [
         (
-            r#"(?i)(api[_-]?key\s*[:=]\s*["']?)([^"'\s,};&\]]{2,})"#,
+            r#"(?i)(api[_-]?key["']?\s*[:=]\s*["']?)([^"'\s,};&\]]{2,})"#,
             "${1}[redacted]",
         ),
         (
