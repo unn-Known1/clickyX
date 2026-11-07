@@ -479,20 +479,6 @@ async fn audio_level(data: web::Data<BridgeState>) -> HttpResponse {
 }
 
 #[derive(Deserialize)]
-struct MessagesRequest {
-    model: Option<String>,
-    messages: Vec<MessageItem>,
-    system: Option<String>,
-    max_tokens: Option<i32>,
-}
-
-#[derive(Deserialize)]
-struct MessageItem {
-    role: String,
-    content: serde_json::Value,
-}
-
-#[derive(Deserialize)]
 struct ResponsesRequest {
     model: Option<String>,
     messages: Vec<ResponseMessageItem>,
@@ -510,9 +496,52 @@ struct ModelsResponse {
     models: Vec<serde_json::Value>,
 }
 
+/// Build the body forwarded to Anthropic from the bridge caller's JSON.
+///
+/// The bridge is a thin Messages-API proxy: the caller's fields pass through,
+/// with these adjustments for API version `2026-10-21` and the 5.x models:
+/// `temperature` / `top_p` / `top_k` are removed (the API rejects them at any
+/// value); `model` / `max_tokens` fall back to config / defaults; the reply is
+/// always non-streaming; effort and refusal fallbacks are added when absent.
+/// Returns the body plus the names of any stripped parameters.
+fn prepare_messages_proxy_body(
+    mut body: serde_json::Value,
+    default_model: &str,
+    effort: &str,
+) -> Result<(serde_json::Value, Vec<&'static str>), String> {
+    let obj = body
+        .as_object_mut()
+        .ok_or_else(|| "request body must be a JSON object".to_string())?;
+    if !obj.get("messages").is_some_and(|m| m.is_array()) {
+        return Err("`messages` must be an array".into());
+    }
+    obj.insert("stream".into(), serde_json::json!(false));
+    let model_missing = obj
+        .get("model")
+        .and_then(|m| m.as_str())
+        .is_none_or(|m| m.trim().is_empty());
+    if model_missing {
+        obj.insert("model".into(), serde_json::json!(default_model));
+    }
+    if !obj.get("max_tokens").is_some_and(|m| m.is_u64()) {
+        obj.insert(
+            "max_tokens".into(),
+            serde_json::json!(crate::ai::anthropic::NON_STREAM_MAX_TOKENS),
+        );
+    }
+    let removed = crate::ai::anthropic::strip_sampling_params(&mut body);
+    let model = body
+        .get("model")
+        .and_then(|m| m.as_str())
+        .unwrap_or_default()
+        .to_string();
+    crate::ai::anthropic::apply_model_options(&mut body, &model, effort);
+    Ok((body, removed))
+}
+
 async fn proxy_messages(
     data: web::Data<BridgeState>,
-    body: web::Json<MessagesRequest>,
+    body: web::Json<serde_json::Value>,
 ) -> HttpResponse {
     let app = &data.app_handle;
     let config = match crate::config::load_config(app) {
@@ -535,50 +564,50 @@ async fn proxy_messages(
         }
     };
 
-    let model = body
-        .model
-        .clone()
-        .unwrap_or_else(|| config.ai.anthropic_model.clone());
-
-    let max_tokens = body.max_tokens.unwrap_or(4096);
-
-    let mut api_messages: Vec<serde_json::Value> = Vec::new();
-    for msg in &body.messages {
-        api_messages.push(serde_json::json!({
-            "role": msg.role,
-            "content": msg.content,
-        }));
-    }
-
-    let mut request_body = serde_json::json!({
-        "model": model,
-        "max_tokens": max_tokens,
-        "stream": false,
-        "messages": api_messages,
-    });
-
-    if let Some(system) = &body.system {
-        // S-MIN-1: no unwrap() on bridge-built JSON — fail 400, never panic
-        // the bridge worker on an unexpected shape.
-        match request_body.as_object_mut() {
-            Some(obj) => {
-                obj.insert("system".into(), serde_json::json!(system));
-            }
-            None => {
-                return HttpResponse::BadRequest().json(ErrorResponse {
-                    error: "bad_request".into(),
-                    message: "proxy request body is not a JSON object".into(),
-                });
-            }
+    let (request_body, stripped) = match prepare_messages_proxy_body(
+        body.into_inner(),
+        &config.ai.anthropic_model,
+        &config.ai.anthropic_effort,
+    ) {
+        Ok(v) => v,
+        Err(message) => {
+            return HttpResponse::BadRequest().json(ErrorResponse {
+                error: "bad_request".into(),
+                message,
+            });
         }
+    };
+    if !stripped.is_empty() {
+        // Names only, never content.
+        log::info!(
+            "Bridge /v1/messages: removed unsupported sampling parameter(s) {} (API version {})",
+            stripped.join(", "),
+            crate::ai::anthropic::API_VERSION
+        );
     }
 
-    let client = reqwest::Client::new();
-    let response = match client
+    let client = match reqwest::Client::builder()
+        .connect_timeout(std::time::Duration::from_secs(15))
+        .read_timeout(std::time::Duration::from_secs(600))
+        .build()
+    {
+        Ok(c) => c,
+        Err(e) => {
+            return HttpResponse::InternalServerError().json(ErrorResponse {
+                error: "internal_error".into(),
+                message: format!("proxy error: {e}"),
+            });
+        }
+    };
+    let mut upstream = client
         .post("https://api.anthropic.com/v1/messages")
         .header("x-api-key", &api_key)
-        .header("anthropic-version", "2023-06-01")
-        .header("content-type", "application/json")
+        .header("anthropic-version", crate::ai::anthropic::API_VERSION)
+        .header("content-type", "application/json");
+    if let Some(beta) = crate::ai::anthropic::beta_header_for(&request_body) {
+        upstream = upstream.header("anthropic-beta", beta);
+    }
+    let response = match upstream
         .json(&request_body)
         .send()
         .await
@@ -1605,6 +1634,46 @@ async fn run_bridge_server(data: web::Data<BridgeState>, auth: Auth) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn messages_proxy_strips_sampling_params_and_applies_defaults() {
+        let body = serde_json::json!({
+            "messages": [{"role": "user", "content": "hi"}],
+            "temperature": 0.3,
+            "top_p": 0.9,
+            "top_k": 40,
+            "system": "be brief"
+        });
+        let (out, removed) =
+            prepare_messages_proxy_body(body, "claude-opus-5-5", "high").expect("valid body");
+        assert_eq!(removed, vec!["temperature", "top_p", "top_k"]);
+        for k in ["temperature", "top_p", "top_k", "thinking"] {
+            assert!(out.get(k).is_none(), "{k}");
+        }
+        assert_eq!(out["model"], "claude-opus-5-5");
+        assert_eq!(out["max_tokens"], 16000);
+        assert_eq!(out["stream"], false);
+        assert_eq!(out["system"], "be brief");
+        assert_eq!(out["output_config"]["effort"], "high");
+        assert_eq!(out["fallbacks"], "default");
+    }
+
+    #[test]
+    fn messages_proxy_keeps_caller_model_and_rejects_bad_bodies() {
+        let body = serde_json::json!({
+            "model": "claude-haiku-5-5",
+            "max_tokens": 50,
+            "messages": []
+        });
+        let (out, removed) =
+            prepare_messages_proxy_body(body, "claude-opus-5-5", "low").expect("valid body");
+        assert!(removed.is_empty());
+        assert_eq!(out["model"], "claude-haiku-5-5");
+        assert_eq!(out["max_tokens"], 50);
+        assert!(out.get("fallbacks").is_none());
+        assert!(prepare_messages_proxy_body(serde_json::json!([]), "m", "low").is_err());
+        assert!(prepare_messages_proxy_body(serde_json::json!({"model": "m"}), "m", "low").is_err());
+    }
 
     #[test]
     fn test_cursor_request_serde() {

@@ -5087,6 +5087,14 @@ html, body, #root {
   gap: 8px;
 }
 
+/* Sign in with ChatGPT card (AI Provider settings) */
+.ai-chatgpt-card,
+.ai-chatgpt-signed-in {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
 .ai-test-btn {
   padding: 8px 14px;
   font-size: var(--text-md);

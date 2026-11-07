@@ -36,10 +36,16 @@ export function invoke<T>(cmd: string, args?: any): Promise<T> {
         onboarding_completed: true,
         ai: {
           anthropic_api_key: null,
-          anthropic_model: "claude-sonnet-4-20250514",
+          anthropic_model: "claude-opus-5-5",
+          anthropic_effort: "medium",
           openai_api_key: null,
-          openai_model: "gpt-4o",
+          openai_model: "gpt-6.1-sol",
+          openai_effort: "medium",
           openai_base_url: "https://api.openai.com",
+          openai_auth_source: "api_key",
+          chatgpt_client_id: null,
+          chatgpt_email: null,
+          chatgpt_host_id: null,
           default_provider: "anthropic",
           system_prompt: "",
         },
@@ -88,7 +94,7 @@ export function invoke<T>(cmd: string, args?: any): Promise<T> {
         mcp_servers: [],
         automations_file: "automations.json",
         computer_use: {
-          pointing_model: "claude-sonnet-4-20250514",
+          pointing_model: "claude-opus-5-5",
           cua_backend: "anthropic",
           native_cua: false,
         },
@@ -131,13 +137,31 @@ export function invoke<T>(cmd: string, args?: any): Promise<T> {
     if (cmd === "get_ai_config") {
       return Promise.resolve({
         anthropic_api_key: null,
-        anthropic_model: "claude-3-5-sonnet",
+        anthropic_model: "claude-opus-5-5",
+        anthropic_effort: "medium",
         openai_api_key: null,
-        openai_model: "gpt-4o",
+        openai_model: "gpt-6.1-sol",
+        openai_effort: "medium",
         openai_base_url: "https://api.openai.com",
+        openai_auth_source: "api_key",
+        chatgpt_client_id: null,
+        chatgpt_email: null,
+        chatgpt_host_id: null,
         default_provider: "anthropic",
         system_prompt: "",
       }) as any;
+    }
+    if (cmd === "chatgpt_status") {
+      return Promise.resolve({
+        signed_in: false,
+        email: null,
+        plan_enabled: false,
+        keychain_available: false,
+        client_registered: false,
+      }) as any;
+    }
+    if (cmd === "chatgpt_sign_in" || cmd === "chatgpt_sign_out") {
+      return Promise.reject(new Error("Sign in with ChatGPT needs the desktop app")) as any;
     }
     if (cmd === "get_jev_config") {
       return Promise.resolve({
@@ -167,8 +191,8 @@ export function invoke<T>(cmd: string, args?: any): Promise<T> {
       try {
         if (typeof window !== "undefined" && new URLSearchParams(window.location.search).get("mockModels")) {
           return Promise.resolve([
-            { id: "claude-sonnet-4-20250514", provider: "anthropic", name: "Claude Sonnet 4", capabilities: ["chat"] },
-            { id: "gpt-4o", provider: "openai", name: "GPT-4o", capabilities: ["chat"] },
+            { id: "claude-opus-5-5", provider: "anthropic", name: "Claude Opus 5.5", capabilities: ["chat"] },
+            { id: "gpt-6.1-sol", provider: "openai", name: "GPT-6.1 Sol", capabilities: ["chat"] },
           ]) as any;
         }
       } catch { /* non-browser URL — fall through to [] */ }
@@ -444,11 +468,37 @@ export interface UpdateInfo {
 export interface AiConfig {
   anthropic_api_key: string | null;
   anthropic_model: string;
+  /** Claude `output_config.effort`: low | medium | high | xhigh | max. */
+  anthropic_effort: string;
   openai_api_key: string | null;
   openai_model: string;
+  /** OpenAI `reasoning.effort` (`none` only on Terra / Luna). */
+  openai_effort: string;
   openai_base_url: string;
+  /** `api_key` (default) or `chatgpt` (Sign in with ChatGPT, OpenAI's own endpoint only). */
+  openai_auth_source: "api_key" | "chatgpt";
+  /** Read-only here: set by the sign-in command. */
+  chatgpt_client_id: string | null;
+  chatgpt_email: string | null;
+  chatgpt_host_id: string | null;
   default_provider: string;
   system_prompt: string;
+}
+
+/** Sign in with ChatGPT status. Never contains tokens. */
+export interface ChatGptStatus {
+  signed_in: boolean;
+  email: string | null;
+  /** False when signed in without the plan-usage grant. */
+  plan_enabled: boolean;
+  keychain_available: boolean;
+  client_registered: boolean;
+}
+
+export interface ChatGptSignOutResult {
+  /** True when OpenAI confirmed revoking the refresh token. */
+  revocation_confirmed: boolean;
+  status: ChatGptStatus;
 }
 
 export interface JevConfig {
@@ -734,6 +784,10 @@ export const commands = {
   getAiConfig: () => invoke<AiConfig>("get_ai_config"),
   updateAiConfig: (partial: Partial<AiConfig>) => invoke<AiConfig>("update_ai_config", { partial }),
   getModels: () => invoke<ModelInfo[]>("get_models"),
+  // Sign in with ChatGPT (OpenAI side on the user's plan)
+  chatgptStatus: () => invoke<ChatGptStatus>("chatgpt_status"),
+  chatgptSignIn: () => invoke<ChatGptStatus>("chatgpt_sign_in"),
+  chatgptSignOut: () => invoke<ChatGptSignOutResult>("chatgpt_sign_out"),
   getChatModels: () => invoke<ModelInfo[]>("get_chat_models"),
   // Jev decision provider (Track 1)
   getJevConfig: () => invoke<JevConfig>("get_jev_config"),

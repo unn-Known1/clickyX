@@ -66,6 +66,10 @@ hex = "0.4.3"
 semver = "1.0.28"
 minisign-verify = "0.2.5"
 keyring = "4.2.0"
+# Sign in with ChatGPT: id_token verification (JWKS) + PKCE. Pure-Rust crypto
+# backend so no C toolchain (aws-lc) is needed on any platform.
+jsonwebtoken = { version = "11", default-features = false, features = ["rust_crypto"] }
+sha2 = "0.11"
 arboard = "3"
 
 # #113: in-process TCC microphone/camera prompt on macOS. AVFoundation-only,
@@ -76,6 +80,8 @@ block2 = "0.6"
 objc2-av-foundation = "0.3"
 
 [dev-dependencies]
+# Tests sign throwaway id_tokens with fixture PEM keys.
+jsonwebtoken = { version = "11", default-features = false, features = ["rust_crypto", "use_pem"] }
 actix-http = "3.13.6"
 tempfile = "3"
 

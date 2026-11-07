@@ -79,6 +79,13 @@ python3 -c "import yaml; yaml.safe_load(open('.github/workflows/ci.yml'))"  # va
 | `ai/guidance.rs` | Annotation tag parser — POINT, RECT, SCRIBBLE, OFFER, HIGHLIGHT, SHAPE |
 | `ai/app_contexts.rs` | Per-app CUA context injection (VS Code, Figma, Terminal, Blender, etc.) |
 | `ai/catalog.rs` | Dynamic model catalog |
+| `ai/anthropic.rs` | Claude Messages API provider (raw HTTP, version `2026-10-21`): one request helper, effort, cached system block, refusal fallbacks, SSE state machine |
+| `ai/responses.rs` | OpenAI Responses API body builder + SSE parser + error mapping (OpenAI's own endpoint and the plan route) |
+| `ai/chatgpt_plan.rs` | Provider for "Sign in with ChatGPT": Responses API on the plan token (stateless, streamed), 401 refresh-once, plan model list |
+| `ai/migrate.rs` | One-shot migration of retired Claude / GPT model ids in saved configs |
+| `auth/chatgpt.rs` | Sign in with ChatGPT: PKCE + loopback callback, id_token JWKS validation, rotating refresh (single mutex), revocation; tokens in the OS keychain only |
+| `commands/chatgpt_cmds.rs` | `chatgpt_status` / `chatgpt_sign_in` / `chatgpt_sign_out` |
+| `test_support.rs` | `#[cfg(test)]` loopback mock HTTP server used by provider/auth tests (no network) |
 | `ai/jev.rs` | TypeSafe Jev decision provider — `JevClient` judge/rank, presets, band gates |
 | `jarvis/` | Co-pilot runtime: `blocklist` (pre-capture deny) / `extract` (title+JPEG) / `questions` (judge pack+rank, injection/money screens) / `kb` (`kb.enc`) / `fill` (fill-only paste) |
 | `commands/jarvis_cmds.rs` | `jarvis_extract/analyze/draft/rank/fill/copy/status/kb/wipe` (gated, fail-closed) |
@@ -126,6 +133,8 @@ python3 -c "import yaml; yaml.safe_load(open('.github/workflows/ci.yml'))"  # va
 | `hooks/useConversations.ts` | Multi-thread conversation history |
 | `hooks/useFocus.ts` | Local-first focus sessions — timer (absolute clock), sessions, parked thoughts, streak; `localStorage` persistence |
 | `hooks/useAiConfig.ts` | react-query AI config (presence-boolean keys) |
+| `hooks/useChatGpt.ts` | react-query ChatGPT sign-in status + sign-in/sign-out mutations (no tokens in the frontend) |
+| `components/SettingsSections/ChatGptPlanCard.tsx` | "Sign in with ChatGPT" card: email, plan-usage state, sign out, usage link, voice-keys note |
 | `hooks/useJevConfig.ts` | react-query Jev triple + presets + test/decide mutations (`JEV_CONFIG_KEY`) |
 | `hooks/useJarvis.ts` | Jarvis slice + status + `jarvis-state-changed` invalidation |
 | `hooks/useJarvisAutoTrigger.ts` | Opt-in auto-analyze (engine frames + 60 s throttle + session change) |
@@ -169,6 +178,7 @@ python3 -c "import yaml; yaml.safe_load(open('.github/workflows/ci.yml'))"  # va
 | `src/hooks/useAgents.test.ts` | Agent list, mutations, error paths |
 | `src/hooks/useConfig.test.ts` | Config load/update, error paths |
 | `src/hooks/useAiConfig.test.ts` | AI config load/update |
+| `src/hooks/useChatGpt.test.ts` | ChatGPT status / sign-in / sign-out mutations |
 | `src/hooks/useJevConfig.test.ts` | Jev config load/update/test/decide, model invalidation |
 | `src/hooks/useJarvis.test.ts` | Jarvis slice load/update + status |
 | `src/hooks/useJarvisAutoTrigger.test.ts` | Auto-trigger gating, throttle, session change |

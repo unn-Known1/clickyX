@@ -318,6 +318,8 @@ pub fn import_config(app: AppHandle, json: String) -> Result<AppConfig, String> 
     // only allow explicit http(s) hosts so a typo can't become key exfiltration.
     validate_openai_base_url(&config.ai.openai_base_url)?;
     crate::ai::jev::validate_jev_base_url(&config.jev.base_url)?;
+    // Imports from older versions may carry retired model ids.
+    config::migrate_model_ids(&mut config);
     // P3/T2: new secrets go straight to the OS keychain when available.
     crate::secret_store::persist_config_secrets(&mut config);
     config::save_config(&app, &config)?;

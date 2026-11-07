@@ -2,6 +2,7 @@ mod accessibility;
 mod agent;
 mod ai;
 mod audio;
+mod auth;
 mod automation;
 mod bridge;
 mod bridge_auth;
@@ -16,6 +17,8 @@ mod permissions;
 pub mod platform;
 mod screen;
 mod secret_store;
+#[cfg(test)]
+mod test_support;
 mod tray;
 mod type_mode;
 mod updater;
@@ -592,6 +595,9 @@ pub fn run() {
             commands::send_chat_message_stream,
             commands::get_models,
             commands::get_ai_config,
+            commands::chatgpt_status,
+            commands::chatgpt_sign_in,
+            commands::chatgpt_sign_out,
             commands::update_ai_config,
             commands::chat_with_vision,
             commands::capture_screens,

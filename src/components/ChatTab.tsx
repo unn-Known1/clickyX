@@ -17,6 +17,7 @@ import { useAppContext } from "../context/AppContext";
 import { useQuery } from "@tanstack/react-query";
 import { commands } from "../bindings";
 import type { AiConfig } from "../bindings";
+import { DEFAULT_ANTHROPIC_MODEL, DEFAULT_OPENAI_MODEL } from "../utils/aiProviders";
 
 const DRAFT_KEY = "clickyx_chat_draft";
 
@@ -224,8 +225,8 @@ function ChatTab({ initialText }: { initialText?: string }) {
     if (!aiConfig || selectedModel) return;
     const defaultModel =
       aiConfig.default_provider === "openai"
-        ? aiConfig.openai_model || "gpt-4o"
-        : aiConfig.anthropic_model || "claude-sonnet-4-20250514";
+        ? aiConfig.openai_model || DEFAULT_OPENAI_MODEL
+        : aiConfig.anthropic_model || DEFAULT_ANTHROPIC_MODEL;
     setSelectedModel(defaultModel);
   }, [aiConfig, selectedModel]);
 

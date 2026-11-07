@@ -119,21 +119,26 @@ The request/response format is identical to `https://api.anthropic.com/v1/messag
 **Request body:**
 ```json
 {
-  "model": "claude-sonnet-4-20250514",
+  "model": "claude-opus-5-5",
   "messages": [
     { "role": "user", "content": "Hello" }
   ],
   "system": "You are a helpful assistant.",
-  "max_tokens": 4096
+  "max_tokens": 16000
 }
 ```
+
+The proxy sends `anthropic-version: 2026-10-21`, which rejects `temperature`, `top_p` and `top_k`: those three
+fields are removed from the forwarded body (the removal is logged by name only). Other fields pass through;
+`stream` is always `false`, and `output_config.effort` (from `ai.anthropic_effort`) and refusal `fallbacks`
+are added for the 5.x models when you do not set them.
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `model` | string | No | Model ID. Defaults to `ai.anthropic_model` from config. |
 | `messages` | array | Yes | Array of `{ role, content }` objects. `content` may be a string or content block array. |
-| `system` | string | No | System prompt override. |
-| `max_tokens` | integer | No | Default `4096`. |
+| `system` | string \| array | No | System prompt (string or text blocks). |
+| `max_tokens` | integer | No | Default `16000`. |
 
 **Response:** Anthropic API response forwarded verbatim (status code preserved).
 
@@ -160,7 +165,7 @@ Proxy to the OpenAI Chat Completions API (`/v1/chat/completions`) using the conf
 **Request body:**
 ```json
 {
-  "model": "gpt-4o",
+  "model": "gpt-6.1-sol",
   "messages": [
     { "role": "user", "content": "Hello" }
   ],
@@ -196,7 +201,7 @@ List all models in the ClickyX model catalog.
 {
   "models": [
     {
-      "id": "claude-sonnet-4-20250514",
+      "id": "claude-opus-5-5",
       "provider": "anthropic",
       "name": "Claude Sonnet 4",
       "capabilities": ["chat", "vision", "computer_use"]

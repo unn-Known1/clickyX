@@ -13,6 +13,14 @@ import {
   matchPresetByBaseUrl,
   resolvePresetId,
   presetsByTier,
+  ANTHROPIC_MODELS,
+  OPENAI_MODELS,
+  DEFAULT_ANTHROPIC_MODEL,
+  DEFAULT_OPENAI_MODEL,
+  isOpenAiOwnBaseUrl,
+  openaiEffortsFor,
+  clampOpenaiEffort,
+  POINTING_MODELS,
 } from "../utils/aiProviders";
 
 describe("aiProviders catalog", () => {
@@ -119,5 +127,59 @@ describe("resolvePresetId", () => {
   it("falls back to custom for an unknown endpoint", () => {
     expect(resolvePresetId("openai", "https://example.com/v1")).toBe(CUSTOM_PRESET_ID);
     expect(resolvePresetId("openai", "")).toBe(CUSTOM_PRESET_ID);
+  });
+});
+
+describe("current model lists", () => {
+  it("offers the exact current Claude and GPT-6 ids and defaults", () => {
+    expect(ANTHROPIC_MODELS.map((m) => m.id)).toEqual([
+      "claude-opus-5-5",
+      "claude-sonnet-5-5",
+      "claude-haiku-5-5",
+      "claude-fable-5-1",
+    ]);
+    expect(OPENAI_MODELS.map((m) => m.id)).toEqual([
+      "gpt-6.1-sol",
+      "gpt-6-astra",
+      "gpt-6.1-terra",
+      "gpt-6-luna",
+    ]);
+    expect(DEFAULT_ANTHROPIC_MODEL).toBe("claude-opus-5-5");
+    expect(DEFAULT_OPENAI_MODEL).toBe("gpt-6.1-sol");
+    expect(presetById("anthropic")?.suggestedModels[0]).toBe("claude-opus-5-5");
+    expect(presetById("openai")?.suggestedModels[0]).toBe("gpt-6.1-sol");
+  });
+
+  it("never lists retired ids in the first-party lists or pointing models", () => {
+    const retired = /claude-(sonnet|opus)-4-2025|claude-haiku-3|claude-3|^gpt-4|^o3-mini/;
+    for (const m of [...ANTHROPIC_MODELS, ...OPENAI_MODELS, ...POINTING_MODELS]) {
+      expect(m.id).not.toMatch(retired);
+    }
+  });
+});
+
+describe("OpenAI own endpoint + reasoning effort", () => {
+  it("recognises only OpenAI's own base URL", () => {
+    for (const u of ["https://api.openai.com", "https://api.openai.com/v1", "https://API.openai.com/v1/"]) {
+      expect(isOpenAiOwnBaseUrl(u), u).toBe(true);
+    }
+    for (const u of ["https://openrouter.ai/api/v1", "http://localhost:11434/v1", "https://api.openai.com.evil.test/v1", ""]) {
+      expect(isOpenAiOwnBaseUrl(u), u).toBe(false);
+    }
+  });
+
+  it("allows 'none' only for Terra and Luna", () => {
+    expect(openaiEffortsFor("gpt-6.1-sol")).not.toContain("none");
+    expect(openaiEffortsFor("gpt-6-astra")).not.toContain("none");
+    expect(openaiEffortsFor("gpt-6.1-terra")).toContain("none");
+    expect(openaiEffortsFor("gpt-6-luna")).toContain("none");
+    expect(openaiEffortsFor("some-custom-model")).toContain("none");
+  });
+
+  it("clamps an invalid effort to the nearest valid level", () => {
+    expect(clampOpenaiEffort("gpt-6.1-sol", "none")).toBe("low");
+    expect(clampOpenaiEffort("gpt-6-luna", "none")).toBe("none");
+    expect(clampOpenaiEffort("gpt-6.1-sol", "max")).toBe("max");
+    expect(clampOpenaiEffort("gpt-6.1-sol", "bogus")).toBe("medium");
   });
 });

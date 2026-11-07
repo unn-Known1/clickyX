@@ -32,9 +32,9 @@ impl ModelCatalog {
     fn default_models() -> Vec<ModelInfo> {
         vec![
             ModelInfo {
-                id: "claude-sonnet-4-20250514".into(),
+                id: "claude-opus-5-5".into(),
                 provider: "anthropic".into(),
-                name: "Claude Sonnet 4".into(),
+                name: "Claude Opus 5.5".into(),
                 capabilities: vec![
                     "chat".into(),
                     "vision".into(),
@@ -43,9 +43,9 @@ impl ModelCatalog {
                 ],
             },
             ModelInfo {
-                id: "claude-opus-4-20250514".into(),
+                id: "claude-sonnet-5-5".into(),
                 provider: "anthropic".into(),
-                name: "Claude Opus 4".into(),
+                name: "Claude Sonnet 5.5".into(),
                 capabilities: vec![
                     "chat".into(),
                     "vision".into(),
@@ -54,15 +54,9 @@ impl ModelCatalog {
                 ],
             },
             ModelInfo {
-                id: "claude-haiku-3-20250313".into(),
+                id: "claude-haiku-5-5".into(),
                 provider: "anthropic".into(),
-                name: "Claude Haiku 3".into(),
-                capabilities: vec!["chat".into(), "vision".into(), "streaming".into()],
-            },
-            ModelInfo {
-                id: "gpt-4o".into(),
-                provider: "openai".into(),
-                name: "GPT-4o".into(),
+                name: "Claude Haiku 5.5".into(),
                 capabilities: vec![
                     "chat".into(),
                     "vision".into(),
@@ -71,16 +65,59 @@ impl ModelCatalog {
                 ],
             },
             ModelInfo {
-                id: "gpt-4o-mini".into(),
-                provider: "openai".into(),
-                name: "GPT-4o Mini".into(),
-                capabilities: vec!["chat".into(), "vision".into(), "streaming".into()],
+                id: "claude-fable-5-1".into(),
+                provider: "anthropic".into(),
+                name: "Claude Fable 5.1".into(),
+                capabilities: vec![
+                    "chat".into(),
+                    "vision".into(),
+                    "streaming".into(),
+                    "tools".into(),
+                ],
             },
             ModelInfo {
-                id: "o3-mini".into(),
+                id: "gpt-6.1-sol".into(),
                 provider: "openai".into(),
-                name: "o3-mini".into(),
-                capabilities: vec!["chat".into(), "streaming".into()],
+                name: "GPT-6.1 Sol".into(),
+                capabilities: vec![
+                    "chat".into(),
+                    "vision".into(),
+                    "streaming".into(),
+                    "tools".into(),
+                ],
+            },
+            ModelInfo {
+                id: "gpt-6-astra".into(),
+                provider: "openai".into(),
+                name: "GPT-6 Astra".into(),
+                capabilities: vec![
+                    "chat".into(),
+                    "vision".into(),
+                    "streaming".into(),
+                    "tools".into(),
+                ],
+            },
+            ModelInfo {
+                id: "gpt-6.1-terra".into(),
+                provider: "openai".into(),
+                name: "GPT-6.1 Terra".into(),
+                capabilities: vec![
+                    "chat".into(),
+                    "vision".into(),
+                    "streaming".into(),
+                    "tools".into(),
+                ],
+            },
+            ModelInfo {
+                id: "gpt-6-luna".into(),
+                provider: "openai".into(),
+                name: "GPT-6 Luna".into(),
+                capabilities: vec![
+                    "chat".into(),
+                    "vision".into(),
+                    "streaming".into(),
+                    "tools".into(),
+                ],
             },
             // Jev decision models — decide/judge/rank only, NEVER chat.
             ModelInfo {

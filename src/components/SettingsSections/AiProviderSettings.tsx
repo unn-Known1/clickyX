@@ -5,8 +5,18 @@ import { useAppContext } from "../../context/AppContext";
 import { useAiConfig } from "../../hooks/useAiConfig";
 import { useConfig } from "../../hooks/useConfig";
 import { commands } from "../../bindings";
+import { useChatGpt } from "../../hooks/useChatGpt";
+import ChatGptPlanCard from "./ChatGptPlanCard";
 import {
+  ANTHROPIC_EFFORTS,
+  ANTHROPIC_MODELS,
   CUSTOM_PRESET_ID,
+  DEFAULT_ANTHROPIC_MODEL,
+  DEFAULT_EFFORT,
+  DEFAULT_OPENAI_MODEL,
+  clampOpenaiEffort,
+  isOpenAiOwnBaseUrl,
+  openaiEffortsFor,
   OPENROUTER_BASE_URL,
   OPENROUTER_MODELS,
   isOpenRouterBaseUrl,
@@ -40,8 +50,12 @@ function AiProviderSettings() {
   const [anthropicKey, setAnthropicKey] = useState("");
   const [openaiKey, setOpenaiKey] = useState("");
   const [openaiBaseUrl, setOpenaiBaseUrl] = useState("https://api.openai.com/v1");
-  const [anthropicModel, setAnthropicModel] = useState("claude-sonnet-4-20250514");
-  const [openaiModel, setOpenaiModel] = useState("gpt-4o");
+  const [anthropicModel, setAnthropicModel] = useState(DEFAULT_ANTHROPIC_MODEL);
+  const [anthropicEffort, setAnthropicEffort] = useState(DEFAULT_EFFORT);
+  const [openaiModel, setOpenaiModel] = useState(DEFAULT_OPENAI_MODEL);
+  const [openaiEffort, setOpenaiEffort] = useState(DEFAULT_EFFORT);
+  const [openaiAuthSource, setOpenaiAuthSource] = useState<"api_key" | "chatgpt">("api_key");
+  const { status: chatgptStatus } = useChatGpt();
   const [providerChoice, setProviderChoice] = useState<ProviderChoice>("anthropic");
   const [presetId, setPresetId] = useState(CUSTOM_PRESET_ID);
   const [systemPrompt, setSystemPrompt] = useState("");
@@ -59,8 +73,11 @@ function AiProviderSettings() {
   // Sync state with loaded config
   useEffect(() => {
     if (aiConfig) {
-      setAnthropicModel(aiConfig.anthropic_model || "claude-sonnet-4-20250514");
-      setOpenaiModel(aiConfig.openai_model || "gpt-4o");
+      setAnthropicModel(aiConfig.anthropic_model || DEFAULT_ANTHROPIC_MODEL);
+      setAnthropicEffort(aiConfig.anthropic_effort || DEFAULT_EFFORT);
+      setOpenaiModel(aiConfig.openai_model || DEFAULT_OPENAI_MODEL);
+      setOpenaiEffort(aiConfig.openai_effort || DEFAULT_EFFORT);
+      setOpenaiAuthSource(aiConfig.openai_auth_source === "chatgpt" ? "chatgpt" : "api_key");
       setOpenaiBaseUrl(aiConfig.openai_base_url || "https://api.openai.com/v1");
       setSystemPrompt(aiConfig.system_prompt || "");
       setHasAnthropicKey(!!aiConfig.anthropic_api_key);
@@ -120,9 +137,18 @@ function AiProviderSettings() {
 
   const usingOpenRouter = providerChoice === "openrouter";
   const usingAnthropic = providerChoice === "anthropic";
+  // OpenAI's own endpoint speaks the Responses API and is the only place the
+  // reasoning effort and "Sign in with ChatGPT" apply.
+  const openaiOwn = providerChoice === "openai" && isOpenAiOwnBaseUrl(openaiBaseUrl);
+  const usingChatgpt = openaiOwn && openaiAuthSource === "chatgpt";
+  const openaiEffortOptions = openaiEffortsFor(openaiModel);
 
   const openaiKeyRequired =
-    !usingAnthropic && (usingOpenRouter || selectedPreset.requiresKey) && !hasOpenaiKey && !openaiKey;
+    !usingAnthropic &&
+    !usingChatgpt &&
+    (usingOpenRouter || selectedPreset.requiresKey) &&
+    !hasOpenaiKey &&
+    !openaiKey;
   const openrouterSelected = usingOpenRouter && !openaiModel.trim();
 
   const saveConfig = useCallback(
@@ -149,6 +175,10 @@ function AiProviderSettings() {
           if (!silent) showToast(t("providers.keyRequired"), "error");
           return false;
         }
+        if (usingChatgpt && !(chatgptStatus?.signed_in && chatgptStatus.plan_enabled)) {
+          if (!silent) showToast(t("providers.chatgptSignInRequired"), "error");
+          return false;
+        }
       }
 
       setSaving(true);
@@ -156,8 +186,11 @@ function AiProviderSettings() {
         await updateAiConfig({
           ...(anthropicKey ? { anthropic_api_key: anthropicKey } : {}),
           anthropic_model: anthropicModel,
+          anthropic_effort: anthropicEffort,
           ...(openaiKey ? { openai_api_key: openaiKey } : {}),
           openai_model: openaiModel,
+          openai_effort: clampOpenaiEffort(openaiModel, openaiEffort),
+          openai_auth_source: usingChatgpt ? "chatgpt" : "api_key",
           openai_base_url: effectiveBaseUrl,
           default_provider: effectiveProvider,
           system_prompt: systemPrompt,
@@ -201,7 +234,8 @@ function AiProviderSettings() {
       }
     },
     [
-      anthropicKey, anthropicModel, openaiKey, openaiModel, openaiBaseUrl,
+      anthropicKey, anthropicModel, anthropicEffort, openaiKey, openaiModel, openaiEffort,
+      openaiBaseUrl, usingChatgpt, chatgptStatus,
       systemPrompt, elevenlabsKey, cartesiaKey, deepgramKey, assemblyaiKey,
       sixtydbKey, appConfig, hasAnthropicKey, hasOpenaiKey, openaiKeyRequired,
       usingAnthropic, usingOpenRouter, updateAiConfig, updateAppConfig,
@@ -388,31 +422,67 @@ function AiProviderSettings() {
               />
             </label>
 
-            <label className="ai-field">
-              <span className="ai-field-label">{t("providers.apiKey")}</span>
-              <input
-                type="password"
-                className="settings-input"
-                placeholder={
-                  hasOpenaiKey
-                    ? t("providers.keySavedUpdate")
-                    : selectedPreset.requiresKey
-                      ? t("providers.keyOpenaiPlaceholder")
-                      : t("providers.localNoKey")
-                }
-                value={openaiKey}
-                onChange={(e) => setOpenaiKey(e.target.value)}
-                autoComplete="new-password"
-                aria-label={t("providers.apiKey")}
+            {openaiOwn && (
+              <div className="ai-provider-group">
+                <h4>{t("providers.authSource")}</h4>
+                <div className="ai-provider-choice" role="radiogroup" aria-label={t("providers.authSource")}>
+                  {(["api_key", "chatgpt"] as const).map((src) => (
+                    <button
+                      key={src}
+                      type="button"
+                      role="radio"
+                      aria-checked={openaiAuthSource === src}
+                      className={`ai-choice-btn${openaiAuthSource === src ? " active" : ""}`}
+                      onClick={() => setOpenaiAuthSource(src)}
+                    >
+                      {src === "api_key" ? t("providers.authApiKey") : t("providers.authChatgpt")}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {usingChatgpt && (
+              <ChatGptPlanCard
+                onSignedIn={(next) => {
+                  if (!next.plan_enabled) return;
+                  setOpenaiAuthSource("chatgpt");
+                  // Persist right away so chat uses the plan without another Save.
+                  void updateAiConfig({ openai_auth_source: "chatgpt" }).catch(() => undefined);
+                }}
+                onSignedOut={() => setOpenaiAuthSource("api_key")}
               />
-            </label>
-            {hasOpenaiKey && !openaiKey && (
-              <span className="settings-hint settings-hint-success">{t("providers.keySaved")}</span>
             )}
-            {openaiKeyRequired && (
-              <span className="settings-hint settings-hint-warn">{t("providers.keyRequired")}</span>
+
+            {!usingChatgpt && (
+              <>
+                <label className="ai-field">
+                  <span className="ai-field-label">{t("providers.apiKey")}</span>
+                  <input
+                    type="password"
+                    className="settings-input"
+                    placeholder={
+                      hasOpenaiKey
+                        ? t("providers.keySavedUpdate")
+                        : selectedPreset.requiresKey
+                          ? t("providers.keyOpenaiPlaceholder")
+                          : t("providers.localNoKey")
+                    }
+                    value={openaiKey}
+                    onChange={(e) => setOpenaiKey(e.target.value)}
+                    autoComplete="new-password"
+                    aria-label={t("providers.apiKey")}
+                  />
+                </label>
+                {hasOpenaiKey && !openaiKey && (
+                  <span className="settings-hint settings-hint-success">{t("providers.keySaved")}</span>
+                )}
+                {openaiKeyRequired && (
+                  <span className="settings-hint settings-hint-warn">{t("providers.keyRequired")}</span>
+                )}
+              </>
             )}
-            {selectedPreset.keyUrl && (
+            {!usingChatgpt && selectedPreset.keyUrl && (
               <a
                 className="ai-doc-link"
                 href={selectedPreset.keyUrl}
@@ -440,6 +510,24 @@ function AiProviderSettings() {
                 <option key={m} value={m} />
               ))}
             </datalist>
+            {openaiOwn && (
+              <label className="ai-field">
+                <span className="ai-field-label">{t("providers.openaiEffort")}</span>
+                <select
+                  className="settings-select"
+                  value={clampOpenaiEffort(openaiModel, openaiEffort)}
+                  onChange={(e) => setOpenaiEffort(e.target.value)}
+                  aria-label={t("providers.openaiEffort")}
+                >
+                  {openaiEffortOptions.map((e) => (
+                    <option key={e} value={e}>
+                      {t(`providers.effort.${e}`)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
+            {openaiOwn && <span className="settings-hint">{t("providers.effortHint")}</span>}
             {selectedPreset.suggestedModels.length > 0 && (
               <span className="settings-hint">
                 {t("providers.suggestedModels")}: {selectedPreset.suggestedModels.slice(0, 3).join(", ")}
@@ -478,9 +566,33 @@ function AiProviderSettings() {
                 placeholder={t("providers.modelAntPlaceholder")}
                 value={anthropicModel}
                 onChange={(e) => setAnthropicModel(e.target.value)}
+                list="ai-anthropic-models"
                 aria-label={t("providers.model")}
               />
             </label>
+            <datalist id="ai-anthropic-models">
+              {ANTHROPIC_MODELS.map((m) => (
+                <option key={m.id} value={m.id}>
+                  {m.name}
+                </option>
+              ))}
+            </datalist>
+            <label className="ai-field">
+              <span className="ai-field-label">{t("providers.claudeEffort")}</span>
+              <select
+                className="settings-select"
+                value={anthropicEffort}
+                onChange={(e) => setAnthropicEffort(e.target.value)}
+                aria-label={t("providers.claudeEffort")}
+              >
+                {ANTHROPIC_EFFORTS.map((e) => (
+                  <option key={e} value={e}>
+                    {t(`providers.effort.${e}`)}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <span className="settings-hint">{t("providers.effortHint")}</span>
           </div>
         )}
 

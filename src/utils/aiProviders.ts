@@ -31,6 +31,65 @@ export interface ProviderPreset {
   keyUrl?: string;
 }
 
+/** Default chat models (kept in sync with src-tauri `ai::anthropic` / `ai::responses`). */
+export const DEFAULT_ANTHROPIC_MODEL = "claude-opus-5-5";
+export const DEFAULT_OPENAI_MODEL = "gpt-6.1-sol";
+
+export interface ModelChoice {
+  id: string;
+  /** Display name (brand, not translated). */
+  name: string;
+}
+
+/** Claude models offered by default (exact ids, no date suffixes). Any other id can still be typed. */
+export const ANTHROPIC_MODELS: ModelChoice[] = [
+  { id: "claude-opus-5-5", name: "Claude Opus 5.5" },
+  { id: "claude-sonnet-5-5", name: "Claude Sonnet 5.5" },
+  { id: "claude-haiku-5-5", name: "Claude Haiku 5.5" },
+  { id: "claude-fable-5-1", name: "Claude Fable 5.1" },
+];
+
+/** OpenAI models on OpenAI's own endpoint (Responses API). */
+export const OPENAI_MODELS: ModelChoice[] = [
+  { id: "gpt-6.1-sol", name: "GPT-6.1 Sol" },
+  { id: "gpt-6-astra", name: "GPT-6 Astra" },
+  { id: "gpt-6.1-terra", name: "GPT-6.1 Terra" },
+  { id: "gpt-6-luna", name: "GPT-6 Luna" },
+];
+
+/** Models offered for computer-use pointing (vision-capable chat models). */
+export const POINTING_MODELS: ModelChoice[] = [...ANTHROPIC_MODELS, ...OPENAI_MODELS];
+
+export const ANTHROPIC_EFFORTS = ["low", "medium", "high", "xhigh", "max"] as const;
+export const OPENAI_EFFORTS = ["none", "low", "medium", "high", "xhigh", "max"] as const;
+export const DEFAULT_EFFORT = "medium";
+
+/** Models that accept reasoning effort `none` (Sol and Astra start at `low`). */
+const OPENAI_MODELS_WITH_NONE = new Set(["gpt-6.1-terra", "gpt-6-luna"]);
+
+/** Reasoning-effort levels valid for an OpenAI model id. */
+export function openaiEffortsFor(model: string): string[] {
+  const known = OPENAI_MODELS.some((m) => m.id === model);
+  if (!known || OPENAI_MODELS_WITH_NONE.has(model)) return [...OPENAI_EFFORTS];
+  return OPENAI_EFFORTS.filter((e) => e !== "none");
+}
+
+/** The effort to show/send: the chosen one if the model allows it, else the nearest valid level. */
+export function clampOpenaiEffort(model: string, effort: string): string {
+  const allowed = openaiEffortsFor(model);
+  if (allowed.includes(effort)) return effort;
+  return effort === "none" ? "low" : DEFAULT_EFFORT;
+}
+
+/** True when the URL is OpenAI's own API (Responses API; the only endpoint plan sign-in works on). */
+export function isOpenAiOwnBaseUrl(url: string): boolean {
+  const norm = url.trim().replace(/\/+$/, "").toLowerCase().replace(/\/v1$/, "");
+  return norm === "https://api.openai.com";
+}
+
+/** Where ChatGPT shows plan usage. */
+export const CHATGPT_USAGE_URL = "https://chatgpt.com/settings/usage";
+
 /** First-class OpenRouter support — one key, models from every major lab. */
 export const OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1";
 export const OPENROUTER_PRESET_ID = "openrouter";
@@ -58,7 +117,7 @@ export const PROVIDER_PRESETS: ProviderPreset[] = [
     label: "OpenAI",
     protocol: "openai",
     baseUrl: "https://api.openai.com/v1",
-    suggestedModels: ["gpt-4o", "gpt-4o-mini", "gpt-4.1", "o4-mini"],
+    suggestedModels: OPENAI_MODELS.map((m) => m.id),
     requiresKey: true,
     tier: "cloud",
     keyHint: "sk-",
@@ -69,7 +128,7 @@ export const PROVIDER_PRESETS: ProviderPreset[] = [
     label: "Anthropic",
     protocol: "anthropic",
     baseUrl: "https://api.anthropic.com",
-    suggestedModels: ["claude-sonnet-4-20250514", "claude-opus-4-1", "claude-haiku-4-5"],
+    suggestedModels: ANTHROPIC_MODELS.map((m) => m.id),
     requiresKey: true,
     tier: "cloud",
     keyHint: "sk-ant-",
