@@ -349,9 +349,12 @@ pub fn parse_response_object(json: &serde_json::Value) -> Result<String, AiError
 pub fn output_text(response: &serde_json::Value) -> String {
     let mut text = String::new();
     if let Some(items) = response.get("output").and_then(|o| o.as_array()) {
-        for item in items.iter().filter(|i| i.get("type").and_then(|t| t.as_str()) == Some("message")) {
+        let is_type = |v: &serde_json::Value, ty: &str| {
+            v.get("type").and_then(|t| t.as_str()) == Some(ty)
+        };
+        for item in items.iter().filter(|i| is_type(i, "message")) {
             if let Some(parts) = item.get("content").and_then(|c| c.as_array()) {
-                for p in parts.iter().filter(|p| p.get("type").and_then(|t| t.as_str()) == Some("output_text")) {
+                for p in parts.iter().filter(|p| is_type(p, "output_text")) {
                     if let Some(t) = p.get("text").and_then(|t| t.as_str()) {
                         text.push_str(t);
                     }

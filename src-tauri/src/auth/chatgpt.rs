@@ -131,7 +131,10 @@ impl std::fmt::Display for ChatGptError {
             ),
             InProgress => write!(f, "A ChatGPT sign-in is already in progress."),
             Browser(e) => write!(f, "Couldn't open your browser for sign-in: {e}"),
-            StateMismatch => write!(f, "Sign-in failed a security check (state mismatch). Try again."),
+            StateMismatch => write!(
+                f,
+                "Sign-in failed a security check (state mismatch). Try again."
+            ),
             NoCode => write!(f, "Sign-in failed: no authorization code came back."),
             Denied(code) => write!(f, "Sign-in failed: {code}"),
             IncompleteRegistration => write!(
@@ -151,7 +154,10 @@ impl std::fmt::Display for ChatGptError {
             TokenResponse(e) => write!(f, "ChatGPT sent an unexpected sign-in response: {e}"),
             Network(e) => write!(f, "Couldn't reach ChatGPT: {e}"),
             IdToken(e) => write!(f, "The ChatGPT identity token was rejected: {e}"),
-            NonceMismatch => write!(f, "Sign-in failed a security check (nonce mismatch). Try again."),
+            NonceMismatch => write!(
+                f,
+                "Sign-in failed a security check (nonce mismatch). Try again."
+            ),
             KeychainUnavailable => write!(
                 f,
                 "The OS keychain isn't available, so the ChatGPT sign-in can't be stored safely. Use an API key instead."
@@ -227,7 +233,10 @@ pub struct AuthorizeParams<'a> {
     pub login_hint: Option<&'a str>,
 }
 
-pub fn build_authorize_url(authorize_url: &str, p: &AuthorizeParams) -> Result<String, ChatGptError> {
+pub fn build_authorize_url(
+    authorize_url: &str,
+    p: &AuthorizeParams,
+) -> Result<String, ChatGptError> {
     let mut url = reqwest::Url::parse(authorize_url)
         .map_err(|e| ChatGptError::Browser(format!("bad authorize URL: {e}")))?;
     {
@@ -395,7 +404,11 @@ pub fn parse_token_response(body: &str) -> Result<TokenResponse, ChatGptError> {
 impl TokenResponse {
     /// Merge into stored credentials: a refresh may omit the refresh token,
     /// id token or scope, in which case the previous values stand.
-    pub fn into_token_set(self, now: u64, previous: Option<&TokenSet>) -> Result<TokenSet, ChatGptError> {
+    pub fn into_token_set(
+        self,
+        now: u64,
+        previous: Option<&TokenSet>,
+    ) -> Result<TokenSet, ChatGptError> {
         let refresh_token = self
             .refresh_token
             .or_else(|| previous.map(|p| p.refresh_token.clone()))
@@ -573,7 +586,10 @@ fn net_err(e: reqwest::Error) -> ChatGptError {
     })
 }
 
-async fn fetch_discovery(http: &reqwest::Client, endpoints: &Endpoints) -> Result<Discovery, ChatGptError> {
+async fn fetch_discovery(
+    http: &reqwest::Client,
+    endpoints: &Endpoints,
+) -> Result<Discovery, ChatGptError> {
     let resp = http
         .get(&endpoints.discovery_url)
         .send()
@@ -879,7 +895,11 @@ pub struct ChatGptAuth {
 }
 
 impl ChatGptAuth {
-    pub fn new(store: Arc<dyn SecretStore>, endpoints: Endpoints, client_id: Option<String>) -> Self {
+    pub fn new(
+        store: Arc<dyn SecretStore>,
+        endpoints: Endpoints,
+        client_id: Option<String>,
+    ) -> Self {
         Self {
             store,
             endpoints,

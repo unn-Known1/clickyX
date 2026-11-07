@@ -249,8 +249,13 @@ pub fn parse_message_response(json: &serde_json::Value) -> Result<String, AiErro
         .filter_map(|b| b.get("text").and_then(|t| t.as_str()))
         .collect::<Vec<_>>()
         .join("");
-    if text.is_empty() && !content.iter().any(|b| b.get("type").and_then(|t| t.as_str()) == Some("text")) {
-        return Err(AiError::Decode("Claude returned no text in its reply".into()));
+    let has_text_block = content
+        .iter()
+        .any(|b| b.get("type").and_then(|t| t.as_str()) == Some("text"));
+    if text.is_empty() && !has_text_block {
+        return Err(AiError::Decode(
+            "Claude returned no text in its reply".into(),
+        ));
     }
     Ok(text)
 }
@@ -388,7 +393,7 @@ impl AnthropicProvider {
         self
     }
 
-    /// Point at another base URL (tests only; the key is only ever sent to Anthropic in production).
+    /// Point at another base URL (tests only; in production the key only goes to Anthropic).
     #[cfg(test)]
     pub fn with_endpoint(mut self, endpoint: &str) -> Self {
         self.endpoint = endpoint.trim_end_matches('/').to_string();
