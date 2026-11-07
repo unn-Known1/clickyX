@@ -237,8 +237,8 @@ Full reference: `docs/BRIDGE_API.md`
 
 | Provider | Models | Usage |
 |----------|--------|-------|
-| Anthropic | claude-sonnet-4, claude-opus-4 | Main chat + vision |
-| OpenAI | gpt-4o, o3-mini, gpt-4o-realtime | Chat, agent mode, realtime voice |
+| Anthropic | claude-opus-5-5 (default), claude-sonnet-5-5, claude-haiku-5-5, claude-fable-5-1 | Main chat + vision (Messages API `2026-10-21`, effort control, refusal fallbacks) |
+| OpenAI | gpt-6.1-sol (default), gpt-6-astra, gpt-6.1-terra, gpt-6-luna; gpt-transcribe (STT) | Chat via Responses API (or the user's ChatGPT plan through Sign in with ChatGPT), agent mode, realtime voice |
 | Deepgram | nova-2 | STT WebSocket |
 | ElevenLabs | eleven_flash_v2_5 | TTS |
 | Google Gemini | gemini-* | Optional fallback |

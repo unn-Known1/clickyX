@@ -5,6 +5,23 @@ All notable changes to ClickyX are documented here.
 ## [Unreleased]
 
 ### Added
+- **Sign in with ChatGPT** — run the OpenAI side of ClickyX on your ChatGPT plan instead of an API
+  key (AI Providers, OpenAI's own endpoint). Implements OpenAI's token-sharing flow: PKCE on a
+  `127.0.0.1:1455-1460` loopback redirect, id_token verified against OpenAI's JWKS, rotating refresh
+  tokens, revocation on sign-out. Tokens live only in the OS keychain. Shows the signed-in email,
+  whether plan usage was allowed, and a link to your usage. Voice transcription and text-to-speech
+  still need their own API keys. New commands `chatgpt_status`, `chatgpt_sign_in`,
+  `chatgpt_sign_out`; new config `openai_auth_source`, `chatgpt_client_id`, `chatgpt_email`,
+  `chatgpt_host_id`.
+- **Effort controls** — `anthropic_effort` (Claude `output_config.effort`, default `medium`) and
+  `openai_effort` (GPT-6 `reasoning.effort`, default `medium`; `none` only on Terra and Luna).
+- **GPT-6 models** — `gpt-6.1-sol` (default), `gpt-6-astra`, `gpt-6.1-terra`, `gpt-6-luna`.
+  OpenAI's own endpoint now uses the Responses API; other OpenAI-compatible servers keep Chat
+  Completions.
+- **Claude 5.x models** — `claude-opus-5-5` (default), `claude-sonnet-5-5`, `claude-haiku-5-5`,
+  `claude-fable-5-1`, on Messages API version `2026-10-21` with a cached system prompt,
+  server-side refusal fallbacks, larger output budgets and a proper SSE state machine
+  (refusals and mid-stream errors now show a friendly message).
 - **Direct OpenRouter support** — OpenRouter is now a first-class chat provider
   alongside Anthropic and OpenAI-compatible: pick it in AI Providers, paste one
   `sk-or-` key, and choose from a curated model list (Claude Sonnet 4, GPT-4o,
@@ -26,7 +43,20 @@ All notable changes to ClickyX are documented here.
   EN/ES/FR/JA, a command-palette entry, and `openclicky://focus` deep-link handling.
 - 60db text-to-speech with a user-configured API key and workspace voice discovery.
 
+### Changed
+- Saved retired model ids are migrated once on load (`claude-sonnet-4-20250514`, `claude-opus-4-20250514`,
+  `claude-haiku-3-20250313`, `claude-3*` -> `claude-opus-5-5`; `gpt-4o`, `gpt-4o-mini`, `o3-mini`,
+  `gpt-4.1` -> `gpt-6.1-sol` on OpenAI's own endpoint). Other ids are untouched.
+- Speech-to-text with OpenAI now uses `gpt-transcribe` (falls back to `whisper-1` only if the account
+  can't see it).
+- The bridge `/v1/messages` proxy sends `anthropic-version: 2026-10-21` and strips `temperature`,
+  `top_p` and `top_k`, which that version rejects.
+- Claude and OpenAI requests use a connect timeout plus an idle timeout instead of a short
+  whole-request timeout, so long thinking turns are no longer cut off.
+
 ### Fixed
+- `declassify_jev_error` could loop forever on any error containing `sk-` or `Bearer ` and missed
+  quoted `"api_key":"..."` values.
 - Voice selection now updates the running speech pipeline without restarting the app.
 
 ## [0.2.3] - 2026-09-28

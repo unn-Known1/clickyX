@@ -82,16 +82,22 @@ The app creates a default config on first run; unrecognized keys are silently ig
 
   "ai": {
     "anthropic_api_key": null,
-    "anthropic_model": "claude-sonnet-4-20250514",
+    "anthropic_model": "claude-opus-5-5",
+    "anthropic_effort": "medium",
     "openai_api_key": null,
-    "openai_model": "gpt-4o",
+    "openai_model": "gpt-6.1-sol",
+    "openai_effort": "medium",
     "openai_base_url": "https://api.openai.com",
+    "openai_auth_source": "api_key",
+    "chatgpt_client_id": null,
+    "chatgpt_email": null,
+    "chatgpt_host_id": null,
     "default_provider": "anthropic",
     "system_prompt": "You are ClickyX, a helpful AI assistant."
   },
 
   "computer_use": {
-    "pointing_model": "claude-sonnet-4-20250514",
+    "pointing_model": "claude-opus-5-5",
     "cua_backend": "anthropic",
     "native_cua": false,
     "enabled": true,
@@ -232,7 +238,7 @@ Controls voice input/output pipeline.
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `ptt_hotkey` | string | `"Ctrl+Shift+V"` | Push-to-talk hotkey. See `hotkeys[]` for key format. |
-| `stt_provider` | string | `"deepgram"` | Speech-to-text provider. Options: `"deepgram"`, `"whisper"`. |
+| `stt_provider` | string | `"deepgram"` | Speech-to-text provider. Options: `"deepgram"`, `"whisper"` (OpenAI; uses `gpt-transcribe`, falling back to `whisper-1` if unavailable; needs an OpenAI API key, not ChatGPT sign-in). |
 | `tts_provider` | string | `"elevenlabs"` | Text-to-speech provider. Options include `"elevenlabs"`, `"cartesia"`, `"aura"`, `"edge"`, `"openai_realtime"`, `"sixtydb"`, `"system"`. |
 | `activation_mode` | string | `"ptt"` | Voice activation mode. Options: `"ptt"` (push-to-talk), `"always_on"`. |
 | `auto_submit` | boolean | `true` | Automatically submit the transcribed text when PTT is released. |
@@ -267,23 +273,30 @@ AI provider configuration. Keys here override the matching entries in `api_keys[
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `anthropic_api_key` | string \| null | `null` | Anthropic API key (`sk-ant-...`). Required for Claude models. |
-| `anthropic_model` | string | `"claude-sonnet-4-20250514"` | Default Anthropic model ID used for chat and CUA. |
-| `openai_api_key` | string \| null | `null` | OpenAI API key (`sk-...`). Required for GPT models. |
-| `openai_model` | string | `"gpt-4o"` | Default OpenAI model ID. |
-| `openai_base_url` | string | `"https://api.openai.com"` | Base URL for OpenAI-compatible API. Override to use NVIDIA NIM, LM Studio, Ollama, etc. |
+| `anthropic_model` | string | `"claude-opus-5-5"` | Default Anthropic model ID used for chat and CUA. |
+| `anthropic_effort` | string | `"medium"` | Claude `output_config.effort`: `"low"`, `"medium"`, `"high"`, `"xhigh"` or `"max"`. Higher thinks longer (slower, costlier). Invalid values are ignored. |
+| `openai_api_key` | string \| null | `null` | OpenAI API key (`sk-...`). Required for GPT models unless `openai_auth_source` is `"chatgpt"`. |
+| `openai_model` | string | `"gpt-6.1-sol"` | Default OpenAI model ID. |
+| `openai_effort` | string | `"medium"` | OpenAI `reasoning.effort`: `"none"`, `"low"`, `"medium"`, `"high"`, `"xhigh"` or `"max"`. `"none"` is accepted only for `gpt-6.1-terra` and `gpt-6-luna`; saving it for Sol/Astra is rejected. Sent only for the four GPT-6 models. |
+| `openai_base_url` | string | `"https://api.openai.com"` | Base URL for OpenAI-compatible API. On OpenAI's own endpoint (`https://api.openai.com`, with or without `/v1`) ClickyX uses the Responses API; any other base URL (OpenRouter, Groq, NVIDIA NIM, LM Studio, Ollama...) keeps Chat Completions. |
+| `openai_auth_source` | string | `"api_key"` | `"api_key"` or `"chatgpt"`. `"chatgpt"` runs the OpenAI side on the user's ChatGPT plan after **Sign in with ChatGPT** (OpenAI's own endpoint only). |
+| `chatgpt_client_id` | string \| null | `null` | OAuth client id issued on the first ChatGPT sign-in (`oaiapp_...`). Written by the sign-in command, not by the UI. Not a secret. |
+| `chatgpt_email` | string \| null | `null` | Email of the last ChatGPT account (used as `login_hint`). |
+| `chatgpt_host_id` | string \| null | `null` | Stable opaque id of this computer (`urn:uuid:...`), created once at the first sign-in. |
 | `default_provider` | string | `"anthropic"` | Provider used when no model is explicitly selected. Options: `"anthropic"`, `"openai"`. |
 | `system_prompt` | string | `"You are ClickyX..."` | System prompt prepended to every AI conversation. |
 
 **Supported model IDs:**
 
-*Anthropic:*
-- `claude-sonnet-4-20250514` (recommended)
-- `claude-opus-4-20250514`
-- `claude-haiku-3-5-20241022`
+*Anthropic* (API version `2026-10-21`; these models think adaptively by default, so there is no thinking setting, only `anthropic_effort`):
+- `claude-opus-5-5` (default), `claude-sonnet-5-5`, `claude-haiku-5-5`, `claude-fable-5-1`
 
 *OpenAI:*
-- `gpt-4o`, `gpt-4o-mini`
-- `o1`, `o3-mini`
+- `gpt-6.1-sol` (default), `gpt-6-astra`, `gpt-6.1-terra`, `gpt-6-luna`
+
+**Model id migration.** On load (and on config import) retired ids are replaced once and logged: `anthropic_model` / `computer_use.pointing_model` values `claude-sonnet-4-20250514`, `claude-opus-4-20250514`, `claude-haiku-3-20250313`, any `claude-3*`, `claude-{haiku,sonnet,opus}-3*` or `claude-*-4-2025*` id become `claude-opus-5-5`; `openai_model` / `pointing_model` values `gpt-4o`, `gpt-4o-mini`, `o3-mini`, `gpt-4.1` become `gpt-6.1-sol`, but only when `openai_base_url` is OpenAI's own. Every other id is left alone.
+
+**Sign in with ChatGPT.** Tokens (access, refresh, id) are stored only in the OS keychain (service `clickyx`, entry `chatgpt.tokens`), never in `config.json`. If no keychain is available, sign-in is refused. Plan usage needs the `chatgpt.tokens.use.direct` grant; voice transcription and text-to-speech are not available with plan tokens and still need their own API keys.
 
 *NVIDIA NIM (via `openai_base_url`):*
 - `nvidia/nemotron-4-340b-instruct`
@@ -340,7 +353,7 @@ Controls Computer Use Automation (CUA) — autonomous click, scroll, and type op
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `pointing_model` | string | `"claude-sonnet-4-20250514"` | Model used for GUI element detection in CUA tasks. |
+| `pointing_model` | string | `"claude-opus-5-5"` | Model used for GUI element detection in CUA tasks. |
 | `cua_backend` | string | `"anthropic"` | AI backend driving CUA decisions. Options: `"anthropic"`, `"openai"`. |
 | `native_cua` | boolean | `false` | Use native OS input injection (requires accessibility permission). When `false`, uses background injection. |
 | `enabled` | boolean | `true` | Master switch for all CUA features. When `false`, click/scroll/type actions are blocked. |
