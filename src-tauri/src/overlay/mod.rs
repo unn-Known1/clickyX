@@ -150,6 +150,7 @@ pub fn show_overlay<R: Runtime>(app: &AppHandle<R>) -> Result<(), String> {
             window
                 .show()
                 .map_err(|e| format!("show overlay {label}: {e}"))?;
+            make_click_through(&window);
             shown = true;
         } else {
             break;
@@ -182,12 +183,26 @@ pub fn show_overlay<R: Runtime>(app: &AppHandle<R>) -> Result<(), String> {
     }
 }
 
+/// Let clicks pass through an overlay window to the apps underneath.
+///
+/// Call this after `show()`. On Linux, tao's `set_ignore_cursor_events`
+/// unwraps the window's GdkWindow, which only exists once the GTK window has
+/// been realized (shown). Calling it on a hidden window, as overlay creation
+/// used to, panics the event loop at startup. Showing first is safe on every
+/// platform, and repeating the call is harmless.
+pub(crate) fn make_click_through<R: Runtime>(window: &tauri::WebviewWindow<R>) {
+    if let Err(e) = window.set_ignore_cursor_events(true) {
+        log::warn!("set_ignore_cursor_events on {}: {e}", window.label());
+    }
+}
+
 /// Show hidden overlay windows so annotations are actually visible (#2).
 fn ensure_overlay_visible<R: Runtime>(app: &AppHandle<R>) {
     let mut i = 0;
     while let Some(window) = app.get_webview_window(&format!("overlay-{}", i)) {
         if !window.is_visible().unwrap_or(true) {
             let _ = window.show();
+            make_click_through(&window);
         }
         i += 1;
     }
