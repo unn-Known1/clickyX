@@ -55,8 +55,6 @@ All notable changes to ClickyX are documented here.
   whole-request timeout, so long thinking turns are no longer cut off.
 
 ### Fixed
-- `declassify_jev_error` could loop forever on any error containing `sk-` or `Bearer ` and missed
-  quoted `"api_key":"..."` values.
 - Voice selection now updates the running speech pipeline without restarting the app.
 
 ## [0.2.3] - 2026-09-28
