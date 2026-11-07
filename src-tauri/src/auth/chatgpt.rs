@@ -726,8 +726,14 @@ async fn await_callback(
                 .query_pairs()
                 .map(|(k, v)| (k.into_owned(), v.into_owned()))
                 .collect();
+            // A hit without this attempt's state (a prefetch, a stale tab,
+            // another local process) must not end the sign-in: ignore it and
+            // keep waiting for the real callback.
+            if !pairs.iter().any(|(k, v)| k == "state" && v == expected_state) {
+                respond(&mut socket, "400 Bad Request", FAIL_PAGE).await;
+                continue;
+            }
             let ok = pairs.iter().any(|(k, v)| k == "code" && !v.is_empty())
-                && pairs.iter().any(|(k, v)| k == "state" && v == expected_state)
                 && !pairs.iter().any(|(k, _)| k == "error");
             respond(&mut socket, "200 OK", if ok { DONE_PAGE } else { FAIL_PAGE }).await;
             return pairs;
@@ -1550,6 +1556,21 @@ ubUb3iM0s7ZqLDUahkMtuH/bPyOhRANCAAR9i4zBlwtVjg/R6IIGfjEy6McKSsMa\n\
         assert!(body.contains("signed in") && body.contains("close this tab"));
         let got = task.await.expect("join").expect("callback");
         assert!(got.iter().any(|(k, v)| k == "code" && v == "c"));
+    }
+
+    #[tokio::test]
+    async fn callback_listener_ignores_a_hit_with_the_wrong_state() {
+        let (listener, port) = bind_loopback(&[41_008]).await.expect("bind");
+        let task = tokio::spawn(async move { await_callback(listener, "st", Duration::from_secs(10)).await });
+        let base = format!("http://127.0.0.1:{port}{CALLBACK_PATH}");
+        // A stray hit (prefetch, stale tab) must not end the sign-in.
+        let stray = reqwest::get(format!("{base}?code=evil&state=other")).await.expect("get");
+        assert_eq!(stray.status().as_u16(), 400);
+        let ok = reqwest::get(format!("{base}?code=c&state=st")).await.expect("get");
+        assert_eq!(ok.status().as_u16(), 200);
+        let got = task.await.expect("join").expect("callback");
+        assert!(got.iter().any(|(k, v)| k == "code" && v == "c"));
+        assert!(!got.iter().any(|(_, v)| v == "evil"));
     }
 
     fn seeded_store(expires_at: u64, scope: &str) -> Arc<MemoryStore> {

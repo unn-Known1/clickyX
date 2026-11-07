@@ -56,14 +56,13 @@ pub fn supports_effort(model: &str) -> bool {
 /// Server-side refusal fallback to opt into: `(anthropic-beta value, body value)`.
 /// Haiku 5.5 has no server-side fallback (the parameter is a 400 there).
 pub fn fallback_for(model: &str) -> Option<(&'static str, serde_json::Value)> {
-    if model.starts_with("claude-opus-5-5") || model.starts_with("claude-sonnet-5-5") {
+    // `"default"` lets the API pick the fallback by refusal category, so no
+    // pinned substitute model has to be migrated when it is retired.
+    if model.starts_with("claude-opus-5-5")
+        || model.starts_with("claude-sonnet-5-5")
+        || model.starts_with("claude-fable-5-1")
+    {
         Some((BETA_FALLBACK_DEFAULT, serde_json::json!("default")))
-    } else if model.starts_with("claude-fable-5-1") {
-        // Fable's documented raw-HTTP shape names the substitute explicitly.
-        Some((
-            BETA_FALLBACK_ARRAY,
-            serde_json::json!([{ "model": "claude-opus-4-8" }]),
-        ))
     } else {
         None
     }
@@ -652,8 +651,8 @@ mod tests {
         assert_eq!(haiku["output_config"]["effort"], "max");
         assert!(haiku.get("fallbacks").is_none(), "Haiku has no server-side fallback");
         let fable = build_request_body("s", &[msg("user", "x")], "claude-fable-5-1", "medium", false, &[]);
-        assert_eq!(fable["fallbacks"][0]["model"], "claude-opus-4-8");
-        assert_eq!(beta_header_for(&fable), Some("server-side-fallback-2026-06-01"));
+        assert_eq!(fable["fallbacks"], "default");
+        assert_eq!(beta_header_for(&fable), Some("server-side-fallback-2026-07-01"));
         let legacy = build_request_body("s", &[msg("user", "x")], "claude-sonnet-4-5", "high", false, &[]);
         assert!(legacy.get("output_config").is_none());
         assert!(legacy.get("fallbacks").is_none());
