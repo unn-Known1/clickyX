@@ -19,7 +19,15 @@ pub async fn get_models(
     let mut catalog = ModelCatalog::new();
     let config = config::load_config(&app).unwrap_or_default();
     let ai_cfg = &config.ai;
-    if ai_cfg
+    if ai_cfg.uses_chatgpt_plan() {
+        // Plan route: ask the models endpoint with the plan token. Failures
+        // (signed out, offline) just leave the built-in catalog.
+        let auth = crate::auth::chatgpt::ChatGptAuth::from_client_id(ai_cfg.chatgpt_client_id.clone());
+        match ai::chatgpt_plan::list_models(&auth).await {
+            Ok(remote) => catalog.merge_remote(remote),
+            Err(e) => log::warn!("ChatGPT plan model list unavailable: {e}"),
+        }
+    } else if ai_cfg
         .openai_api_key
         .as_ref()
         .is_some_and(|k| !k.is_empty())

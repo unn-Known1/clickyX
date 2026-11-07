@@ -9,7 +9,6 @@ use std::time::Duration;
 use super::streaming::{self, SseBuffer, StreamEvent, StreamSender};
 use super::{AiError, ChatMessage, ImageInput};
 
-pub const OPENAI_API_BASE: &str = "https://api.openai.com";
 pub const NON_STREAM_MAX_OUTPUT_TOKENS: u32 = 16_000;
 pub const STREAM_MAX_OUTPUT_TOKENS: u32 = 32_000;
 

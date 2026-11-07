@@ -26,6 +26,9 @@ pub mod keys {
     pub const ANTHROPIC_API_KEY: &str = "ai.anthropic_api_key";
     pub const OPENAI_API_KEY: &str = "ai.openai_api_key";
     pub const JEV_API_KEY: &str = "jev.api_key";
+    /// Sign in with ChatGPT: one JSON blob (access, refresh and id token plus
+    /// expiry and granted scope). Never mirrored into `config.json`.
+    pub const CHATGPT_TOKENS: &str = "chatgpt.tokens";
 
     pub fn legacy_api_key(provider: &str) -> String {
         format!("apikey.{provider}")
