@@ -2,6 +2,7 @@ import { useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useAppContext } from "../../context/AppContext";
 import { usePublicConfig } from "../../hooks/usePublicConfig";
+import { DEFAULT_ANTHROPIC_MODEL, POINTING_MODELS } from "../../utils/aiProviders";
 
 function ComputerUseSettings() {
   const { t } = useTranslation();
@@ -53,11 +54,15 @@ function ComputerUseSettings() {
       <div className="setting-row">
         <label>{t("cua.pointingModel")}</label>
         <select className="setting-select"
-          value={cuConfig?.pointing_model || "claude-sonnet-4-20250514"}
+          value={cuConfig?.pointing_model || DEFAULT_ANTHROPIC_MODEL}
           onChange={(e) => updateField("pointing_model", e.target.value)}>
-          <option value="claude-sonnet-4-20250514">Claude Sonnet 4</option>
-          <option value="claude-opus-4-20250514">Claude Opus 4</option>
-          <option value="gpt-4o">GPT-4o</option>
+          {/* A saved id outside the list (e.g. typed by hand) stays selectable. */}
+          {cuConfig?.pointing_model && !POINTING_MODELS.some((m) => m.id === cuConfig.pointing_model) && (
+            <option value={cuConfig.pointing_model}>{cuConfig.pointing_model}</option>
+          )}
+          {POINTING_MODELS.map((m) => (
+            <option key={m.id} value={m.id}>{m.name}</option>
+          ))}
         </select>
       </div>
       <div className="setting-row">

@@ -24,7 +24,8 @@ function ModelSelector({ selectedModel, onModelChange }: ModelSelectorProps) {
   });
 
   const hasAnthropicKey = !!aiConfig?.anthropic_api_key;
-  const hasOpenaiKey = !!aiConfig?.openai_api_key;
+  // Signed in with ChatGPT counts as a configured OpenAI side (no API key needed).
+  const hasOpenaiKey = !!aiConfig?.openai_api_key || aiConfig?.openai_auth_source === "chatgpt";
   const baseUrl = aiConfig?.openai_base_url ?? "";
 
   // Load chat-capable models only — Jev decision entries are excluded by the
